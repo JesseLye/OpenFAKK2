@@ -47,9 +47,7 @@ static char		s_backgroundLoop[MAX_QPATH];
 // =======================================================================
 
 // only begin attenuating sound volumes when outside the FULLVOLUME range
-#define		SOUND_FULLVOLUME	80
 
-#define		SOUND_ATTENUATE		0.0008f
 
 channel_t   s_channels[MAX_CHANNELS];
 channel_t   loop_channels[MAX_CHANNELS];
@@ -307,6 +305,15 @@ static sfx_t *S_FindName( const char *name ) {
 	sfx->next = sfxHash[hash];
 	sfxHash[hash] = sfx;
 
+	// FAKK2: the sound's own volume and distance, for calls that give none
+	{
+		const soundInfo_t	*info = S_SoundInfoForName( name );
+
+		sfx->infoMinDist = info->minDist;
+		sfx->infoVolume = info->volume;
+		sfx->infoLocal = info->localSound;
+	}
+
 	return sfx;
 }
 
@@ -421,7 +428,7 @@ S_SpatializeOrigin
 Used for spatializing s_channels
 =================
 */
-void S_SpatializeOrigin (vec3_t origin, int master_vol, int *left_vol, int *right_vol)
+void S_SpatializeOrigin (vec3_t origin, int master_vol, float minDist, int *left_vol, int *right_vol)
 {
     vec_t		dot;
     vec_t		dist;
@@ -429,17 +436,14 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, int *left_vol, int *righ
     vec3_t		source_vec;
     vec3_t		vec;
 
-	const float dist_mult = SOUND_ATTENUATE;
-	
-	// calculate stereo separation and distance attenuation
+	// calculate stereo separation and distance attenuation.
+	// FAKK2: the Miles rolloff, full within the sound's minimum distance
+	// and the inverse of the distance beyond it (see snd_info.c)
 	VectorSubtract(origin, listener_origin, source_vec);
 
 	dist = VectorNormalize(source_vec);
-	dist -= SOUND_FULLVOLUME;
-	if (dist < 0)
-		dist = 0;			// close enough to be at full volume
-	dist *= dist_mult;		// different attenuation levels
-	
+	dist = 1.0f - S_SoundGain( minDist, dist );
+
 	VectorRotate( source_vec, listener_axis, vec );
 
 	dot = -vec[1];
@@ -524,7 +528,7 @@ if origin is NULL, the sound will be dynamically sourced from the entity
 Entchannel 0 will never override a playing sound
 ====================
 */
-static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, qboolean localSound ) {
+static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, qboolean localSound, float volume, float minDist ) {
 	channel_t	*ch;
 	sfx_t		*sfx;
   int i, oldest, chosen, time;
@@ -535,6 +539,10 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 		return;
 	}
 
+	// FAKK2: a sound at an origin may name no entity
+	if ( origin && ( entityNum < 0 || entityNum >= MAX_GENTITIES ) ) {
+		entityNum = ENTITYNUM_NONE;
+	}
 	if ( !origin && ( entityNum < 0 || entityNum >= MAX_GENTITIES ) ) {
 		Com_Error( ERR_DROP, "S_StartSound: bad entitynum %i", entityNum );
 	}
@@ -550,8 +558,16 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 		S_memoryLoad(sfx);
 	}
 
+	// FAKK2: the sound's own values stand in for negative ones (retail 0x45bf00)
+	if ( volume < 0 ) {
+		volume = sfx->infoVolume;
+	}
+	if ( minDist < 0 ) {
+		minDist = sfx->infoMinDist;
+	}
+
 	if ( s_show->integer == 1 ) {
-		Com_Printf( "%i : %s\n", s_paintedtime, sfx->soundName );
+		Com_Printf( "%d - %s (vol %f, mindist %f)\n", s_paintedtime, sfx->soundName, volume, minDist );
 	}
 
 	time = Com_Milliseconds();
@@ -565,7 +581,7 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 	}
 
 	fullVolume = qfalse;
-	if (localSound || S_Base_HearingThroughEntity(entityNum, origin)) {
+	if (localSound || sfx->infoLocal || S_Base_HearingThroughEntity(entityNum, origin)) {
 		fullVolume = qtrue;
 	}
 
@@ -636,7 +652,8 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 		ch->fixed_origin = qfalse;
 	}
 
-	ch->master_vol = 127;
+	ch->master_vol = 127 * volume;
+	ch->minDist = minDist;
 	ch->entnum = entityNum;
 	ch->thesfx = sfx;
 	ch->startSample = START_SAMPLE_IMMEDIATE;
@@ -654,8 +671,8 @@ S_StartSound
 if origin is NULL, the sound will be dynamically sourced from the entity
 ====================
 */
-void S_Base_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle ) {
-	S_Base_StartSoundEx( origin, entityNum, entchannel, sfxHandle, qfalse );
+void S_Base_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle, float volume, float minDist ) {
+	S_Base_StartSoundEx( origin, entityNum, entchannel, sfxHandle, qfalse, volume, minDist );
 }
 
 /*
@@ -673,7 +690,34 @@ void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum ) {
 		return;
 	}
 
-	S_Base_StartSoundEx( NULL, listener_number, channelNum, sfxHandle, qtrue );
+	S_Base_StartSoundEx( NULL, listener_number, channelNum, sfxHandle, qtrue, -1, -1 );
+}
+
+/*
+==================
+S_StopSound
+
+FAKK2: stops what an entity plays on a channel; CHAN_AUTO stops all of
+the entity's channels. (The retail engine's rule has not been read.)
+==================
+*/
+void S_Base_StopSound( int entityNum, int entchannel ) {
+	channel_t	*ch;
+	int			i;
+
+	if ( !s_soundStarted ) {
+		return;
+	}
+	ch = s_channels;
+	for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
+		if ( !ch->thesfx || ch->entnum != entityNum ) {
+			continue;
+		}
+		if ( entchannel != CHAN_AUTO && ch->entchannel != entchannel ) {
+			continue;
+		}
+		ch->thesfx = NULL;
+	}
 }
 
 
@@ -765,7 +809,7 @@ Called during entity generation for a frame
 Include velocity in case I get around to doing doppler...
 ==================
 */
-void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle ) {
+void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle, float volume, float minDist ) {
 	sfx_t *sfx;
 
 	if ( !s_soundStarted || s_soundMuted ) {
@@ -795,6 +839,8 @@ void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t ve
 	loopSounds[entityNum].oldDopplerScale = 1.0;
 	loopSounds[entityNum].dopplerScale = 1.0;
 	loopSounds[entityNum].sfx = sfx;
+	loopSounds[entityNum].volume = volume < 0 ? sfx->infoVolume : volume;
+	loopSounds[entityNum].minDist = minDist < 0 ? sfx->infoMinDist : minDist;
 
 	if (s_doppler->integer && VectorLengthSquared(velocity)>0.0) {
 		vec3_t	out;
@@ -828,7 +874,7 @@ Called during entity generation for a frame
 Include velocity in case I get around to doing doppler...
 ==================
 */
-void S_Base_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle ) {
+void S_Base_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle, float volume, float minDist ) {
 	sfx_t *sfx;
 
 	if ( !s_soundStarted || s_soundMuted ) {
@@ -855,6 +901,8 @@ void S_Base_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_
 	loopSounds[entityNum].active = qtrue;
 	loopSounds[entityNum].kill = qfalse;
 	loopSounds[entityNum].doppler = qfalse;
+	loopSounds[entityNum].volume = volume < 0 ? sfx->infoVolume : volume;
+	loopSounds[entityNum].minDist = minDist < 0 ? sfx->infoMinDist : minDist;
 }
 
 
@@ -888,9 +936,9 @@ void S_AddLoopSounds (void) {
 		}
 
 		if (loop->kill) {
-			S_SpatializeOrigin( loop->origin, 127, &left_total, &right_total);			// 3d
+			S_SpatializeOrigin( loop->origin, 127 * loop->volume, loop->minDist, &left_total, &right_total);			// 3d
 		} else {
-			S_SpatializeOrigin( loop->origin, 90,  &left_total, &right_total);			// sphere
+			S_SpatializeOrigin( loop->origin, 90 * loop->volume, loop->minDist, &left_total, &right_total);			// sphere
 		}
 
 		loop->sfx->lastTimeUsed = time;
@@ -903,9 +951,9 @@ void S_AddLoopSounds (void) {
 			loop2->mergeFrame = loopFrame;
 
 			if (loop2->kill) {
-				S_SpatializeOrigin( loop2->origin, 127, &left, &right);				// 3d
+				S_SpatializeOrigin( loop2->origin, 127 * loop2->volume, loop2->minDist, &left, &right);				// 3d
 			} else {
-				S_SpatializeOrigin( loop2->origin, 90,  &left, &right);				// sphere
+				S_SpatializeOrigin( loop2->origin, 90 * loop2->volume, loop2->minDist, &left, &right);				// sphere
 			}
 
 			loop2->sfx->lastTimeUsed = time;
@@ -1001,7 +1049,7 @@ void S_Base_RawSamples( int stream, int samples, int rate, int width, int numCha
 
 		if ( entityNum >= 0 && entityNum < MAX_GENTITIES ) {
 			// support spatialized raw streams, e.g. for VoIP
-			S_SpatializeOrigin( loopSounds[ entityNum ].origin, 256, &leftvol, &rightvol );
+			S_SpatializeOrigin( loopSounds[ entityNum ].origin, 256, S_SoundInfoForName( NULL )->minDist, &leftvol, &rightvol );
 		} else {
 			leftvol = rightvol = 256;
 		}
@@ -1151,7 +1199,7 @@ void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int 
 				VectorCopy( loopSounds[ ch->entnum ].origin, origin );
 			}
 
-			S_SpatializeOrigin (origin, ch->master_vol, &ch->leftvol, &ch->rightvol);
+			S_SpatializeOrigin (origin, ch->master_vol, ch->minDist, &ch->leftvol, &ch->rightvol);
 		}
 	}
 
@@ -1589,6 +1637,7 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 	si->Shutdown = S_Base_Shutdown;
 	si->StartSound = S_Base_StartSound;
 	si->StartLocalSound = S_Base_StartLocalSound;
+	si->StopSound = S_Base_StopSound;
 	si->StartBackgroundTrack = S_Base_StartBackgroundTrack;
 	si->StopBackgroundTrack = S_Base_StopBackgroundTrack;
 	si->RawSamples = S_Base_RawSamples;

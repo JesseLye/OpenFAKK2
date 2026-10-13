@@ -49,17 +49,41 @@ typedef	struct sndBuffer_s {
 	adpcm_state_t			adpcm;
 } sndBuffer;
 
+// FAKK2's sound information (global/sound*.txt); see snd_info.c
+#define	MAX_SOUND_INFOS			1000
+#define	SOUND_MAX_DIST_FACTOR	64.0f			// the maximum distance over the minimum
+#define	SOUND_MIN_GAIN			( 1.0f / SOUND_MAX_DIST_FACTOR )	// what is left at the maximum distance
+
+typedef struct soundInfo_s {
+	char				name[MAX_QPATH];
+	float				minDist;			// full volume within this distance
+	float				volume;				// 0 to 1
+	int					loopStart, loopEnd;	// sample loop block, -1 for none
+	int					maxNumber;			// how many may play at once
+	float				maxFactor;
+	qboolean			localSound;			// played at the listener, not in the world
+	struct soundInfo_s	*hashNext;
+} soundInfo_t;
+
+void				S_LoadSoundInfo( void );
+void				S_SoundInfo_f( void );
+const soundInfo_t	*S_SoundInfoForName( const char *name );
+float				S_SoundGain( float minDist, float dist );
+
 typedef struct sfx_s {
 	sndBuffer		*soundData;
 	qboolean		defaultSound;			// couldn't be loaded, so use buzz
 	qboolean		inMemory;				// not in Memory
 	qboolean		soundCompressed;		// not in Memory
-	int				soundCompressionMethod;	
+	int				soundCompressionMethod;
 	int 			soundLength;
 	int			soundChannels;
 	char 			soundName[MAX_QPATH];
 	int				lastTimeUsed;
 	struct sfx_s	*next;
+	float			infoMinDist;			// from the sound information table
+	float			infoVolume;
+	qboolean		infoLocal;
 } sfx_t;
 
 typedef struct {
@@ -90,6 +114,8 @@ typedef struct loopSound_s {
 	float		dopplerScale;
 	float		oldDopplerScale;
 	int			framenum;
+	float		volume;			// 0 to 1
+	float		minDist;		// full volume within this distance
 } loopSound_t;
 
 typedef struct
@@ -108,6 +134,7 @@ typedef struct
 	sfx_t		*thesfx;		// sfx structure
 	qboolean	doppler;
 	qboolean	fullVolume;
+	float		minDist;		// full volume within this distance
 } channel_t;
 
 
@@ -127,15 +154,16 @@ typedef struct {
 typedef struct
 {
 	void (*Shutdown)(void);
-	void (*StartSound)( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx );
+	void (*StartSound)( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float minDist );
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
+	void (*StopSound)( int entnum, int entchannel );
 	void (*StartBackgroundTrack)( const char *intro, const char *loop );
 	void (*StopBackgroundTrack)( void );
 	void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
 	void (*StopAllSounds)( void );
 	void (*ClearLoopingSounds)( qboolean killall );
-	void (*AddLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx );
-	void (*AddRealLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx );
+	void (*AddLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist );
+	void (*AddRealLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist );
 	void (*StopLoopingSound)(int entityNum );
 	void (*Respatialize)( int entityNum, const vec3_t origin, vec3_t axis[3], int inwater );
 	void (*UpdateEntityPosition)( int entityNum, const vec3_t origin );

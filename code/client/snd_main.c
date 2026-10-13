@@ -46,6 +46,7 @@ static qboolean S_ValidSoundInterface( soundInterface_t *pSi )
 	if( !pSi->Shutdown ) return qfalse;
 	if( !pSi->StartSound ) return qfalse;
 	if( !pSi->StartLocalSound ) return qfalse;
+	if( !pSi->StopSound ) return qfalse;
 	if( !pSi->StartBackgroundTrack ) return qfalse;
 	if( !pSi->StopBackgroundTrack ) return qfalse;
 	if( !pSi->RawSamples ) return qfalse;
@@ -80,10 +81,22 @@ static qboolean S_ValidSoundInterface( soundInterface_t *pSi )
 S_StartSound
 =================
 */
-void S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx )
+void S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float minDist )
 {
 	if( si.StartSound ) {
-		si.StartSound( origin, entnum, entchannel, sfx );
+		si.StartSound( origin, entnum, entchannel, sfx, volume, minDist );
+	}
+}
+
+/*
+=================
+S_StopSound
+=================
+*/
+void S_StopSound( int entnum, int entchannel )
+{
+	if( si.StopSound ) {
+		si.StopSound( entnum, entchannel );
 	}
 }
 
@@ -165,10 +178,10 @@ S_AddLoopingSound
 =================
 */
 void S_AddLoopingSound( int entityNum, const vec3_t origin,
-		const vec3_t velocity, sfxHandle_t sfx )
+		const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist )
 {
 	if( si.AddLoopingSound ) {
-		si.AddLoopingSound( entityNum, origin, velocity, sfx );
+		si.AddLoopingSound( entityNum, origin, velocity, sfx, volume, minDist );
 	}
 }
 
@@ -178,10 +191,10 @@ S_AddRealLoopingSound
 =================
 */
 void S_AddRealLoopingSound( int entityNum, const vec3_t origin,
-		const vec3_t velocity, sfxHandle_t sfx )
+		const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist )
 {
 	if( si.AddRealLoopingSound ) {
-		si.AddRealLoopingSound( entityNum, origin, velocity, sfx );
+		si.AddRealLoopingSound( entityNum, origin, velocity, sfx, volume, minDist );
 	}
 }
 
@@ -490,6 +503,7 @@ void S_Init( void )
 	} else {
 
 		S_CodecInit( );
+		S_LoadSoundInfo( );		// FAKK2: global/sound*.txt
 
 		Cmd_AddCommand( "play", S_Play_f );
 		Cmd_AddCommand( "music", S_Music_f );
@@ -497,6 +511,7 @@ void S_Init( void )
 		Cmd_AddCommand( "s_list", S_SoundList );
 		Cmd_AddCommand( "s_stop", S_StopAllSounds );
 		Cmd_AddCommand( "s_info", S_SoundInfo );
+		Cmd_AddCommand( "s_soundinfo", S_SoundInfo_f );	// FAKK2
 
 		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH );
 		if( cv->integer ) {

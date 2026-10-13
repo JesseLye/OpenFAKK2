@@ -1052,14 +1052,20 @@ typedef struct {
 // channel 0 never willingly overrides
 // other channels will allways override a playing sound on that channel
 typedef enum {
+	// FAKK2's channels, as the game modules number them
 	CHAN_AUTO,
 	CHAN_LOCAL,		// menu sounds, etc
 	CHAN_WEAPON,
 	CHAN_VOICE,
 	CHAN_ITEM,
 	CHAN_BODY,
-	CHAN_LOCAL_SOUND,	// chat messages, etc
-	CHAN_ANNOUNCER		// announcer voices, etc
+	CHAN_DIALOG,
+	CHAN_DIALOG_SECONDARY,
+	CHAN_WEAPONIDLE,
+	CHAN_MENU,			// what the retail engine uses for local sounds
+	// Quake III's names for the engine's own uses
+	CHAN_LOCAL_SOUND = CHAN_MENU,
+	CHAN_ANNOUNCER = CHAN_DIALOG
 } soundChannel_t;
 
 

@@ -540,25 +540,30 @@ static int CL_CG_CM_MarkFragments( int numPoints, const vec3_t *points, const ve
 
 // sound
 //
-// Volumes, minimum distances, reverb and the music system are not applied
-// yet; Quake III's sound system plays the sounds as it does its own.
+// Volumes and minimum distances go to the sound system, which takes a
+// sound's own from global/sound*.txt when the module passes -1 (see
+// snd_info.c). Reverb and the music system are not applied yet.
 
 static int	cl_loopingSoundNum;		// FAKK2 names no entity for a looping sound; Quake III wants one
 
 static void CL_CG_S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float min_dist ) {
-	S_StartSound( origin, entnum, entchannel, sfx );
+	S_StartSound( origin, entnum, entchannel, sfx, volume, min_dist );
 }
 
+// The retail engine (0x43ed80) resolves an alias, registers the name and
+// starts it on the listener's entity on CHAN_MENU with the default volume
+// and distance.
 static void CL_CG_S_StartLocalSound( const char *sound_name ) {
 	const char	*name = Alias_FindRandom( sound_name );
 
 	if ( !name ) {
 		name = sound_name;
 	}
-	S_StartLocalSound( S_RegisterSound( name, qfalse ), CHAN_LOCAL_SOUND );
+	S_StartLocalSound( S_RegisterSound( name, qfalse ), CHAN_MENU );
 }
 
 static void CL_CG_S_StopSound( int entnum, int channel ) {
+	S_StopSound( entnum, channel );
 }
 
 static void CL_CG_S_ClearLoopingSounds( void ) {
@@ -570,7 +575,7 @@ static void CL_CG_S_AddLoopingSound( const vec3_t origin, const vec3_t velocity,
 	if ( cl_loopingSoundNum >= MAX_GENTITIES ) {
 		return;
 	}
-	S_AddLoopingSound( cl_loopingSoundNum++, origin, velocity, sfx );
+	S_AddLoopingSound( cl_loopingSoundNum++, origin, velocity, sfx, volume, min_dist );
 }
 
 static void CL_CG_S_Respatialize( int entityNum, vec3_t origin, vec3_t axis[3] ) {

@@ -192,10 +192,28 @@ Not read, done another way:
   connected client and sends them with the next snapshot (the wire format is OpenFAKK2's
   own); the retail import (`0x448520`) has not been read, so whether it filters by
   visibility is unknown. The client game module receives them as the SDK's
-  `server_sound_t` and plays them through Quake III's sound system: FAKK2's volume,
-  minimum distance, reverb and ambient-volume calls are ignored, looping sounds are keyed
-  by their order in the frame, `S_StartLocalSound` resolves an alias before a file name,
-  and the music calls do nothing.
+  `server_sound_t` and plays them through Quake III's sound system with FAKK2's volumes
+  and minimum distances. The sound information files `global/sound0.txt` to `sound9.txt`
+  are read as the retail engine reads them at sound start-up (`0x43f890`: `sound`,
+  `mindist`, `volume`, `loopstart`, `loopend`, `maxnumber`, `maxfactor`, `localsound`,
+  `defaultmindist` and `defaultvolume`, `maxdist` and `defaultmaxdist` read and ignored,
+  `$define` macros, defaults 160 and 1.0, 1000 sounds at most), and a negative volume or
+  distance from the module takes the sound's own (retail `0x45bf00`). The attenuation is
+  what that function asks the Miles sound system for: a minimum distance and a maximum of
+  64 times it, both in metres at 1/52.49 per unit, the volume times `s_volume` on a 0 to
+  127 scale, a `localsound` not placed in the world; the curve between them, full within
+  the minimum distance, the inverse of the distance beyond and no quieter than 1/64, is
+  Miles' documented model and has not been read. `S_StartLocalSound` (`0x43ed80`)
+  resolves an alias, registers the name and plays it on the listener's entity on
+  `CHAN_MENU`; the channel numbers are FAKK2's. Not followed: `maxnumber` and
+  `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity stays), loop blocks,
+  the `s_show` print is retail's format only; `S_StopSound` stops the entity's channel
+  (the retail rule has not been read); the OpenAL backend mutes a sound beyond 64 minimum
+  distances rather than holding 1/64; `.mp3` files (1340 of the dialog files) are not
+  decoded; reverb and ambient-volume calls are ignored; looping sounds are keyed by their
+  order in the frame; the music calls do nothing. `s_soundinfo [name]` prints the table's
+  size or a name's entry. The OpenAL backend's version of this compiles but has not been
+  run (no OpenAL runtime on the test machine); the software mixer's has.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
