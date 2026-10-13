@@ -496,6 +496,16 @@ typedef struct {
 } kbutton_t;
 
 void CL_InitInput(void);
+usercmd_t CL_CreateFreeCmd( void );
+
+//
+// cl_viewer.c
+//
+void CL_Viewer_Init( void );
+void CL_Viewer_Stop( void );
+qboolean CL_Viewer_Active( void );
+void CL_Viewer_Frame( void );
+void CL_Viewer_Draw( void );
 void CL_ShutdownInput(void);
 void CL_SendCmd (void);
 void CL_ClearState (void);

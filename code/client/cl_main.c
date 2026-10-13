@@ -1208,6 +1208,9 @@ CL_ShutdownAll
 */
 void CL_ShutdownAll(qboolean shutdownRef)
 {
+	// the world the viewer draws is about to be thrown away
+	CL_Viewer_Stop();
+
 	if(CL_VideoRecording())
 		CL_CloseAVI();
 
@@ -3094,6 +3097,8 @@ void CL_Frame ( int msec ) {
 	CL_SetCGameTime();
 
 	// update the screen
+	CL_Viewer_Frame();
+
 	SCR_UpdateScreen();
 
 	// update audio
@@ -3258,7 +3263,7 @@ void CL_InitRef( void ) {
 	Com_Printf( "----- Initializing Renderer ----\n" );
 
 #ifdef USE_RENDERER_DLOPEN
-	cl_renderer = Cvar_Get("cl_renderer", "opengl2", CVAR_ARCHIVE | CVAR_LATCH);
+	cl_renderer = Cvar_Get("cl_renderer", "opengl1", CVAR_ARCHIVE | CVAR_LATCH);
 
 	Com_sprintf(dllName, sizeof(dllName), "renderer_%s" DLL_EXT, cl_renderer->string);
 
@@ -3557,6 +3562,7 @@ void CL_Init( void ) {
 	cls.realtime = 0;
 
 	CL_InitInput ();
+	CL_Viewer_Init();
 
 	//
 	// register our variables

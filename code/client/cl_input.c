@@ -323,12 +323,14 @@ void CL_KeyMove( usercmd_t *cmd ) {
 	// the walking flag is to keep animations consistent
 	// even during acceleration and develeration
 	//
+	// FAKK2 has a run button rather than Quake III's walking flag: the game
+	// walks the player unless it is set. Whether the retail client also
+	// scales the move values has not been examined; they are left at full.
+	movespeed = 127;
 	if ( in_speed.active ^ cl_run->integer ) {
-		movespeed = 127;
-		cmd->buttons &= ~BUTTON_WALKING;
+		cmd->buttons |= BUTTON_RUN;
 	} else {
-		cmd->buttons |= BUTTON_WALKING;
-		movespeed = 64;
+		cmd->buttons &= ~BUTTON_RUN;
 	}
 
 	forward = 0;
@@ -361,7 +363,8 @@ CL_MouseEvent
 */
 void CL_MouseEvent( int dx, int dy, int time ) {
 	if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
-		VM_Call( uivm, UI_MOUSE_EVENT, dx, dy );
+		if ( uivm )
+			VM_Call( uivm, UI_MOUSE_EVENT, dx, dy );
 	} else if (Key_GetCatcher( ) & KEYCATCH_CGAME) {
 		VM_Call (cgvm, CG_MOUSE_EVENT, dx, dy);
 	} else {
@@ -398,8 +401,8 @@ void CL_JoystickMove( usercmd_t *cmd ) {
 	float pitch   = j_pitch->value   * cl.joystickAxis[j_pitch_axis->integer];
 	float up      = j_up->value      * cl.joystickAxis[j_up_axis->integer];
 
-	if ( !(in_speed.active ^ cl_run->integer) ) {
-		cmd->buttons |= BUTTON_WALKING;
+	if ( in_speed.active ^ cl_run->integer ) {
+		cmd->buttons |= BUTTON_RUN;
 	}
 
 	if ( in_speed.active ) {
@@ -628,14 +631,7 @@ CL_CreateNewCommands
 Create a new usercmd_t structure for this frame
 =================
 */
-void CL_CreateNewCommands( void ) {
-	int			cmdNum;
-
-	// no need to create usercmds until we have a gamestate
-	if ( clc.state < CA_PRIMED ) {
-		return;
-	}
-
+static void CL_UpdateFrameMsec( void ) {
 	frame_msec = com_frameTime - old_com_frameTime;
 
 	// if running over 1000fps, act as if each frame is 1ms
@@ -650,12 +646,35 @@ void CL_CreateNewCommands( void ) {
 		frame_msec = 200;
 	}
 	old_com_frameTime = com_frameTime;
+}
 
+void CL_CreateNewCommands( void ) {
+	int			cmdNum;
+
+	// no need to create usercmds until we have a gamestate
+	if ( clc.state < CA_PRIMED ) {
+		return;
+	}
+
+	CL_UpdateFrameMsec();
 
 	// generate a command for this frame
 	cl.cmdNumber++;
 	cmdNum = cl.cmdNumber & CMD_MASK;
 	cl.cmds[cmdNum] = CL_CreateCmd ();
+}
+
+/*
+=================
+CL_CreateFreeCmd
+
+Reads the keys and the mouse into a command that is not part of a game's
+command stream. The map viewer moves its camera with it.
+=================
+*/
+usercmd_t CL_CreateFreeCmd( void ) {
+	CL_UpdateFrameMsec();
+	return CL_CreateCmd();
 }
 
 /*

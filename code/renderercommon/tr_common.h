@@ -148,6 +148,7 @@ void R_LoadPCX( const char *name, byte **pic, int *width, int *height );
 void R_LoadPNG( const char *name, byte **pic, int *width, int *height );
 void R_LoadPVR( const char *name, byte **pic, int *width, int *height );
 void R_LoadTGA( const char *name, byte **pic, int *width, int *height );
+void R_LoadFTX( const char *name, byte **pic, int *width, int *height );
 
 /*
 ====================================================================

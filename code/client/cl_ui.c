@@ -1118,7 +1118,10 @@ void CL_InitUI( void ) {
 
 	uivm = VM_Create( "ui", CL_UISystemCalls, interpret );
 	if ( !uivm ) {
-		Com_Error( ERR_FATAL, "VM_Create on UI failed" );
+		// FAKK2 has no user interface module (its menus are built into the
+		// retail executable), so the client runs with the console alone
+		Com_DPrintf( "No user interface module\n" );
+		return;
 	}
 
 	// sanity check

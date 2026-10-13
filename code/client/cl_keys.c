@@ -1186,7 +1186,7 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 	char buf[ MAX_STRING_CHARS ], *p = buf, *end;
 	qboolean allCommands, allowUpCmds;
 
-	if( clc.state == CA_DISCONNECTED && Key_GetCatcher( ) == 0 )
+	if( clc.state == CA_DISCONNECTED && Key_GetCatcher( ) == 0 && !CL_Viewer_Active() )
 		return;
 	if( !keys[key].binding || !keys[key].binding[0] )
 		return;
@@ -1196,7 +1196,7 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 	allCommands = ( Key_GetCatcher( ) == 0 );
 
 	// allow button up commands if in game even if key catcher is set
-	allowUpCmds = ( clc.state != CA_DISCONNECTED );
+	allowUpCmds = ( clc.state != CA_DISCONNECTED || CL_Viewer_Active() );
 
 	while( 1 )
 	{
@@ -1291,6 +1291,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 			return;
 		}
 
+		if ( !uivm ) {
+			return;
+		}
+
 		if ( !( Key_GetCatcher( ) & KEYCATCH_UI ) ) {
 			if ( clc.state == CA_ACTIVE && !clc.demoplaying ) {
 				VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_INGAME );
@@ -1323,7 +1327,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 		} 
 	} else if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE ) {
 		Message_Key( key );
-	} else if ( clc.state == CA_DISCONNECTED ) {
+	} else if ( clc.state == CA_DISCONNECTED && !CL_Viewer_Active() ) {
 		Console_Key( key );
 	}
 }
@@ -1399,7 +1403,8 @@ void CL_CharEvent( int key ) {
 	}
 	else if ( Key_GetCatcher( ) & KEYCATCH_UI )
 	{
-		VM_Call( uivm, UI_KEY_EVENT, key | K_CHAR_FLAG, qtrue );
+		if ( uivm )
+			VM_Call( uivm, UI_KEY_EVENT, key | K_CHAR_FLAG, qtrue );
 	}
 	else if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE ) 
 	{

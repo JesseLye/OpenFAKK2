@@ -12,10 +12,11 @@ include(identity)
 project(${PROJECT_NAME} VERSION ${PROJECT_VERSION} LANGUAGES C)
 
 option(BUILD_SERVER "Build dedicated server" ON)
-# The client and renderers still target Quake III's client game interface and
-# do not build against the FAKK2 shared structures yet.
-option(BUILD_CLIENT "Build client" OFF)
-option(BUILD_RENDERER_GL1 "Build GL1 renderer" OFF)
+# The client starts without a game: it has a console and a map viewer
+# ("viewmap <name>"). It does not yet speak FAKK2's client game interface, and
+# only the GL1 renderer has been taught FAKK2's formats.
+option(BUILD_CLIENT "Build client" ON)
+option(BUILD_RENDERER_GL1 "Build GL1 renderer" ON)
 option(BUILD_RENDERER_GL2 "Build GL2 renderer" OFF)
 option(BUILD_GAME_LIBRARIES "Build Quake III game module libraries" OFF)
 option(BUILD_GAME_QVMS "Build Quake III game module qvms" OFF)

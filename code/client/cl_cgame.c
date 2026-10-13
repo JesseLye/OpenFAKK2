@@ -478,9 +478,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CM_INLINEMODEL:
 		return CM_InlineModel( args[1] );
 	case CG_CM_TEMPBOXMODEL:
-		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qfalse );
+		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qfalse, CONTENTS_BODY );
 	case CG_CM_TEMPCAPSULEMODEL:
-		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qtrue );
+		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qtrue, CONTENTS_BODY );
 	case CG_CM_POINTCONTENTS:
 		return CM_PointContents( VMA(1), args[2] );
 	case CG_CM_TRANSFORMEDPOINTCONTENTS:

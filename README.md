@@ -11,12 +11,13 @@ Early. The engine does **not** run the game yet.
 
 | Area | State |
 | --- | --- |
-| Engine base | ioquake3 `87a99d18`, rebranded. Only the dedicated server (`openfakk2ded`) builds; the client and renderers are disabled until they are ported |
+| Engine base | ioquake3 `87a99d18`, rebranded. The dedicated server (`openfakk2ded`) and the client (`openfakk2`, GL1 renderer only) build. The client has a console and a map viewer but cannot join a game yet |
 | Game data | Retail pk3s mount; BSP v12 collision data loads for all 30 retail maps |
 | Game modules | `gamex86.dll` / `cgamex86.dll` build from Ritual's 1.02 SDK source (x86, MSVC). Under the retail engine the rebuilt `gamex86.dll` matches retail console output at map spawn on four maps; `cgamex86.dll` is untested |
 | Engine ↔ game interface | Server side (`GAME_API_VERSION 4`): the game module loads, initialises and spawns maps. With `developer 1`, the lines the game prints while spawning a map are identical to the retail engine's on all 30 retail maps. It also runs the retail `gamex86.dll` unmodified, with the same result. With a headless test player (`sv_testplayer 1`), level scripts and cinematics run; ten seconds after the player enters, level variables match the retail game on all 29 comparable maps, and the state of every entity (up to 300 per map) matches on 7 maps and differs on 1 to 9 entities on the others, mostly by random choices that also vary between retail runs. Sound playback and client prints are still stubs. See `docs/known-differences.md`. Client side (`CGAME_IMPORT_API_VERSION 3`): not implemented |
 | TIKI models (`.tik` `.tan` `.skb` `.ska`) | Definitions, animations and skeletons load for the server's queries; bounds and radius match the retail engine's cached values on 742 of 743 models. Skeletal tag placement is provisional. No rendering |
-| BSP v12 rendering, `.ftx`, `.urc` UI, sound/music | Not implemented |
+| Map viewer | `viewmap <name>` in the client draws a retail map with its `.ftx` textures and lightmaps and a fly camera (`viewpos`, `viewstop`, normal movement keys). Skies, FAKK2's shader script extensions, models and entities are not drawn yet |
+| `.urc` UI, sound/music, client game module | Not implemented |
 
 ## Sources
 

@@ -72,7 +72,7 @@ Con_ToggleConsole_f
 */
 void Con_ToggleConsole_f (void) {
 	// Can't toggle the console when it's the only thing available
-	if ( clc.state == CA_DISCONNECTED && Key_GetCatcher( ) == KEYCATCH_CONSOLE ) {
+	if ( clc.state == CA_DISCONNECTED && Key_GetCatcher( ) == KEYCATCH_CONSOLE && !CL_Viewer_Active() ) {
 		return;
 	}
 
@@ -776,7 +776,7 @@ void Con_DrawConsole( void ) {
 	Con_CheckResize ();
 
 	// if disconnected, render console full screen
-	if ( clc.state == CA_DISCONNECTED ) {
+	if ( clc.state == CA_DISCONNECTED && !CL_Viewer_Active() ) {
 		if ( !( Key_GetCatcher( ) & (KEYCATCH_UI | KEYCATCH_CGAME)) ) {
 			Con_DrawSolidConsole( 1.0 );
 			return;

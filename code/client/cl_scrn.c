@@ -534,6 +534,9 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 		}
 	}
 
+	// a map being viewed without a game
+	CL_Viewer_Draw();
+
 	// the menu draws next
 	if ( Key_GetCatcher( ) & KEYCATCH_UI && uivm ) {
 		VM_Call( uivm, UI_REFRESH, cls.realtime );
@@ -568,9 +571,9 @@ void SCR_UpdateScreen( void ) {
 	}
 	recursive = 1;
 
-	// If there is no VM, there are also no rendering commands issued. Stop the renderer in
-	// that case.
-	if( uivm || com_dedicated->integer )
+	// FAKK2 has no user interface module, so the console and the map viewer
+	// draw without one. Nothing can be drawn while the renderer is down.
+	if( cls.rendererStarted || com_dedicated->integer )
 	{
 		// XXX
 		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");

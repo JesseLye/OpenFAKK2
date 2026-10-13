@@ -921,6 +921,7 @@ typedef struct
 // when there are multiple images of different formats available
 static imageExtToLoaderMap_t imageLoaders[ ] =
 {
+	{ "ftx",  R_LoadFTX },
 	{ "tga",  R_LoadTGA },
 	{ "jpg",  R_LoadJPG },
 	{ "jpeg", R_LoadJPG },
