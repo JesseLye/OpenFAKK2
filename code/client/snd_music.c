@@ -126,6 +126,7 @@ static int				music_fadeStart;
 static qboolean			music_fadeDown;
 
 static musicHandle_t	music_handles[MUSIC_HANDLES];
+static qboolean			music_initialised;		// the sound system started (and so the codecs)
 
 static const char *MUSIC_MoodName( int mood ) {
 	if ( mood < 0 || mood >= mood_totalnumber ) {
@@ -607,7 +608,7 @@ Retail 0x4412a0, once a frame.
 void MUSIC_Update( void ) {
 	int		curMood;
 
-	if ( !music_enabled ) {
+	if ( !music_enabled || !music_initialised ) {
 		return;
 	}
 
@@ -722,6 +723,7 @@ static void MUSIC_Info_f( void ) {
 }
 
 void MUSIC_Init( void ) {
+	music_initialised = qtrue;
 	Cmd_AddCommand( "loadsoundtrack", MUSIC_LoadSoundtrack_f );
 	Cmd_AddCommand( "playsong", MUSIC_PlaySong_f );
 	Cmd_AddCommand( "music_info", MUSIC_Info_f );

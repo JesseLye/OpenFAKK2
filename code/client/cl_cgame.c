@@ -640,8 +640,42 @@ static qhandle_t CL_CG_R_RegisterModel( const char *name ) {
 	return re.RegisterModel( name );
 }
 
+// cl_showRefEnts <text>: prints every entity the module adds whose model
+// name contains the text, and the camera of every scene, for comparing
+// placement with the retail game
+static cvar_t	*cl_showRefEnts;
+
 static void CL_CG_R_AddRefEntityToScene( refEntity_t *ent ) {
+	if ( !cl_showRefEnts ) {
+		cl_showRefEnts = Cvar_Get( "cl_showRefEnts", "", CVAR_TEMP );
+	}
+	if ( cl_showRefEnts->string[0] ) {
+		const tiki_t	*tiki = CL_TikiForHandle( ent->hModel );
+		const char		*name = tiki ? TIKI_Name( tiki ) : "?";
+
+		if ( Q_stristr( name, cl_showRefEnts->string ) ) {
+			vec3_t	angles;
+
+			vectoangles( ent->axis[0], angles );
+			Com_Printf( "refent %i %s ent %i org %.1f %.1f %.1f yaw %.0f pitch %.0f axislen %.2f scale %.2f anim %i frame %i old %i/%i lerp %.2f rfx %x\n",
+				cl.serverTime, name, ent->entityNumber, ent->origin[0], ent->origin[1], ent->origin[2],
+				angles[YAW], angles[PITCH], VectorLength( ent->axis[0] ), ent->scale, ent->anim, ent->frame, ent->oldanim, ent->oldframe,
+				ent->backlerp, ent->renderfx );
+		}
+	}
 	re.AddRefEntityToScene( ent );
+}
+
+static void CL_CG_R_RenderScene( refdef_t *fd ) {
+	if ( cl_showRefEnts && cl_showRefEnts->string[0] ) {
+		vec3_t	angles;
+
+		vectoangles( fd->viewaxis[0], angles );
+		Com_Printf( "scene %i org %.1f %.1f %.1f yaw %.0f pitch %.0f fov %.0f%s\n", cl.serverTime,
+			fd->vieworg[0], fd->vieworg[1], fd->vieworg[2], angles[YAW], angles[PITCH], fd->fov_x,
+			fd->sky_portal ? " skyportal" : "" );
+	}
+	re.RenderScene( fd );
 }
 
 static void CL_CG_R_AddRefSpriteToScene( refEntity_t *ent ) {
@@ -888,7 +922,7 @@ static void CL_FillCGameImport( clientGameImport_t *import ) {
 	import->BeginRegistration = CL_CG_BeginRegistration;
 	import->EndRegistration = CL_CG_EndRegistration;
 	import->R_ClearScene = re.ClearScene;
-	import->R_RenderScene = re.RenderScene;
+	import->R_RenderScene = CL_CG_R_RenderScene;
 	import->R_LoadWorldMap = re.LoadWorld;
 	import->R_RegisterModel = CL_CG_R_RegisterModel;
 	import->R_RegisterSkin = re.RegisterSkin;

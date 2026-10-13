@@ -174,6 +174,14 @@ static qboolean TAN_InFile( int length, int offset, int size ) {
 	return offset >= 0 && size >= 0 && offset <= length && size <= length - offset;
 }
 
+// FAKK2: the entity's scale (refEntity_t.scale, from the entity state) multiplies
+// the model on top of the definition's own scale; the tag functions already
+// apply it, so an attached model lands on the scaled tag. A scale of 0, which
+// only a caller that never set one gives, counts as 1.
+static float R_TikiEntityScale( const refEntity_t *e ) {
+	return e->scale > 0 ? e->scale : 1.0f;
+}
+
 /*
 ===============
 R_TikiShader
@@ -836,6 +844,7 @@ float R_TikiFarthestPoint( const trRefEntity_t *ent, const model_t *mod ) {
 	if ( ent->e.nonNormalizedAxes ) {
 		scale = VectorLength( ent->e.axis[0] );
 	}
+	scale *= R_TikiEntityScale( &ent->e );
 	VectorSubtract( ent->e.origin, tr.viewParms.or.origin, delta );
 	return VectorLength( delta ) + radius * scale;
 }
@@ -861,15 +870,18 @@ Culls with the frames' bounds, as Quake III does for MD3 models.
 ===============
 */
 static int R_TikiCull( const tikiFrame_t *newFrame, const tikiFrame_t *oldFrame, const trRefEntity_t *ent ) {
-	vec3_t	bounds[2];
+	vec3_t	bounds[2], origin;
+	float	escale = R_TikiEntityScale( &ent->e );
 	int		i;
 
 	if ( !ent->e.nonNormalizedAxes ) {
-		int		sphereCull = R_CullLocalPointAndRadius( (float *)newFrame->localOrigin, newFrame->radius );
+		int		sphereCull, sphereCullB;
 
+		VectorScale( newFrame->localOrigin, escale, origin );
+		sphereCull = R_CullLocalPointAndRadius( origin, newFrame->radius * escale );
 		if ( newFrame != oldFrame ) {
-			int		sphereCullB = R_CullLocalPointAndRadius( (float *)oldFrame->localOrigin, oldFrame->radius );
-
+			VectorScale( oldFrame->localOrigin, escale, origin );
+			sphereCullB = R_CullLocalPointAndRadius( origin, oldFrame->radius * escale );
 			if ( sphereCull != sphereCullB ) {
 				sphereCull = CULL_CLIP;
 			}
@@ -880,8 +892,8 @@ static int R_TikiCull( const tikiFrame_t *newFrame, const tikiFrame_t *oldFrame,
 	}
 
 	for ( i = 0 ; i < 3 ; i++ ) {
-		bounds[0][i] = oldFrame->bounds[0][i] < newFrame->bounds[0][i] ? oldFrame->bounds[0][i] : newFrame->bounds[0][i];
-		bounds[1][i] = oldFrame->bounds[1][i] > newFrame->bounds[1][i] ? oldFrame->bounds[1][i] : newFrame->bounds[1][i];
+		bounds[0][i] = ( oldFrame->bounds[0][i] < newFrame->bounds[0][i] ? oldFrame->bounds[0][i] : newFrame->bounds[0][i] ) * escale;
+		bounds[1][i] = ( oldFrame->bounds[1][i] > newFrame->bounds[1][i] ? oldFrame->bounds[1][i] : newFrame->bounds[1][i] ) * escale;
 	}
 	return R_CullLocalBox( bounds );
 }
@@ -1027,7 +1039,7 @@ void RB_SurfaceTan( void *surface ) {
 	const tikiFrame_t		*oldFrame = &surf->anim->frames[e->oldframe];
 	const unsigned short	*newXyz, *oldXyz;
 	float					*outXyz, *outNormal;
-	float					backlerp, frontlerp;
+	float					backlerp, frontlerp, escale = R_TikiEntityScale( e );
 	int						i, j, numVerts, numIndexes, baseVertex, baseIndex;
 
 	backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
@@ -1060,12 +1072,13 @@ void RB_SurfaceTan( void *surface ) {
 		newNormal[2] = tr.sinTable[( lng + ( FUNCTABLE_SIZE / 4 ) ) & FUNCTABLE_MASK];
 
 		if ( backlerp == 0 ) {
+			VectorScale( outXyz, escale, outXyz );
 			VectorCopy( newNormal, outNormal );
 			continue;
 		}
 
 		for ( j = 0 ; j < 3 ; j++ ) {
-			outXyz[j] = outXyz[j] * frontlerp + ( oldXyz[j] * oldFrame->scale[j] + oldFrame->offset[j] ) * backlerp;
+			outXyz[j] = ( outXyz[j] * frontlerp + ( oldXyz[j] * oldFrame->scale[j] + oldFrame->offset[j] ) * backlerp ) * escale;
 		}
 		lat = ( ( oldXyz[3] >> 8 ) & 0xff ) * ( FUNCTABLE_SIZE / 256 );
 		lng = ( oldXyz[3] & 0xff ) * ( FUNCTABLE_SIZE / 256 );
@@ -1349,6 +1362,8 @@ void RB_SurfaceSkel( void *surface ) {
 	float				*outXyz, *outNormal;
 	int					i, j, numVerts, numIndexes, baseVertex, baseIndex;
 
+	float				escale = R_TikiEntityScale( &ent->e );
+
 	if ( !R_TikiSkelAnim( tiki, ent->e.anim ) ) {
 		return;
 	}
@@ -1379,7 +1394,7 @@ void RB_SurfaceSkel( void *surface ) {
 			Skel_RotateByAxis( v->normal, pose->axis, turned );
 			VectorMA( normal, w->weight, turned, normal );
 		}
-		VectorScale( xyz, tiki->scale, outXyz );
+		VectorScale( xyz, tiki->scale * escale, outXyz );
 		VectorNormalizeFast( normal );
 		VectorCopy( normal, outNormal );
 

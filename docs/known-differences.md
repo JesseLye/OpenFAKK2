@@ -448,6 +448,13 @@ What is implemented, and on what basis:
 - **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
   size is the image's width times the shader's `spriteScale` times the entity's scale.
   That is OpenMoHAA's rule; the retail renderer's has not been read.
+- **The entity's scale** (`refEntity_t.scale`, the entity state's `scale`, which maps and
+  scripts set: `intro`'s dropship is placed at 0.02, Obadiah in `swamp1` at 2.0) multiplies
+  a `.tik` model's vertexes, bounds and radius on top of the definition's own scale, as the
+  SDK's field description says and as the tag functions already did. Until it was applied
+  an attached model sat where the scaled tag is while its parent drew unscaled.
+  `cl_showRefEnts <text>` prints every entity the client game module adds whose model name
+  contains the text, and each scene's camera, which is how this was found.
 - **Render flags** (`RF_*`) use FAKK2's values throughout, so that the client game
   module's flags mean the same thing to the renderer. The `refEntity_t`, `refdef_t`
   and `glconfig_t` layouts are the SDK's, since the module fills them in.
