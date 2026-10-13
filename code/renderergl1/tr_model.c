@@ -188,13 +188,34 @@ typedef struct
 	qhandle_t (*ModelLoader)( const char *, model_t * );
 } modelExtToLoaderMap_t;
 
+/*
+====================
+R_RegisterSpr
+
+FAKK2: a ".spr" model is a sprite drawn with the shader of that name. There
+is no file; the shader scripts define them.
+====================
+*/
+static qhandle_t R_RegisterSpr( const char *name, model_t *mod ) {
+	shader_t	*sh = R_FindShader( name, LIGHTMAP_NONE, qtrue );
+
+	if ( sh->defaultShader ) {
+		ri.Printf( PRINT_DEVELOPER, "R_RegisterSpr: no shader for %s\n", name );
+		return 0;
+	}
+	mod->type = MOD_SPRITE;
+	mod->spriteShader = sh;
+	return mod->index;
+}
+
 // Note that the ordering indicates the order of preference used
 // when there are multiple models of different formats available
 static modelExtToLoaderMap_t modelLoaders[ ] =
 {
 	{ "iqm", R_RegisterIQM },
 	{ "mdr", R_RegisterMDR },
-	{ "md3", R_RegisterMD3 }
+	{ "md3", R_RegisterMD3 },
+	{ "spr", R_RegisterSpr }
 };
 
 static int numModelLoaders = ARRAY_LEN(modelLoaders);
@@ -1104,7 +1125,7 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 		return;
 	} else if(model->type == MOD_IQM) {
 		iqmData_t *iqmData;
-		
+
 		iqmData = model->modelData;
 
 		if(iqmData->bounds)
@@ -1113,8 +1134,29 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 			VectorCopy(iqmData->bounds + 3, maxs);
 			return;
 		}
+	} else if ( model->type == MOD_TIKI ) {
+		R_TikiBounds( model, mins, maxs );
+		return;
 	}
 
 	VectorClear( mins );
 	VectorClear( maxs );
+}
+
+/*
+====================
+RE_ModelRadius
+
+FAKK2: how far a model reaches from its origin.
+====================
+*/
+float RE_ModelRadius( qhandle_t handle ) {
+	model_t		*model = R_GetModelByHandle( handle );
+	vec3_t		mins, maxs;
+
+	if ( model->type == MOD_TIKI ) {
+		return R_TikiRadius( model );
+	}
+	R_ModelBounds( handle, mins, maxs );
+	return RadiusFromBounds( mins, maxs );
 }

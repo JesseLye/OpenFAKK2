@@ -16,24 +16,32 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with Quake III Arena source code; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 ===========================================================================
 */
 // cl_cgame.c  -- client system interaction with client game
+//
+// FAKK2's client game module is a native library (cgamex86.dll) that exports
+// GetCGameAPI, which takes nothing and returns the module's entry points;
+// the engine then hands CG_Init a table of its own functions
+// (clientGameImport_t). There is no system call interface. The table's order
+// comes from the SDK's cg_public.h and matches the retail engine's
+// (fakk2.exe 0x41ce90 fills 124 slots; two of them, NumSkins and
+// Tag_OrientationEx, it leaves NULL).
 
 #include "client.h"
-
-#include "../botlib/botlib.h"
+#include "../sys/sys_local.h"
+#include "../sys/sys_loadlib.h"
+#include "../tiki/tiki.h"
+#include "../qcommon/alias.h"
+#include "../server/server.h"
 
 #ifdef USE_MUMBLE
 #include "libmumblelink.h"
 #endif
 
-extern	botlib_export_t	*botlib_export;
-
-extern qboolean loadCamera(const char *name);
-extern void startCamera(int time);
-extern qboolean getCameraInfo(int time, vec3_t *origin, vec3_t *angles);
+static void					*cgameLibrary;
+static clientGameExport_t	*cge;
 
 /*
 ====================
@@ -117,11 +125,19 @@ void	CL_GetCurrentSnapshotNumber( int *snapshotNumber, int *serverTime ) {
 /*
 ====================
 CL_GetSnapshot
+
+Follows the retail engine (fakk2.exe 0x41c6d0): a snapshot from before the
+last server restart is not handed out, and the entities are ordered so that
+an attached entity comes after its parent, which the client game module
+places it from. Entities whose parents never turn up are added last, with a
+note.
 ====================
 */
 qboolean	CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 	clSnapshot_t	*clSnap;
-	int				i, count;
+	// -1: not seen, -2: added, otherwise the parent the entity waits for
+	static int		placed[MAX_GENTITIES];
+	int				i, pass, count;
 
 	if ( snapshotNumber > cl.snap.messageNum ) {
 		Com_Error( ERR_DROP, "CL_GetSnapshot: snapshotNumber > cl.snapshot.messageNum" );
@@ -138,6 +154,11 @@ qboolean	CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 		return qfalse;
 	}
 
+	// a frame from the other side of a server restart is not comparable
+	if ( ( clSnap->snapFlags ^ cl.snap.snapFlags ) & SNAPFLAG_SERVERCOUNT ) {
+		return qfalse;
+	}
+
 	// if the entities in the frame have fallen out of their
 	// circular buffer, we can't return it
 	if ( cl.parseEntitiesNum - clSnap->parseEntitiesNum >= MAX_PARSE_ENTITIES ) {
@@ -151,18 +172,53 @@ qboolean	CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 	snapshot->serverTime = clSnap->serverTime;
 	Com_Memcpy( snapshot->areamask, clSnap->areamask, sizeof( snapshot->areamask ) );
 	snapshot->ps = clSnap->ps;
+	snapshot->number_of_sounds = clSnap->number_of_sounds;
+	Com_Memcpy( snapshot->sounds, clSnap->sounds, sizeof( snapshot->sounds ) );
+
 	count = clSnap->numEntities;
 	if ( count > MAX_ENTITIES_IN_SNAPSHOT ) {
 		Com_DPrintf( "CL_GetSnapshot: truncated %i entities to %i\n", count, MAX_ENTITIES_IN_SNAPSHOT );
 		count = MAX_ENTITIES_IN_SNAPSHOT;
 	}
-	snapshot->numEntities = count;
+	snapshot->numEntities = 0;
+
+#define SNAP_ENTITY( n ) cl.parseEntities[ ( clSnap->parseEntitiesNum + ( n ) ) & ( MAX_PARSE_ENTITIES - 1 ) ]
+#define SNAP_ADD( es ) ( placed[( es )->number] = -2, snapshot->entities[snapshot->numEntities++] = *( es ) )
+
+	Com_Memset( placed, -1, sizeof( placed ) );
 	for ( i = 0 ; i < count ; i++ ) {
-		snapshot->entities[i] = 
-			cl.parseEntities[ ( clSnap->parseEntitiesNum + i ) & (MAX_PARSE_ENTITIES-1) ];
+		entityState_t	*es = &SNAP_ENTITY( i );
+
+		if ( es->parent == ENTITYNUM_NONE || placed[es->parent] == -2 ) {
+			SNAP_ADD( es );
+		} else {
+			placed[es->number] = es->parent;
+		}
+	}
+	for ( pass = 0 ; pass < 8 && snapshot->numEntities != count ; pass++ ) {
+		for ( i = 0 ; i < count ; i++ ) {
+			entityState_t	*es = &SNAP_ENTITY( i );
+
+			if ( placed[es->number] >= 0 && placed[placed[es->number]] == -2 ) {
+				SNAP_ADD( es );
+			}
+		}
+	}
+	if ( snapshot->numEntities != count ) {
+		Com_DPrintf( "CL_GetSnapshot: %i entities without their parents\n", count - snapshot->numEntities );
+		for ( i = 0 ; i < count ; i++ ) {
+			entityState_t	*es = &SNAP_ENTITY( i );
+
+			if ( placed[es->number] >= 0 ) {
+				Com_DPrintf( "CL_GetSnapshot: entity %d with parent %d at %.0f %.0f %.0f\n", es->number, es->parent,
+					es->origin[0], es->origin[1], es->origin[2] );
+				SNAP_ADD( es );
+			}
+		}
 	}
 
-	// FIXME: configstring changes and server commands!!!
+#undef SNAP_ENTITY
+#undef SNAP_ADD
 
 	return qtrue;
 }
@@ -218,7 +274,7 @@ void CL_ConfigstringModified( void ) {
 
 	// leave the first 0 for uninitialized strings
 	cl.gameState.dataCount = 1;
-		
+
 	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
 		if ( i == index ) {
 			dup = s;
@@ -378,6 +434,533 @@ void CL_CM_LoadMap( const char *mapname ) {
 }
 
 /*
+===========================================================================
+
+The functions handed to the client game module
+
+===========================================================================
+*/
+
+static void QDECL CL_CG_Printf( const char *fmt, ... ) {
+	va_list		argptr;
+	char		msg[MAXPRINTMSG];
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( msg, sizeof( msg ), fmt, argptr );
+	va_end( argptr );
+
+	Com_Printf( "%s", msg );
+}
+
+static void QDECL CL_CG_DPrintf( const char *fmt, ... ) {
+	va_list		argptr;
+	char		msg[MAXPRINTMSG];
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( msg, sizeof( msg ), fmt, argptr );
+	va_end( argptr );
+
+	Com_DPrintf( "%s", msg );
+}
+
+static void QDECL CL_CG_Error( int errorLevel, const char *fmt, ... ) {
+	va_list		argptr;
+	char		msg[MAXPRINTMSG];
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( msg, sizeof( msg ), fmt, argptr );
+	va_end( argptr );
+
+	Com_Error( errorLevel, "%s", msg );
+}
+
+static void *CL_CG_Malloc( int size ) {
+	return Z_Malloc( size );
+}
+
+static void CL_CG_Free( void *block ) {
+	if ( block ) {
+		Z_Free( block );
+	}
+}
+
+static int CL_CG_FS_ReadFile( const char *name, void **buf, qboolean quiet ) {
+	return FS_ReadFile( name, buf );
+}
+
+static void CL_CG_FS_WriteFile( const char *qpath, const void *buffer, int size ) {
+	FS_WriteFile( qpath, buffer, size );
+}
+
+static int CL_CG_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
+	return CL_GetSnapshot( snapshotNumber, snapshot );
+}
+
+static void CL_CG_SendConsoleCommand( const char *text ) {
+	Cbuf_AddText( text );
+}
+
+// The retail engine redraws the screen only until the first snapshot is
+// expected (fakk2.exe 0x423490).
+static void CL_CG_UpdateLoadingScreen( void ) {
+	if ( clc.state < CA_PRIMED ) {
+		SCR_UpdateScreen();
+	}
+}
+
+static void CL_CG_SendClientCommand( const char *s ) {
+	CL_AddReliableCommand( s, qfalse );
+}
+
+// collision
+
+static int CL_CG_CM_TransformedPointContents( const vec3_t p, int headnode, vec3_t origin, vec3_t angles ) {
+	return CM_TransformedPointContents( p, headnode, origin, angles );
+}
+
+static void CL_CG_CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
+							   const vec3_t mins, const vec3_t maxs, int headnode, int brushmask, qboolean cylinder ) {
+	CM_BoxTrace( results, start, end, mins, maxs, headnode, brushmask, cylinder );
+}
+
+static void CL_CG_CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
+										  const vec3_t mins, const vec3_t maxs, int headnode, int brushmask,
+										  const vec3_t origin, const vec3_t angles, qboolean cylinder ) {
+	CM_TransformedBoxTrace( results, start, end, mins, maxs, headnode, brushmask, origin, angles, cylinder );
+}
+
+static clipHandle_t CL_CG_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs, int contents ) {
+	return CM_TempBoxModel( mins, maxs, qfalse, contents );
+}
+
+static int CL_CG_CM_MarkFragments( int numPoints, const vec3_t *points, const vec3_t projection,
+								   int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t *fragmentBuffer ) {
+	return re.MarkFragments( numPoints, points, projection, maxPoints, pointBuffer, maxFragments, fragmentBuffer );
+}
+
+// sound
+//
+// Volumes, minimum distances, reverb and the music system are not applied
+// yet; Quake III's sound system plays the sounds as it does its own.
+
+static int	cl_loopingSoundNum;		// FAKK2 names no entity for a looping sound; Quake III wants one
+
+static void CL_CG_S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float min_dist ) {
+	S_StartSound( origin, entnum, entchannel, sfx );
+}
+
+static void CL_CG_S_StartLocalSound( const char *sound_name ) {
+	const char	*name = Alias_FindRandom( sound_name );
+
+	if ( !name ) {
+		name = sound_name;
+	}
+	S_StartLocalSound( S_RegisterSound( name, qfalse ), CHAN_LOCAL_SOUND );
+}
+
+static void CL_CG_S_StopSound( int entnum, int channel ) {
+}
+
+static void CL_CG_S_ClearLoopingSounds( void ) {
+	S_ClearLoopingSounds( qfalse );
+	cl_loopingSoundNum = 0;
+}
+
+static void CL_CG_S_AddLoopingSound( const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, float volume, float min_dist ) {
+	if ( cl_loopingSoundNum >= MAX_GENTITIES ) {
+		return;
+	}
+	S_AddLoopingSound( cl_loopingSoundNum++, origin, velocity, sfx );
+}
+
+static void CL_CG_S_Respatialize( int entityNum, vec3_t origin, vec3_t axis[3] ) {
+	S_Respatialize( entityNum, origin, axis, 0 );
+}
+
+static sfxHandle_t CL_CG_S_RegisterSound( const char *sample ) {
+	return S_RegisterSound( sample, qfalse );
+}
+
+static void CL_CG_S_EndRegistration( void ) {
+}
+
+static void CL_CG_S_UpdateEntity( int entityNum, const vec3_t origin, const vec3_t velocity, qboolean use_listener ) {
+	S_UpdateEntityPosition( entityNum, origin );
+}
+
+static void CL_CG_S_SetReverb( int reverb_type, float reverb_level ) {
+}
+
+static void CL_CG_S_SetGlobalAmbientVolumeLevel( float volume ) {
+}
+
+static void CL_CG_MUSIC_NewSoundtrack( const char *name ) {
+	Com_DPrintf( "MUSIC_NewSoundtrack: %s (music is not played yet)\n", name );
+}
+
+static void CL_CG_MUSIC_UpdateMood( int current_mood, int fallback_mood ) {
+}
+
+static void CL_CG_MUSIC_UpdateVolume( float volume, float fade_time ) {
+}
+
+// The camera look offsets (mouse look while the view is fixed) have not been
+// read from the retail engine; there is no offset yet.
+static float *CL_CG_GetCameraOffset( qboolean *lookactive, qboolean *resetview ) {
+	static vec3_t	offset;
+
+	*lookactive = qfalse;
+	*resetview = qfalse;
+	return offset;
+}
+
+// renderer
+
+static void CL_CG_BeginRegistration( void ) {
+	// the client began the renderer's registration when it started it
+}
+
+static void CL_CG_EndRegistration( void ) {
+	re.EndRegistration();
+}
+
+static qhandle_t CL_CG_R_RegisterModel( const char *name ) {
+	int		len = strlen( name );
+
+	if ( len > 4 && !Q_stricmp( name + len - 4, ".tik" ) ) {
+		return CL_RegisterTikiModel( name, NULL );
+	}
+	return re.RegisterModel( name );
+}
+
+static void CL_CG_R_AddRefEntityToScene( refEntity_t *ent ) {
+	re.AddRefEntityToScene( ent );
+}
+
+static void CL_CG_R_AddRefSpriteToScene( refEntity_t *ent ) {
+	re.AddRefSpriteToScene( ent );
+}
+
+static void CL_CG_R_AddLightToScene( vec3_t origin, float intensity, float r, float g, float b, int type ) {
+	re.AddLightToScene( origin, intensity, r, g, b, type );
+}
+
+static void CL_CG_R_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int renderfx ) {
+	re.AddPolyToScene( hShader, numVerts, verts, 1 );
+}
+
+static void CL_CG_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) {
+	re.ModelBounds( model, mins, maxs );
+}
+
+static float CL_CG_R_ModelRadius( clipHandle_t model ) {
+	return re.ModelRadius( model );
+}
+
+static void CL_CG_R_DebugLine( vec3_t start, vec3_t end, float r, float g, float b, float alpha ) {
+	re.DebugLine( start, end, r, g, b, alpha );
+}
+
+static void CL_CG_R_SwipePoint( vec3_t p1, vec3_t p2, float time ) {
+	re.SwipePoint( p1, p2, time );
+}
+
+// TIKI
+//
+// The client game module gets a model's definition through TIKI_GetHandle
+// from the renderer's model handle. Here the two handles are the same
+// number; a handle that is not a .tik model has no definition.
+
+static tiki_t *CL_Tiki( int tikihandle ) {
+	return CL_TikiForHandle( tikihandle );
+}
+
+static int CL_CG_TIKI_GetHandle( qhandle_t handle ) {
+	return CL_TikiForHandle( handle ) ? handle : -1;
+}
+
+static int CL_CG_NumAnims( int tikihandle ) { return TIKI_NumAnims( CL_Tiki( tikihandle ) ); }
+static int CL_CG_NumSkins( int tikihandle ) { return TIKI_NumSkins( CL_Tiki( tikihandle ) ); }
+static int CL_CG_NumSurfaces( int tikihandle ) { return TIKI_NumSurfaces( CL_Tiki( tikihandle ) ); }
+static int CL_CG_NumTags( int tikihandle ) { return TIKI_NumTags( CL_Tiki( tikihandle ) ); }
+static qboolean CL_CG_InitCommands( int tikihandle, tiki_cmd_t *tiki_cmd ) { return TIKI_InitCommands( CL_Tiki( tikihandle ), qfalse, tiki_cmd ); }
+static void CL_CG_CalculateBounds( int tikihandle, float scale, vec3_t mins, vec3_t maxs ) { TIKI_CalculateBounds( CL_Tiki( tikihandle ), scale, mins, maxs ); }
+static void CL_CG_FlushAll( void ) {}
+static const char *CL_CG_TIKI_NameForNum( int tikihandle ) {
+	const char	*name = TIKI_Name( CL_Tiki( tikihandle ) );
+
+	return name ? name : "";
+}
+
+static const char *CL_CG_Anim_NameForNum( int tikihandle, int animnum ) { return TIKI_Anim_NameForNum( CL_Tiki( tikihandle ), animnum ); }
+static int CL_CG_Anim_NumForName( int tikihandle, const char *name ) { return TIKI_Anim_NumForName( CL_Tiki( tikihandle ), name ); }
+static int CL_CG_Anim_Random( int tikihandle, const char *name ) { return TIKI_Anim_Random( CL_Tiki( tikihandle ), name ); }
+static int CL_CG_Anim_NumFrames( int tikihandle, int animnum ) { return TIKI_Anim_NumFrames( CL_Tiki( tikihandle ), animnum ); }
+static float CL_CG_Anim_Time( int tikihandle, int animnum ) { return TIKI_Anim_Time( CL_Tiki( tikihandle ), animnum ); }
+static void CL_CG_Anim_Delta( int tikihandle, int animnum, vec3_t delta ) { TIKI_Anim_Delta( CL_Tiki( tikihandle ), animnum, delta ); }
+static int CL_CG_Anim_Flags( int tikihandle, int animnum ) { return TIKI_Anim_Flags( CL_Tiki( tikihandle ), animnum ); }
+// the definitions' cross-blend times are not read yet, so animations change without blending
+static int CL_CG_Anim_CrossblendTime( int tikihandle, int animnum ) { return 0; }
+static qboolean CL_CG_Anim_HasCommands( int tikihandle, int animnum ) { return TIKI_Anim_HasCommands( CL_Tiki( tikihandle ), animnum, qfalse ); }
+
+static qboolean CL_CG_Frame_Commands( int tikihandle, int animnum, int framenum, tiki_cmd_t *tiki_cmd ) { return TIKI_Frame_Commands( CL_Tiki( tikihandle ), animnum, framenum, qfalse, tiki_cmd ); }
+static void CL_CG_Frame_Delta( int tikihandle, int animnum, int framenum, vec3_t delta ) { TIKI_Frame_Delta( CL_Tiki( tikihandle ), animnum, framenum, delta ); }
+static float CL_CG_Frame_Time( int tikihandle, int animnum, int framenum ) { return TIKI_Frame_Time( CL_Tiki( tikihandle ), animnum, framenum ); }
+static void CL_CG_Frame_Bounds( int tikihandle, int animnum, int framenum, float scale, vec3_t mins, vec3_t maxs ) { TIKI_Frame_Bounds( CL_Tiki( tikihandle ), animnum, framenum, scale, mins, maxs ); }
+static float CL_CG_Frame_Radius( int tikihandle, int animnum, int framenum ) {
+	vec3_t	mins, maxs;
+
+	TIKI_Frame_Bounds( CL_Tiki( tikihandle ), animnum, framenum, 1.0f, mins, maxs );
+	return RadiusFromBounds( mins, maxs );
+}
+
+static int CL_CG_Surface_NameToNum( int tikihandle, const char *name ) { return TIKI_Surface_NameToNum( CL_Tiki( tikihandle ), name ); }
+static const char *CL_CG_Surface_NumToName( int tikihandle, int num ) { return TIKI_Surface_NumToName( CL_Tiki( tikihandle ), num ); }
+static int CL_CG_Surface_Flags( int tikihandle, int num ) { return TIKI_Surface_Flags( CL_Tiki( tikihandle ), num ); }
+static int CL_CG_Surface_NumSkins( int tikihandle, int num ) { return TIKI_Surface_NumSkins( CL_Tiki( tikihandle ), num ); }
+
+static int CL_CG_Tag_NumForName( int tikihandle, const char *name ) { return TIKI_Tag_NumForName( CL_Tiki( tikihandle ), name ); }
+static const char *CL_CG_Tag_NameForNum( int tikihandle, int num ) { return TIKI_Tag_NameForNum( CL_Tiki( tikihandle ), num ); }
+
+// bone controllers and cross-blending are not applied to tags yet
+static orientation_t CL_CG_Tag_Orientation( int tikihandle, int anim, int frame, int tagnum, float scale, int *bone_tag, vec4_t *bone_quat ) {
+	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), anim, frame, tagnum, scale );
+}
+
+static orientation_t CL_CG_Tag_OrientationEx( int tikihandle, int anim, int frame, int tagnum, float scale, int *bone_tag, vec4_t *bone_quat,
+	int crossblend_anim, int crossblend_frame, float crossblend_lerp, qboolean uselegs, qboolean usetorso, int torso_anim, int torso_frame,
+	int torso_crossblend_anim, int torso_crossblend_frame, float torso_crossblend_lerp ) {
+	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), anim, frame, tagnum, scale );
+}
+
+static orientation_t CL_CG_Tag_NamedOrientation( int tikihandle, int anim, int frame, float scale, const char *tagName, int *bone_tag, vec4_t *bone_quat ) {
+	tiki_t	*tiki = CL_Tiki( tikihandle );
+
+	return TIKI_Tag_Orientation( tiki, anim, frame, TIKI_Tag_NumForName( tiki, tagName ), scale );
+}
+
+// the tag of the frame the model shows; not interpolated towards its old frame yet
+static orientation_t CL_CG_Tag_LerpedOrientation( int tikihandle, refEntity_t *model, int tagnum ) {
+	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), model->anim, model->frame, tagnum, model->scale ? model->scale : 1.0f );
+}
+
+static AliasList_t *CL_TikiAliases( int tikihandle, qboolean create ) {
+	tiki_t		*tiki = CL_Tiki( tikihandle );
+	AliasList_t	**list;
+
+	if ( !tiki ) {
+		return NULL;
+	}
+	list = TIKI_AliasList( tiki );
+	if ( !*list && create ) {
+		*list = AliasList_New( TIKI_Name( tiki ) );
+	}
+	return *list;
+}
+
+static qboolean CL_CG_TIKI_Alias_Add( int tikihandle, const char *alias, const char *name, const char *parameters ) {
+	return Alias_ListAdd( CL_TikiAliases( tikihandle, qtrue ), alias, name, parameters );
+}
+static const char *CL_CG_TIKI_Alias_FindRandom( int tikihandle, const char *alias ) {
+	return Alias_ListFindRandom( CL_TikiAliases( tikihandle, qfalse ), alias );
+}
+static void CL_CG_TIKI_Alias_Dump( int tikihandle ) {
+	Alias_ListDump( CL_TikiAliases( tikihandle, qfalse ) );
+}
+static void CL_CG_TIKI_Alias_Clear( int tikihandle ) {
+	Alias_ListClear( CL_TikiAliases( tikihandle, qfalse ) );
+}
+static const char *CL_CG_TIKI_Alias_FindDialog( int tikihandle, const char *alias, int random, int entity_number ) {
+	return Alias_ListFindDialog( CL_TikiAliases( tikihandle, qfalse ), alias, random, entity_number );
+}
+
+/*
+====================
+CL_FillCGameImport
+====================
+*/
+static void CL_FillCGameImport( clientGameImport_t *import ) {
+	Com_Memset( import, 0, sizeof( *import ) );
+
+	import->apiversion = CGAME_IMPORT_API_VERSION;
+
+	import->Printf = CL_CG_Printf;
+	import->DPrintf = CL_CG_DPrintf;
+	import->DebugPrintf = CL_CG_DPrintf;
+	import->Malloc = CL_CG_Malloc;
+	import->Free = CL_CG_Free;
+	import->Error = CL_CG_Error;
+	import->Milliseconds = Sys_Milliseconds;
+	import->Cvar_Get = Cvar_Get;
+	import->Cvar_Set = Cvar_Set;
+	import->Argc = Cmd_Argc;
+	import->Argv = Cmd_Argv;
+	import->Args = Cmd_Args;
+	import->AddCommand = CL_AddCgameCommand;
+	import->FS_ReadFile = CL_CG_FS_ReadFile;
+	import->FS_FreeFile = FS_FreeFile;
+	import->FS_WriteFile = CL_CG_FS_WriteFile;
+	import->FS_WriteTextFile = CL_CG_FS_WriteFile;
+	import->SendConsoleCommand = CL_CG_SendConsoleCommand;
+	import->UpdateLoadingScreen = CL_CG_UpdateLoadingScreen;
+	import->SendClientCommand = CL_CG_SendClientCommand;
+
+	import->CM_LoadMap = CL_CM_LoadMap;
+	import->CM_InlineModel = CM_InlineModel;
+	import->CM_NumInlineModels = CM_NumInlineModels;
+	import->CM_PointContents = CM_PointContents;
+	import->CM_TransformedPointContents = CL_CG_CM_TransformedPointContents;
+	import->CM_BoxTrace = CL_CG_CM_BoxTrace;
+	import->CM_TransformedBoxTrace = CL_CG_CM_TransformedBoxTrace;
+	import->CM_TempBoxModel = CL_CG_CM_TempBoxModel;
+	import->CM_MarkFragments = CL_CG_CM_MarkFragments;
+
+	import->S_StartSound = CL_CG_S_StartSound;
+	import->S_StartLocalSound = CL_CG_S_StartLocalSound;
+	import->S_StopSound = CL_CG_S_StopSound;
+	import->S_ClearLoopingSounds = CL_CG_S_ClearLoopingSounds;
+	import->S_AddLoopingSound = CL_CG_S_AddLoopingSound;
+	import->S_Respatialize = CL_CG_S_Respatialize;
+	import->S_BeginRegistration = S_BeginRegistration;
+	import->S_RegisterSound = CL_CG_S_RegisterSound;
+	import->S_EndRegistration = CL_CG_S_EndRegistration;
+	import->S_UpdateEntity = CL_CG_S_UpdateEntity;
+	import->S_SetReverb = CL_CG_S_SetReverb;
+	import->S_SetGlobalAmbientVolumeLevel = CL_CG_S_SetGlobalAmbientVolumeLevel;
+
+	import->MUSIC_NewSoundtrack = CL_CG_MUSIC_NewSoundtrack;
+	import->MUSIC_UpdateMood = CL_CG_MUSIC_UpdateMood;
+	import->MUSIC_UpdateVolume = CL_CG_MUSIC_UpdateVolume;
+
+	import->get_lip_length = SV_SoundLength;
+	import->get_lip_amplitudes = SV_SoundAmplitudes;
+
+	import->get_camera_offset = CL_CG_GetCameraOffset;
+
+	import->BeginRegistration = CL_CG_BeginRegistration;
+	import->EndRegistration = CL_CG_EndRegistration;
+	import->R_ClearScene = re.ClearScene;
+	import->R_RenderScene = re.RenderScene;
+	import->R_LoadWorldMap = re.LoadWorld;
+	import->R_RegisterModel = CL_CG_R_RegisterModel;
+	import->R_RegisterSkin = re.RegisterSkin;
+	import->R_RegisterShader = re.RegisterShader;
+	import->R_RegisterShaderNoMip = re.RegisterShaderNoMip;
+	import->R_AddRefEntityToScene = CL_CG_R_AddRefEntityToScene;
+	import->R_AddRefSpriteToScene = CL_CG_R_AddRefSpriteToScene;
+	import->R_AddLightToScene = CL_CG_R_AddLightToScene;
+	import->R_AddPolyToScene = CL_CG_R_AddPolyToScene;
+	import->R_SetColor = re.SetColor;
+	import->R_DrawStretchPic = re.DrawStretchPic;
+	import->R_GetRenderEntity = re.GetRenderEntity;
+	import->R_ModelBounds = CL_CG_R_ModelBounds;
+	import->R_ModelRadius = CL_CG_R_ModelRadius;
+	import->R_Noise = re.Noise;
+	import->R_DebugLine = CL_CG_R_DebugLine;
+	import->R_SwipeBegin = re.SwipeBegin;
+	import->R_SwipePoint = CL_CG_R_SwipePoint;
+	import->R_SwipeEnd = re.SwipeEnd;
+	import->R_GetShaderWidth = re.GetShaderWidth;
+	import->R_GetShaderHeight = re.GetShaderHeight;
+	import->R_DrawBox = re.DrawBox;
+
+	import->GetGameState = CL_GetGameState;
+	import->GetSnapshot = CL_CG_GetSnapshot;
+	import->GetCurrentSnapshotNumber = CL_GetCurrentSnapshotNumber;
+	import->GetGlconfig = CL_GetGlconfig;
+	import->GetParseEntityState = CL_GetParseEntityState;
+	import->GetCurrentCmdNumber = CL_GetCurrentCmdNumber;
+	import->GetUserCmd = CL_GetUserCmd;
+	import->GetServerCommand = CL_GetServerCommand;
+
+	import->Alias_Add = Alias_Add;
+	import->Alias_FindRandom = Alias_FindRandom;
+	import->Alias_Dump = Alias_Dump;
+	import->Alias_Clear = Alias_Clear;
+
+	import->TIKI_GetHandle = CL_CG_TIKI_GetHandle;
+	import->NumAnims = CL_CG_NumAnims;
+	import->NumSkins = CL_CG_NumSkins;
+	import->NumSurfaces = CL_CG_NumSurfaces;
+	import->NumTags = CL_CG_NumTags;
+	import->InitCommands = CL_CG_InitCommands;
+	import->CalculateBounds = CL_CG_CalculateBounds;
+	import->FlushAll = CL_CG_FlushAll;
+	import->TIKI_NameForNum = CL_CG_TIKI_NameForNum;
+
+	import->Anim_NameForNum = CL_CG_Anim_NameForNum;
+	import->Anim_NumForName = CL_CG_Anim_NumForName;
+	import->Anim_Random = CL_CG_Anim_Random;
+	import->Anim_NumFrames = CL_CG_Anim_NumFrames;
+	import->Anim_Time = CL_CG_Anim_Time;
+	import->Anim_Delta = CL_CG_Anim_Delta;
+	import->Anim_Flags = CL_CG_Anim_Flags;
+	import->Anim_CrossblendTime = CL_CG_Anim_CrossblendTime;
+	import->Anim_HasCommands = CL_CG_Anim_HasCommands;
+
+	import->Frame_Commands = CL_CG_Frame_Commands;
+	import->Frame_Delta = CL_CG_Frame_Delta;
+	import->Frame_Time = CL_CG_Frame_Time;
+	import->Frame_Bounds = CL_CG_Frame_Bounds;
+	import->Frame_Radius = CL_CG_Frame_Radius;
+
+	import->Surface_NameToNum = CL_CG_Surface_NameToNum;
+	import->Surface_NumToName = CL_CG_Surface_NumToName;
+	import->Surface_Flags = CL_CG_Surface_Flags;
+	import->Surface_NumSkins = CL_CG_Surface_NumSkins;
+
+	import->Tag_NumForName = CL_CG_Tag_NumForName;
+	import->Tag_NameForNum = CL_CG_Tag_NameForNum;
+	import->Tag_Orientation = CL_CG_Tag_Orientation;
+	import->Tag_OrientationEx = CL_CG_Tag_OrientationEx;
+	import->Tag_NamedOrientation = CL_CG_Tag_NamedOrientation;
+	import->Tag_LerpedOrientation = CL_CG_Tag_LerpedOrientation;
+
+	import->TIKI_Alias_Add = CL_CG_TIKI_Alias_Add;
+	import->TIKI_Alias_FindRandom = CL_CG_TIKI_Alias_FindRandom;
+	import->TIKI_Alias_Dump = CL_CG_TIKI_Alias_Dump;
+	import->TIKI_Alias_Clear = CL_CG_TIKI_Alias_Clear;
+	import->TIKI_Alias_FindDialog = CL_CG_TIKI_Alias_FindDialog;
+}
+
+/*
+===============
+CL_LoadCGameLibrary
+
+Looks beside the server game module: the home directory, the executable's
+directory and the base directory, each under the current game directory.
+===============
+*/
+static void *CL_LoadCGameLibrary( char *loadedFrom, int loadedFromSize ) {
+	const char	*bases[3];
+	const char	*gamedir = FS_GetCurrentGameDir();
+	char		name[MAX_QPATH];
+	int			i;
+
+	Com_sprintf( name, sizeof( name ), "cgame" ARCH_STRING DLL_EXT );
+
+	bases[0] = Cvar_VariableString( "fs_homepath" );
+	bases[1] = Sys_BinaryPath();
+	bases[2] = Cvar_VariableString( "fs_basepath" );
+
+	for ( i = 0 ; i < (int)ARRAY_LEN( bases ) ; i++ ) {
+		char	*path;
+		void	*library;
+
+		if ( !bases[i] || !bases[i][0] ) {
+			continue;
+		}
+		path = FS_BuildOSPath( bases[i], gamedir, name );
+		library = Sys_LoadLibrary( path );
+		if ( library ) {
+			Q_strncpyz( loadedFrom, path, loadedFromSize );
+			return library;
+		}
+	}
+	return NULL;
+}
+
+/*
 ====================
 CL_ShutdownCGame
 
@@ -386,320 +969,15 @@ CL_ShutdownCGame
 void CL_ShutdownCGame( void ) {
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CGAME );
 	cls.cgameStarted = qfalse;
-	if ( !cgvm ) {
-		return;
+	if ( cge ) {
+		cge->CG_Shutdown();
+		cge = NULL;
 	}
-	VM_Call( cgvm, CG_SHUTDOWN );
-	VM_Free( cgvm );
-	cgvm = NULL;
-}
-
-static int	FloatAsInt( float f ) {
-	floatint_t fi;
-	fi.f = f;
-	return fi.i;
-}
-
-/*
-====================
-CL_CgameSystemCalls
-
-The cgame module is making a system call
-====================
-*/
-intptr_t CL_CgameSystemCalls( intptr_t *args ) {
-	switch( args[0] ) {
-	case CG_PRINT:
-		Com_Printf( "%s", (const char*)VMA(1) );
-		return 0;
-	case CG_ERROR:
-		Com_Error( ERR_DROP, "%s", (const char*)VMA(1) );
-		return 0;
-	case CG_MILLISECONDS:
-		return Sys_Milliseconds();
-	case CG_CVAR_REGISTER:
-		Cvar_Register( VMA(1), VMA(2), VMA(3), args[4] ); 
-		return 0;
-	case CG_CVAR_UPDATE:
-		Cvar_Update( VMA(1) );
-		return 0;
-	case CG_CVAR_SET:
-		Cvar_SetSafe( VMA(1), VMA(2) );
-		return 0;
-	case CG_CVAR_VARIABLESTRINGBUFFER:
-		Cvar_VariableStringBuffer( VMA(1), VMA(2), args[3] );
-		return 0;
-	case CG_ARGC:
-		return Cmd_Argc();
-	case CG_ARGV:
-		Cmd_ArgvBuffer( args[1], VMA(2), args[3] );
-		return 0;
-	case CG_ARGS:
-		Cmd_ArgsBuffer( VMA(1), args[2] );
-		return 0;
-	case CG_FS_FOPENFILE:
-		return FS_FOpenFileByMode( VMA(1), VMA(2), args[3] );
-	case CG_FS_READ:
-		FS_Read( VMA(1), args[2], args[3] );
-		return 0;
-	case CG_FS_WRITE:
-		FS_Write( VMA(1), args[2], args[3] );
-		return 0;
-	case CG_FS_FCLOSEFILE:
-		FS_FCloseFile( args[1] );
-		return 0;
-	case CG_FS_SEEK:
-		return FS_Seek( args[1], args[2], args[3] );
-	case CG_SENDCONSOLECOMMAND:
-		Cbuf_AddText( VMA(1) );
-		return 0;
-	case CG_ADDCOMMAND:
-		CL_AddCgameCommand( VMA(1) );
-		return 0;
-	case CG_REMOVECOMMAND:
-		Cmd_RemoveCommandSafe( VMA(1) );
-		return 0;
-	case CG_SENDCLIENTCOMMAND:
-		CL_AddReliableCommand(VMA(1), qfalse);
-		return 0;
-	case CG_UPDATESCREEN:
-		// this is used during lengthy level loading, so pump message loop
-//		Com_EventLoop();	// FIXME: if a server restarts here, BAD THINGS HAPPEN!
-// We can't call Com_EventLoop here, a restart will crash and this _does_ happen
-// if there is a map change while we are downloading at pk3.
-// ZOID
-		SCR_UpdateScreen();
-		return 0;
-	case CG_CM_LOADMAP:
-		CL_CM_LoadMap( VMA(1) );
-		return 0;
-	case CG_CM_NUMINLINEMODELS:
-		return CM_NumInlineModels();
-	case CG_CM_INLINEMODEL:
-		return CM_InlineModel( args[1] );
-	case CG_CM_TEMPBOXMODEL:
-		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qfalse, CONTENTS_BODY );
-	case CG_CM_TEMPCAPSULEMODEL:
-		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qtrue, CONTENTS_BODY );
-	case CG_CM_POINTCONTENTS:
-		return CM_PointContents( VMA(1), args[2] );
-	case CG_CM_TRANSFORMEDPOINTCONTENTS:
-		return CM_TransformedPointContents( VMA(1), args[2], VMA(3), VMA(4) );
-	case CG_CM_BOXTRACE:
-		CM_BoxTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qfalse );
-		return 0;
-	case CG_CM_CAPSULETRACE:
-		CM_BoxTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qtrue );
-		return 0;
-	case CG_CM_TRANSFORMEDBOXTRACE:
-		CM_TransformedBoxTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9), /*int capsule*/ qfalse );
-		return 0;
-	case CG_CM_TRANSFORMEDCAPSULETRACE:
-		CM_TransformedBoxTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9), /*int capsule*/ qtrue );
-		return 0;
-	case CG_CM_MARKFRAGMENTS:
-		return re.MarkFragments( args[1], VMA(2), VMA(3), args[4], VMA(5), args[6], VMA(7) );
-	case CG_S_STARTSOUND:
-		S_StartSound( VMA(1), args[2], args[3], args[4] );
-		return 0;
-	case CG_S_STARTLOCALSOUND:
-		S_StartLocalSound( args[1], args[2] );
-		return 0;
-	case CG_S_CLEARLOOPINGSOUNDS:
-		S_ClearLoopingSounds(args[1]);
-		return 0;
-	case CG_S_ADDLOOPINGSOUND:
-		S_AddLoopingSound( args[1], VMA(2), VMA(3), args[4] );
-		return 0;
-	case CG_S_ADDREALLOOPINGSOUND:
-		S_AddRealLoopingSound( args[1], VMA(2), VMA(3), args[4] );
-		return 0;
-	case CG_S_STOPLOOPINGSOUND:
-		S_StopLoopingSound( args[1] );
-		return 0;
-	case CG_S_UPDATEENTITYPOSITION:
-		S_UpdateEntityPosition( args[1], VMA(2) );
-		return 0;
-	case CG_S_RESPATIALIZE:
-		S_Respatialize( args[1], VMA(2), VMA(3), args[4] );
-		return 0;
-	case CG_S_REGISTERSOUND:
-		return S_RegisterSound( VMA(1), args[2] );
-	case CG_S_STARTBACKGROUNDTRACK:
-		S_StartBackgroundTrack( VMA(1), VMA(2) );
-		return 0;
-	case CG_R_LOADWORLDMAP:
-		re.LoadWorld( VMA(1) );
-		return 0; 
-	case CG_R_REGISTERMODEL:
-		return re.RegisterModel( VMA(1) );
-	case CG_R_REGISTERSKIN:
-		return re.RegisterSkin( VMA(1) );
-	case CG_R_REGISTERSHADER:
-		return re.RegisterShader( VMA(1) );
-	case CG_R_REGISTERSHADERNOMIP:
-		return re.RegisterShaderNoMip( VMA(1) );
-	case CG_R_REGISTERFONT:
-		re.RegisterFont( VMA(1), args[2], VMA(3));
-		return 0;
-	case CG_R_CLEARSCENE:
-		re.ClearScene();
-		return 0;
-	case CG_R_ADDREFENTITYTOSCENE:
-		re.AddRefEntityToScene( VMA(1) );
-		return 0;
-	case CG_R_ADDPOLYTOSCENE:
-		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
-		return 0;
-	case CG_R_ADDPOLYSTOSCENE:
-		re.AddPolyToScene( args[1], args[2], VMA(3), args[4] );
-		return 0;
-	case CG_R_LIGHTFORPOINT:
-		return re.LightForPoint( VMA(1), VMA(2), VMA(3), VMA(4) );
-	case CG_R_ADDLIGHTTOSCENE:
-		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
-		return 0;
-	case CG_R_ADDADDITIVELIGHTTOSCENE:
-		re.AddAdditiveLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
-		return 0;
-	case CG_R_RENDERSCENE:
-		re.RenderScene( VMA(1) );
-		return 0;
-	case CG_R_SETCOLOR:
-		re.SetColor( VMA(1) );
-		return 0;
-	case CG_R_DRAWSTRETCHPIC:
-		re.DrawStretchPic( VMF(1), VMF(2), VMF(3), VMF(4), VMF(5), VMF(6), VMF(7), VMF(8), args[9] );
-		return 0;
-	case CG_R_MODELBOUNDS:
-		re.ModelBounds( args[1], VMA(2), VMA(3) );
-		return 0;
-	case CG_R_LERPTAG:
-		return re.LerpTag( VMA(1), args[2], args[3], args[4], VMF(5), VMA(6) );
-	case CG_GETGLCONFIG:
-		CL_GetGlconfig( VMA(1) );
-		return 0;
-	case CG_GETGAMESTATE:
-		CL_GetGameState( VMA(1) );
-		return 0;
-	case CG_GETCURRENTSNAPSHOTNUMBER:
-		CL_GetCurrentSnapshotNumber( VMA(1), VMA(2) );
-		return 0;
-	case CG_GETSNAPSHOT:
-		return CL_GetSnapshot( args[1], VMA(2) );
-	case CG_GETSERVERCOMMAND:
-		return CL_GetServerCommand( args[1] );
-	case CG_GETCURRENTCMDNUMBER:
-		return CL_GetCurrentCmdNumber();
-	case CG_GETUSERCMD:
-		return CL_GetUserCmd( args[1], VMA(2) );
-	case CG_SETUSERCMDVALUE:
-		CL_SetUserCmdValue( args[1], VMF(2) );
-		return 0;
-	case CG_MEMORY_REMAINING:
-		return Hunk_MemoryRemaining();
-  case CG_KEY_ISDOWN:
-		return Key_IsDown( args[1] );
-  case CG_KEY_GETCATCHER:
-		return Key_GetCatcher();
-  case CG_KEY_SETCATCHER:
-		// Don't allow the cgame module to close the console
-		Key_SetCatcher( args[1] | ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) );
-    return 0;
-  case CG_KEY_GETKEY:
-		return Key_GetKey( VMA(1) );
-
-
-
-	case CG_MEMSET:
-		Com_Memset( VMA(1), args[2], args[3] );
-		return 0;
-	case CG_MEMCPY:
-		Com_Memcpy( VMA(1), VMA(2), args[3] );
-		return 0;
-	case CG_STRNCPY:
-		strncpy( VMA(1), VMA(2), args[3] );
-		return args[1];
-	case CG_SIN:
-		return FloatAsInt( sin( VMF(1) ) );
-	case CG_COS:
-		return FloatAsInt( cos( VMF(1) ) );
-	case CG_ATAN2:
-		return FloatAsInt( atan2( VMF(1), VMF(2) ) );
-	case CG_SQRT:
-		return FloatAsInt( sqrt( VMF(1) ) );
-	case CG_FLOOR:
-		return FloatAsInt( floor( VMF(1) ) );
-	case CG_CEIL:
-		return FloatAsInt( ceil( VMF(1) ) );
-	case CG_ACOS:
-		return FloatAsInt( Q_acos( VMF(1) ) );
-
-	case CG_PC_ADD_GLOBAL_DEFINE:
-		return botlib_export->PC_AddGlobalDefine( VMA(1) );
-	case CG_PC_LOAD_SOURCE:
-		return botlib_export->PC_LoadSourceHandle( VMA(1) );
-	case CG_PC_FREE_SOURCE:
-		return botlib_export->PC_FreeSourceHandle( args[1] );
-	case CG_PC_READ_TOKEN:
-		return botlib_export->PC_ReadTokenHandle( args[1], VMA(2) );
-	case CG_PC_SOURCE_FILE_AND_LINE:
-		return botlib_export->PC_SourceFileAndLine( args[1], VMA(2), VMA(3) );
-
-	case CG_S_STOPBACKGROUNDTRACK:
-		S_StopBackgroundTrack();
-		return 0;
-
-	case CG_REAL_TIME:
-		return Com_RealTime( VMA(1) );
-	case CG_SNAPVECTOR:
-		Q_SnapVector(VMA(1));
-		return 0;
-
-	case CG_CIN_PLAYCINEMATIC:
-	  return CIN_PlayCinematic(VMA(1), args[2], args[3], args[4], args[5], args[6]);
-
-	case CG_CIN_STOPCINEMATIC:
-	  return CIN_StopCinematic(args[1]);
-
-	case CG_CIN_RUNCINEMATIC:
-	  return CIN_RunCinematic(args[1]);
-
-	case CG_CIN_DRAWCINEMATIC:
-	  CIN_DrawCinematic(args[1]);
-	  return 0;
-
-	case CG_CIN_SETEXTENTS:
-	  CIN_SetExtents(args[1], args[2], args[3], args[4], args[5]);
-	  return 0;
-
-	case CG_R_REMAP_SHADER:
-		re.RemapShader( VMA(1), VMA(2), VMA(3) );
-		return 0;
-
-/*
-	case CG_LOADCAMERA:
-		return loadCamera(VMA(1));
-
-	case CG_STARTCAMERA:
-		startCamera(args[1]);
-		return 0;
-
-	case CG_GETCAMERAINFO:
-		return getCameraInfo(args[1], VMA(2), VMA(3));
-*/
-	case CG_GET_ENTITY_TOKEN:
-		return re.GetEntityToken( VMA(1), args[2] );
-	case CG_R_INPVS:
-		return re.inPVS( VMA(1), VMA(2) );
-
-	default:
-	        assert(0);
-		Com_Error( ERR_DROP, "Bad cgame system trap: %ld", (long int) args[0] );
+	if ( cgameLibrary ) {
+		Sys_UnloadLibrary( cgameLibrary );
+		cgameLibrary = NULL;
 	}
-	return 0;
 }
-
 
 /*
 ====================
@@ -709,10 +987,13 @@ Should only be called by CL_StartHunkUsers
 ====================
 */
 void CL_InitCGame( void ) {
+	typedef clientGameExport_t *( QDECL *GetCGameAPIProc )( void );
+	static clientGameImport_t	import;
+	GetCGameAPIProc		GetCGameAPI;
+	char				loadedFrom[MAX_OSPATH];
 	const char			*info;
 	const char			*mapname;
 	int					t1, t2;
-	vmInterpret_t		interpret;
 
 	t1 = Sys_Milliseconds();
 
@@ -724,25 +1005,35 @@ void CL_InitCGame( void ) {
 	mapname = Info_ValueForKey( info, "mapname" );
 	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%s.bsp", mapname );
 
-	// load the dll or bytecode
-	interpret = Cvar_VariableValue("vm_cgame");
-	if(cl_connectedToPureServer)
-	{
-		// if sv_pure is set we only allow qvms to be loaded
-		if(interpret != VMI_COMPILED && interpret != VMI_BYTECODE)
-			interpret = VMI_COMPILED;
+	// load the library
+	CL_ShutdownCGame();
+	cgameLibrary = CL_LoadCGameLibrary( loadedFrom, sizeof( loadedFrom ) );
+	if ( !cgameLibrary ) {
+		Com_Error( ERR_DROP, "Couldn't load cgame" ARCH_STRING DLL_EXT );
 	}
+	GetCGameAPI = (GetCGameAPIProc)Sys_LoadFunction( cgameLibrary, "GetCGameAPI" );
+	if ( !GetCGameAPI ) {
+		Sys_UnloadLibrary( cgameLibrary );
+		cgameLibrary = NULL;
+		Com_Error( ERR_DROP, "%s does not export GetCGameAPI", loadedFrom );
+	}
+	cge = GetCGameAPI();
+	if ( !cge || !cge->CG_Init || !cge->CG_DrawActiveFrame ) {
+		cge = NULL;
+		Sys_UnloadLibrary( cgameLibrary );
+		cgameLibrary = NULL;
+		Com_Error( ERR_DROP, "%s returned no client game interface", loadedFrom );
+	}
+	Com_Printf( "Loaded client game module from %s\n", loadedFrom );
 
-	cgvm = VM_Create( "cgame", CL_CgameSystemCalls, interpret );
-	if ( !cgvm ) {
-		Com_Error( ERR_DROP, "VM_Create on cgame failed" );
-	}
+	CL_FillCGameImport( &import );
 	clc.state = CA_LOADING;
 
 	// init for this gamestate
 	// use the lastExecutedServerCommand instead of the serverCommandSequence
 	// otherwise server commands sent just before a gamestate are dropped
-	VM_Call( cgvm, CG_INIT, clc.serverMessageSequence, clc.lastExecutedServerCommand, clc.clientNum );
+	S_BeginRegistration();
+	cge->CG_Init( &import, clc.serverMessageSequence, clc.lastExecutedServerCommand );
 
 	// reset any CVAR_CHEAT cvars registered by cgame
 	if ( !clc.demoplaying && !cl_connectedToCheatServer )
@@ -778,11 +1069,11 @@ See if the current console command is claimed by the cgame
 ====================
 */
 qboolean CL_GameCommand( void ) {
-	if ( !cgvm ) {
+	if ( !cge ) {
 		return qfalse;
 	}
 
-	return VM_Call( cgvm, CG_CONSOLE_COMMAND );
+	return cge->CG_ConsoleCommand();
 }
 
 
@@ -790,11 +1081,18 @@ qboolean CL_GameCommand( void ) {
 /*
 =====================
 CL_CGameRendering
+
+The scene, then the game's 2D layer over it once play has begun.
 =====================
 */
 void CL_CGameRendering( stereoFrame_t stereo ) {
-	VM_Call( cgvm, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying );
-	VM_Debug( 0 );
+	if ( !cge ) {
+		return;
+	}
+	cge->CG_DrawActiveFrame( cl.serverTime, stereo, clc.demoplaying );
+	if ( clc.state == CA_ACTIVE ) {
+		cge->CG_Draw2D();
+	}
 }
 
 
@@ -961,7 +1259,7 @@ void CL_SetCGameTime( void ) {
 		if ( clc.state != CA_ACTIVE ) {
 			return;
 		}
-	}	
+	}
 
 	// if we have gotten to this point, cl.snap is guaranteed to be valid
 	if ( !cl.snap.valid ) {
@@ -987,10 +1285,10 @@ void CL_SetCGameTime( void ) {
 
 	} else {
 		// cl_timeNudge is a user adjustable cvar that allows more
-		// or less latency to be added in the interest of better 
+		// or less latency to be added in the interest of better
 		// smoothness or better responsiveness.
 		int tn;
-		
+
 		tn = cl_timeNudge->integer;
 		if (tn<-30) {
 			tn = -30;
@@ -1077,6 +1375,3 @@ void CL_SetCGameTime( void ) {
 	}
 
 }
-
-
-

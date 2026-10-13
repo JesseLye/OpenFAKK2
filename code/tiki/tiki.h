@@ -52,6 +52,7 @@ int			TIKI_NumSurfaces( const tiki_t *tiki );
 int			TIKI_NumTags( const tiki_t *tiki );
 qboolean	TIKI_InitCommands( const tiki_t *tiki, qboolean server, tiki_cmd_t *out );
 void		TIKI_CalculateBounds( const tiki_t *tiki, float scale, vec3_t mins, vec3_t maxs );
+float		TIKI_Radius( const tiki_t *tiki );
 
 const char	*TIKI_Anim_NameForNum( const tiki_t *tiki, int animnum );
 int			TIKI_Anim_NumForName( const tiki_t *tiki, const char *name );

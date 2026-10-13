@@ -1630,10 +1630,18 @@ static qboolean ParseShader( char **text )
 			shader.isPortalSky = qtrue;
 			continue;
 		}
+		// FAKK2: a sprite's size relative to its image
+		else if ( !Q_stricmp( token, "spriteScale" ) ) {
+			token = COM_ParseExt( text, qfalse );
+			if ( token[0] ) {
+				shader.spriteScale = atof( token );
+			}
+			continue;
+		}
 		// FAKK2 parameters for its map compiler and sprite models
 		else if ( !Q_stricmp( token, "surfaceColor" ) || !Q_stricmp( token, "surfaceDensity" )
 			|| !Q_stricmp( token, "subdivisions" ) || !Q_stricmp( token, "spriteGen" )
-			|| !Q_stricmp( token, "spriteScale" ) || !Q_stricmp( token, "deform" )
+			|| !Q_stricmp( token, "deform" )
 			|| !Q_stricmp( token, "fogOnly" ) || !Q_stricmp( token, "force32bit" ) ) {
 			SkipRestOfLine( text );
 			continue;
@@ -3007,6 +3015,59 @@ qhandle_t RE_RegisterShaderNoMip( const char *name ) {
 
 /*
 ====================
+RE_GetShaderWidth, RE_GetShaderHeight
+
+FAKK2: the size of a shader's first image, which its client game module uses
+to lay out 2D pictures.
+====================
+*/
+static image_t *R_ShaderFirstImage( shader_t *sh ) {
+	int		i;
+
+	for ( i = 0 ; i < MAX_SHADER_STAGES && sh->stages[i] ; i++ ) {
+		if ( sh->stages[i]->bundle[0].image[0] ) {
+			return sh->stages[i]->bundle[0].image[0];
+		}
+	}
+	return NULL;
+}
+
+int RE_GetShaderWidth( qhandle_t hShader ) {
+	image_t	*image = R_ShaderFirstImage( R_GetShaderByHandle( hShader ) );
+
+	return image ? image->width : 0;
+}
+
+int RE_GetShaderHeight( qhandle_t hShader ) {
+	image_t	*image = R_ShaderFirstImage( R_GetShaderByHandle( hShader ) );
+
+	return image ? image->height : 0;
+}
+
+/*
+====================
+R_SpriteRadius
+
+FAKK2: a sprite's half size on screen is its image's size scaled by the
+shader's spriteScale and the entity's scale. (How the retail renderer sizes
+sprites has not been read; this follows OpenMoHAA's.)
+====================
+*/
+float R_SpriteRadius( shader_t *sh, float scale ) {
+	image_t	*image = R_ShaderFirstImage( sh );
+	float	size = image ? image->width : 32;
+
+	if ( sh->spriteScale ) {
+		size *= sh->spriteScale;
+	}
+	if ( scale ) {
+		size *= scale;
+	}
+	return size * 0.5f;
+}
+
+/*
+====================
 R_GetShaderByHandle
 
 When a handle is passed in by another module, this range checks
@@ -3272,6 +3333,17 @@ static void CreateInternalShaders( void ) {
 	Q_strncpyz( shader.name, "<stencil shadow>", sizeof( shader.name ) );
 	shader.sort = SS_STENCIL_SHADOW;
 	tr.shadowShader = FinishShader();
+
+	// FAKK2: a plain white 2D shader for filled rectangles, which the game's
+	// data need not define
+	InitShader( "<white>", LIGHTMAP_NONE );
+	stages[0].bundle[0].image[0] = tr.whiteImage;
+	stages[0].active = qtrue;
+	stages[0].rgbGen = CGEN_VERTEX;
+	stages[0].alphaGen = AGEN_VERTEX;
+	stages[0].stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	shader.sort = SS_BLEND0;
+	tr.whiteShader = FinishShader();
 }
 
 static void CreateExternalShaders( void ) {

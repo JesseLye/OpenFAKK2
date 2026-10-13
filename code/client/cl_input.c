@@ -366,7 +366,7 @@ void CL_MouseEvent( int dx, int dy, int time ) {
 		if ( uivm )
 			VM_Call( uivm, UI_MOUSE_EVENT, dx, dy );
 	} else if (Key_GetCatcher( ) & KEYCATCH_CGAME) {
-		VM_Call (cgvm, CG_MOUSE_EVENT, dx, dy);
+		// FAKK2's client game module takes no mouse events
 	} else {
 		cl.mouseDx[cl.mouseIndex] += dx;
 		cl.mouseDy[cl.mouseIndex] += dy;

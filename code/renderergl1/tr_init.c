@@ -1182,8 +1182,9 @@ void R_Init( void ) {
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
 
-	if(sizeof(glconfig_t) != 11332)
-		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 11332", (unsigned int) sizeof(glconfig_t));
+	// FAKK2's client game module reads this structure as its SDK lays it out
+	if(sizeof(glconfig_t) != 5188)
+		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 5188", (unsigned int) sizeof(glconfig_t));
 
 //	Swap_Init();
 
@@ -1321,6 +1322,18 @@ void RE_EndRegistration( void ) {
 
 
 /*
+=============
+RE_Noise
+
+FAKK2: the renderer's noise function, which its client game module uses to
+jitter beams.
+=============
+*/
+float RE_Noise( float x, float y, float z, float t ) {
+	return R_NoiseGet4f( x, y, z, t );
+}
+
+/*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
 
@@ -1350,7 +1363,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.BeginRegistration = RE_BeginRegistration;
 	re.RegisterModel = RE_RegisterModel;
-	re.RegisterTan = RE_RegisterTan;
+	re.RegisterTiki = RE_RegisterTiki;
 	re.RegisterSkin = RE_RegisterSkin;
 	re.RegisterShader = RE_RegisterShader;
 	re.RegisterShaderNoMip = RE_RegisterShaderNoMip;
@@ -1369,8 +1382,18 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.AddRefEntityToScene = RE_AddRefEntityToScene;
 	re.AddPolyToScene = RE_AddPolyToScene;
 	re.LightForPoint = R_LightForPoint;
+	re.AddRefSpriteToScene = RE_AddRefSpriteToScene;
 	re.AddLightToScene = RE_AddLightToScene;
-	re.AddAdditiveLightToScene = RE_AddAdditiveLightToScene;
+	re.GetRenderEntity = RE_GetRenderEntity;
+	re.DrawBox = RE_DrawBox;
+	re.GetShaderWidth = RE_GetShaderWidth;
+	re.GetShaderHeight = RE_GetShaderHeight;
+	re.ModelRadius = RE_ModelRadius;
+	re.Noise = RE_Noise;
+	re.DebugLine = RE_DebugLine;
+	re.SwipeBegin = RE_SwipeBegin;
+	re.SwipePoint = RE_SwipePoint;
+	re.SwipeEnd = RE_SwipeEnd;
 	re.RenderScene = RE_RenderScene;
 
 	re.SetColor = RE_SetColor;

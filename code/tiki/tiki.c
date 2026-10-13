@@ -1239,6 +1239,10 @@ qboolean TIKI_InitCommands( const tiki_t *tiki, qboolean server, tiki_cmd_t *out
 	return qtrue;
 }
 
+float TIKI_Radius( const tiki_t *tiki ) {
+	return tiki ? tiki->radius : 0;
+}
+
 void TIKI_CalculateBounds( const tiki_t *tiki, float scale, vec3_t mins, vec3_t maxs ) {
 	if ( !tiki ) {
 		VectorClear( mins );

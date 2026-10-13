@@ -26,6 +26,30 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define	REF_API_VERSION		9
 
+// FAKK2: what a renderer needs from a .tik model definition. The engine's
+// TIKI code reads the definition and fills this in; the renderer loads the
+// animation files it names and draws the frames the game asks for.
+#define	TIKI_MODEL_MAX_SKINS	4
+
+typedef struct {
+	const char	*name;			// the .tik file's name, identifies the model
+	float		scale;			// applied to every vertex
+	vec3_t		origin;			// added after scaling
+	const char	*path;			// directory the model's images are in
+	qboolean	skeletal;		// animations are .ska over a .skb skeleton, not .tan files
+	vec3_t		mins, maxs;		// the definition's bounds, as the game sees them
+	float		radius;
+
+	int			numAnims;
+	const char	**animFiles;	// one per animation
+
+	int			numSurfaces;
+	const char	**surfaceNames;
+	// numSurfaces * TIKI_MODEL_MAX_SKINS shader names; NULL means the
+	// definition hides the surface (skin 0) or has no shader for that skin
+	const char	**shaderNames;
+} tikiModelDesc_t;
+
 //
 // these are the functions exported by the refresh module
 //
@@ -46,10 +70,8 @@ typedef struct {
 	// size display elements
 	void	(*BeginRegistration)( glconfig_t *config );
 	qhandle_t (*RegisterModel)( const char *name );
-	// FAKK2: one frame of a vertex animation file as a static model. The
-	// caller has read the model's .tik definition and passes what it says.
-	qhandle_t (*RegisterTan)( const char *name, const char *tanFile, int frame, float scale, const vec3_t origin,
-		const char *path, int numSurfaceNames, const char **surfaceNames, const char **shaderNames );
+	// FAKK2: a model from its .tik definition, which the caller has read
+	qhandle_t (*RegisterTiki)( const tikiModelDesc_t *desc );
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
@@ -67,15 +89,31 @@ typedef struct {
 	// Nothing is drawn until R_RenderScene is called.
 	void	(*ClearScene)( void );
 	void	(*AddRefEntityToScene)( const refEntity_t *re );
+	// FAKK2: a sprite; the entity's model names the shader and its scale the size
+	void	(*AddRefSpriteToScene)( const refEntity_t *re );
 	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
-	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
-	void	(*AddAdditiveLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
+	// type is a combination of dlighttype_t bits
+	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b, int type );
 	void	(*RenderScene)( const refdef_t *fd );
+	// FAKK2: the entity added to the scene being built with that entity
+	// number, or NULL. Attached entities are placed from their parent's tags.
+	refEntity_t *(*GetRenderEntity)( int entityNumber );
 
 	void	(*SetColor)( const float *rgba );	// NULL = 1,1,1,1
-	void	(*DrawStretchPic) ( float x, float y, float w, float h, 
+	void	(*DrawStretchPic) ( float x, float y, float w, float h,
 		float s1, float t1, float s2, float t2, qhandle_t hShader );	// 0 = white
+	// FAKK2: a rectangle in the current color
+	void	(*DrawBox)( float x, float y, float w, float h );
+	int		(*GetShaderWidth)( qhandle_t hShader );
+	int		(*GetShaderHeight)( qhandle_t hShader );
+	float	(*ModelRadius)( qhandle_t model );
+	float	(*Noise)( float x, float y, float z, float t );
+	void	(*DebugLine)( const vec3_t start, const vec3_t end, float r, float g, float b, float alpha );
+	// FAKK2 sword swipes: a ribbon through the points given between Begin and End
+	void	(*SwipeBegin)( float thistime, float life, qhandle_t shader );
+	void	(*SwipePoint)( const vec3_t p1, const vec3_t p2, float time );
+	void	(*SwipeEnd)( void );
 
 	// Draw images for cinematic rendering, pass as 32 bit rgba
 	void	(*DrawStretchRaw) (int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);

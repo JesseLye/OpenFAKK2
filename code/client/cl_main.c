@@ -125,7 +125,6 @@ cvar_t	*cl_rate;
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
-vm_t				*cgvm;
 
 char				cl_reconnectArgs[MAX_OSPATH];
 char				cl_oldGame[MAX_QPATH];
@@ -357,14 +356,15 @@ void CL_VoipParseTargets(void)
 			}
 			else
 			{
+				// FAKK2's client game module does not report these
 				if(!Q_stricmpn(target, "attacker", 8))
 				{
-					val = VM_Call(cgvm, CG_LAST_ATTACKER);
+					val = -1;
 					target += 8;
 				}
 				else if(!Q_stricmpn(target, "crosshair", 9))
 				{
-					val = VM_Call(cgvm, CG_CROSSHAIR_PLAYER);
+					val = -1;
 					target += 9;
 				}
 				else
@@ -3179,6 +3179,8 @@ CL_InitRenderer
 void CL_InitRenderer( void ) {
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
+	// its model handles start over
+	CL_ClearTikiHandles();
 
 	// load character sets
 	cls.charSetShader = re.RegisterShader( "gfx/2d/bigchars" );

@@ -53,6 +53,12 @@ A probe must end with `pendingevents`; that is how the script knows it has finis
 runs the OpenFAKK2 client in a window against the retail data, copies its console log
 to `build\compare\client.log` (`-Name` changes the name) and stops it after `-Secs`
 seconds if it has not quit. Screenshots land in `build\sandbox\home\fakk\screenshots`.
+
+`-Run "+map zoo +wait 900 +screenshotJPEG +wait 10 +quit"` joins a local game instead:
+the client game module draws the level from the game's camera. The module is looked for
+in `build\sandbox\home\fakk` first, then beside the executable, so copying the retail
+`cgamex86.dll` into the sandbox home tests the engine against Ritual's own build; remove
+it again to go back to the rebuilt module.
 `viewpos <x> <y> <z> [yaw] [pitch]` places the camera before a screenshot. `viewsky` prints the sky
 portal camera's position, `viewsky <x> <y> <z>` moves it and `viewsky off` turns it off, which
 also shows the sky's models as ordinary scenery. With `developer 1` the log names each

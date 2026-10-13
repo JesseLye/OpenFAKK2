@@ -348,6 +348,7 @@ typedef struct shader_s {
 	qboolean	isPortalSky;			// shows the sky portal's view rather than its own stages
 	skyParms_t	sky;
 	fogParms_t	fogParms;
+	float		spriteScale;			// FAKK2: a sprite's size relative to its image, 0 = 1
 
 	float		portalRange;			// distance to fog out at
 
@@ -500,6 +501,7 @@ typedef enum {
 	SF_IQM,
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
+	SF_TAN,					// FAKK2 vertex animation surface
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -763,7 +765,8 @@ typedef enum {
 	MOD_MESH,
 	MOD_MDR,
 	MOD_IQM,
-	MOD_TAN
+	MOD_TIKI,			// FAKK2 model definition, animations in .tan files
+	MOD_SPRITE			// FAKK2 .spr: a sprite drawn with the shader of that name
 } modtype_t;
 
 typedef struct model_s {
@@ -774,13 +777,15 @@ typedef struct model_s {
 	int			dataSize;	// just for listing purposes
 	bmodel_t	*bmodel;		// only if type == MOD_BRUSH
 	md3Header_t	*md3[MD3_MAX_LODS];	// only if type == MOD_MESH
-	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM | MOD_TAN)
+	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM | MOD_TIKI)
+	shader_t	*spriteShader;	// only if type == MOD_SPRITE
 
 	int			 numLods;
 } model_t;
 
 
-#define	MAX_MOD_KNOWN	1024
+// FAKK2 levels reference up to 384 models, and the game's effects more
+#define	MAX_MOD_KNOWN	4096
 
 void		R_ModelInit (void);
 model_t		*R_GetModelByHandle( qhandle_t hModel );
@@ -922,6 +927,7 @@ typedef struct {
 
 	shader_t				*defaultShader;
 	shader_t				*shadowShader;
+	shader_t				*whiteShader;			// FAKK2: for RE_DrawBox
 	shader_t				*projectionShadowShader;
 
 	shader_t				*flareShader;
@@ -1390,8 +1396,19 @@ void R_InitNextFrame( void );
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
+void RE_AddRefSpriteToScene( const refEntity_t *ent );
+refEntity_t *RE_GetRenderEntity( int entityNumber );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int type );
+void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float b, float alpha );
+void RE_SwipeBegin( float thistime, float life, qhandle_t shader );
+void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time );
+void RE_SwipeEnd( void );
+void RE_DrawBox( float x, float y, float w, float h );
+int RE_GetShaderWidth( qhandle_t hShader );
+int RE_GetShaderHeight( qhandle_t hShader );
+float R_SpriteRadius( shader_t *sh, float scale );
+float RE_ModelRadius( qhandle_t handle );
+float RE_Noise( float x, float y, float z, float t );
 void RE_RenderScene( const refdef_t *fd );
 
 /*
@@ -1621,10 +1638,12 @@ void R_DrawElements( int numIndexes, const glIndex_t *indexes );
 //
 // tr_model_tan.c
 //
-qhandle_t RE_RegisterTan( const char *name, const char *tanFile, int frame, float scale, const vec3_t origin,
-						  const char *path, int numSurfaceNames, const char **surfaceNames, const char **shaderNames );
-void R_AddTanSurfaces( trRefEntity_t *ent );
-float R_TanFarthestPoint( const trRefEntity_t *ent, const model_t *mod );
+qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc );
+void R_AddTikiSurfaces( trRefEntity_t *ent );
+float R_TikiFarthestPoint( const trRefEntity_t *ent, const model_t *mod );
+void R_TikiBounds( const model_t *mod, vec3_t mins, vec3_t maxs );
+float R_TikiRadius( const model_t *mod );
+void RB_SurfaceTan( void *surface );
 void VectorArrayNormalize( vec4_t *normals, unsigned int count );
 
 #ifdef idppc_altivec

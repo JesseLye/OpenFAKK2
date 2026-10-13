@@ -283,6 +283,30 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	SHOWNET( msg, "packet entities" );
 	CL_ParsePacketEntities( msg, old, &newSnap );
 
+	// FAKK2: the sounds the game started this frame. The wire format is
+	// OpenFAKK2's own.
+	SHOWNET( msg, "sounds" );
+	newSnap.number_of_sounds = MSG_ReadBits( msg, MAX_SERVER_SOUNDS_BITS );
+	if ( newSnap.number_of_sounds > MAX_SERVER_SOUNDS ) {
+		Com_Error( ERR_DROP, "CL_ParseSnapshot: %i sounds", newSnap.number_of_sounds );
+	}
+	for ( i = 0 ; i < newSnap.number_of_sounds ; i++ ) {
+		server_sound_t	*sound = &newSnap.sounds[i];
+
+		sound->stop_flag = MSG_ReadBits( msg, 1 );
+		sound->entity_number = MSG_ReadBits( msg, GENTITYNUM_BITS );
+		sound->channel = MSG_ReadByte( msg );
+		if ( sound->stop_flag ) {
+			continue;
+		}
+		sound->sound_index = MSG_ReadBits( msg, MAX_SOUNDS_BITS );
+		sound->origin[0] = MSG_ReadFloat( msg );
+		sound->origin[1] = MSG_ReadFloat( msg );
+		sound->origin[2] = MSG_ReadFloat( msg );
+		sound->volume = MSG_ReadFloat( msg );
+		sound->min_dist = MSG_ReadFloat( msg );
+	}
+
 	// if not valid, dump the entire thing now that it has
 	// been properly read
 	if ( !newSnap.valid ) {

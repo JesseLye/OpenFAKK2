@@ -234,6 +234,17 @@ void RE_StretchPic ( float x, float y, float w, float h,
 	cmd->t2 = t2;
 }
 
+/*
+=============
+RE_DrawBox
+
+FAKK2: a rectangle filled with the current color.
+=============
+*/
+void RE_DrawBox( float x, float y, float w, float h ) {
+	RE_StretchPic( x, y, w, h, 0, 0, 0, 0, tr.whiteShader->index );
+}
+
 #define MODE_RED_CYAN	1
 #define MODE_RED_BLUE	2
 #define MODE_RED_GREEN	3

@@ -43,6 +43,7 @@ static vec3_t	viewerSkyOrigin;
 typedef struct {
 	char		name[MAX_QPATH];
 	qhandle_t	model;
+	int			anim;			// the idle animation, shown in its first frame
 	vec3_t		origin;
 	vec3_t		axis[3];
 	qboolean	scaled;
@@ -67,14 +68,11 @@ CL_Viewer_AddModel
 ===============
 */
 static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const vec3_t angles, float scale ) {
-	const char		*surfaceNames[64], *shaderNames[64];
 	char			name[MAX_QPATH];
 	viewerModel_t	*vm;
-	static tiki_cmd_t	init;
 	tiki_t			*tiki;
-	vec3_t			tikiOrigin;
 	qhandle_t		handle;
-	int				anim, numSurfaces, i, j;
+	int				anim, i;
 
 	if ( viewerNumModels == VIEWER_MAX_MODELS ) {
 		return;
@@ -87,8 +85,8 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 		Q_strncpyz( name, model, sizeof( name ) );
 	}
 
-	tiki = TIKI_Register( name );
-	if ( !tiki || !TIKI_NumAnims( tiki ) ) {
+	handle = CL_RegisterTikiModel( name, &tiki );
+	if ( !tiki || !TIKI_NumAnims( tiki ) || !handle ) {
 		Com_DPrintf( "viewer: %s has no usable definition\n", name );
 		viewerFailed++;
 		return;
@@ -103,43 +101,10 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 	if ( anim < 0 ) {
 		anim = 0;
 	}
-	numSurfaces = TIKI_NumSurfaces( tiki );
-	if ( numSurfaces > ARRAY_LEN( surfaceNames ) ) {
-		numSurfaces = ARRAY_LEN( surfaceNames );
-	}
-	for ( i = 0 ; i < numSurfaces ; i++ ) {
-		surfaceNames[i] = TIKI_Surface_NumToName( tiki, i );
-		shaderNames[i] = TIKI_Surface_Shader( tiki, i, 0 );
-	}
-
-	// A model's own initialisation can hide surfaces ("surface <name> +nodraw");
-	// the sky boxes without ground are made that way. No other init command
-	// is applied here.
-	TIKI_InitCommands( tiki, qtrue, &init );
-	for ( j = 0 ; j < init.num_cmds ; j++ ) {
-		const tiki_singlecmd_t	*cmd = &init.cmds[j];
-
-		if ( cmd->num_args != 3 || Q_stricmp( cmd->args[0], "surface" ) || Q_stricmp( cmd->args[2], "+nodraw" ) ) {
-			continue;
-		}
-		for ( i = 0 ; i < numSurfaces ; i++ ) {
-			if ( !Q_stricmp( surfaceNames[i], cmd->args[1] ) || !Q_stricmp( cmd->args[1], "all" ) ) {
-				shaderNames[i] = NULL;
-			}
-		}
-	}
-	TIKI_Origin( tiki, tikiOrigin );
-
-	handle = re.RegisterTan( name, TIKI_Anim_File( tiki, anim ), 0, TIKI_Scale( tiki ), tikiOrigin,
-		TIKI_Path( tiki ), numSurfaces, surfaceNames, shaderNames );
-	if ( !handle ) {
-		Com_DPrintf( "viewer: %s could not be turned into a model\n", name );
-		viewerFailed++;
-		return;
-	}
 
 	vm = &viewerModels[viewerNumModels++];
 	vm->model = handle;
+	vm->anim = anim;
 	Q_strncpyz( vm->name, name, sizeof( vm->name ) );
 	VectorCopy( origin, vm->origin );
 	AnglesToAxis( angles, vm->axis );
@@ -273,6 +238,7 @@ static void CL_Viewer_ViewMap_f( void ) {
 	SV_Shutdown( "Viewing a map" );
 	CL_Disconnect( qtrue );
 	CL_FlushMemory();
+	CL_ClearTikiHandles();
 
 	re.LoadWorld( name );
 	CL_Viewer_FindStart();
@@ -442,6 +408,7 @@ void CL_Viewer_Draw( void ) {
 		Com_Memset( &ent, 0, sizeof( ent ) );
 		ent.reType = RT_MODEL;
 		ent.hModel = vm->model;
+		ent.anim = ent.oldanim = vm->anim;
 		VectorCopy( vm->origin, ent.origin );
 		VectorCopy( vm->origin, ent.oldorigin );
 		VectorCopy( vm->origin, ent.lightingOrigin );

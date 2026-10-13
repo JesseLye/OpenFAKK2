@@ -86,7 +86,7 @@ client is ported.
 | `cheats` | 1 after `map` | 0 | The game reads `cheats`. Quake III enables cheats only for `devmap` |
 | `protocol` | 1 | 71 | ioquake3's value; the wire format is OpenFAKK2's own for now |
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
-| `sv_pure` | 0 | 1 | |
+| `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
 | `sv_timeout` | 120 | 200 | |
 | `com_maxfps` | 85 | 125 | |
 | `sv_allowdownload` | 1 | 0 | |
@@ -101,8 +101,10 @@ corresponding retail code has not been examined.
 - **Traces skip entities whose solid type is `SOLID_NOT` or `SOLID_TRIGGER`.** Inferred
   from an actor seated in a non-solid chair (`homes1`) and items inside brush entities
   (`towncenter_evil`).
-- **A temporary box model takes its entity's contents.** Inferred from solid pods that
-  solid-only traces must hit (`otto`, `oracle`).
+- **A temporary box model takes its entity's contents.** First inferred from solid pods
+  that solid-only traces must hit (`otto`, `oracle`); since read in `SV_ClipHandleForEntity`
+  (`0x448660`), which also showed that a brush entity the game has made `SOLID_BBOX` clips
+  as its box rather than its brushes (see below).
 - **Alias range lookup and weighted pick** come from OpenMoHAA's version of the same code.
 - **Dialog selection** follows `fakk2.exe` (`0x41bdc0`) except for two details that were
   not recovered: the test for whether use is tracked per actor (taken to be "the alias is
@@ -118,6 +120,73 @@ corresponding retail code has not been examined.
   are *not* flagged.)
 - **`pointbrushnum`** always returns 0.
 - **Tag and frame-bound scaling** (`load_scale * scale`, plus the setup origin).
+
+## Model indexes
+
+A brush entity's model index is its inline model number, as in Quake III: `setmodel`
+(`0x445050`) hands a `*<n>` name to `SV_SetBrushModel` (`0x444510`), which stores `n`,
+and nothing else; any other name gets a config string index from `SV_FindIndex`
+(`0x4459a0`) and, for a model definition, its definition in a table kept by index
+(`0x444fd0`; the config string is taken before the definition is loaded, so a definition
+that fails to load still uses up an index). `IsModel` (`0x444850`) is a lookup in that
+table (`0x444780`). The client game module relies on the same thing: it indexes the
+inline models with the entity's model index directly.
+
+What keeps a brush entity from being taken for the definition with the same index is the
+config string layout: `SV_ClearWorld` (`0x448810`) registers `*1` to `*<n-1>` as the
+first model config strings before the game runs, so index `n` is `*n` and no definition
+can have it. An earlier version kept the config string index in the entity instead,
+which also worked for the server alone but not for the client game module; a version
+with the inline number and without the reserved config strings ran definitions' init
+commands on brush entities (`swamp1` had creatures stuck in a trigger that `setsize` had
+made `SOLID_BBOX`).
+
+Where a brush entity has been made `SOLID_BBOX`, `SV_ClipHandleForEntity` (`0x448660`)
+clips it as a temporary box of its mins and maxs and contents, not as its brushes, and the
+box is not rotated (`SV_ClipToEntity`, `0x448f30`).
+
+## The client game module
+
+The module is a native library; `GetCGameAPI` returns its entry points and `CG_Init`
+takes a table of 124 engine functions. The table's order is the SDK's `cg_public.h`, and
+matches the retail engine's (`0x41ce90` fills it; it leaves `apiversion` 0 and the
+`NumSkins` and `Tag_OrientationEx` slots NULL, and the renderer functions in it are the
+renderer's exports). The retail and the rebuilt `cgamex86.dll` both run.
+
+Read from `fakk2.exe` and followed:
+
+- **`GetSnapshot`** (`0x41c6d0`): a frame from the other side of a server restart
+  (`SNAPFLAG_SERVERCOUNT` differs from the current frame's) is refused, at most 256
+  entities are returned, and they are ordered so that an attached entity follows its
+  parent: entities with no parent or an already placed parent first, then up to eight
+  passes for the rest, then whatever is left with a developer message. The `snapshot_t`
+  layout is the SDK's (`numServerCommands` is never filled in).
+- **`UpdateLoadingScreen`** (`0x423490`) redraws the screen only while the client has not
+  yet been primed.
+- **`CM_InlineModel`** (`0x426750`) is the plain collision function; the model-index
+  rule above is what makes the game's argument an inline model number.
+
+Not read, done another way:
+
+- **Sounds the game starts.** The server queues every sound the game starts for every
+  connected client and sends them with the next snapshot (the wire format is OpenFAKK2's
+  own); the retail import (`0x448520`) has not been read, so whether it filters by
+  visibility is unknown. The client game module receives them as the SDK's
+  `server_sound_t` and plays them through Quake III's sound system: FAKK2's volume,
+  minimum distance, reverb and ambient-volume calls are ignored, looping sounds are keyed
+  by their order in the frame, `S_StartLocalSound` resolves an alias before a file name,
+  and the music calls do nothing.
+- **Camera-look offsets** (`get_camera_offset`) are always zero.
+- **Animation cross-blend times** are reported as 0, so animations change without
+  blending; `Tag_LerpedOrientation` returns the tag of the current frame without
+  interpolation, and `Tag_OrientationEx` ignores its blending arguments.
+- **Lip-sync data** comes from the server's `.lip` reader, which is in the same
+  executable.
+- **The pure-server check** is off (`sv_pure 0`, as retail has it).
+- **Message size.** The game state for `training` is 37K; Quake III's 16K limit and its
+  16-bit fragment offsets were raised to 128K and 32 bits.
+- **The client's own key and mouse events** are not passed to the module; FAKK2's has
+  no entry points for them.
 
 ## With a player present
 
@@ -278,21 +347,35 @@ What is implemented, and on what basis:
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
   it. From the SDK's scene definition and flag descriptions, and OpenMoHAA.
-- **Static models from `.tan` files**: one frame, scaled by the definition's `scale`
-  and moved by its `origin`. Assumed: that the origin is added after scaling, and that
-  vertex normals use Quake III's two-angle encoding. Skeletal models (`.skb`) are not
-  drawn; they are between 0 and 33 of the entities on each map.
+- **Models from `.tik` definitions**: the `.tan` file of the animation the entity asks
+  for is loaded on first use, and the entity's frame and old frame are decoded and
+  interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by
+  the definition's `scale` and moved by its `origin`. Surfaces take the shader of the
+  skin the entity's surface flags select, and `MDL_SURFACE_NODRAW` hides one. Assumed:
+  that the origin is added after scaling, and that vertex normals use Quake III's
+  two-angle encoding. Cross-blending, torso animations, bone controllers and level of
+  detail are not applied. Skeletal models (`.skb`) register but draw nothing; the player
+  and the creatures are among them.
+- **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
+  size is the image's width times the shader's `spriteScale` times the entity's scale.
+  That is OpenMoHAA's rule; the retail renderer's has not been read.
 - **Render flags** (`RF_*`) use FAKK2's values throughout, so that the client game
-  module's flags will mean the same thing to the renderer.
+  module's flags mean the same thing to the renderer. The `refEntity_t`, `refdef_t`
+  and `glconfig_t` layouts are the SDK's, since the module fills them in.
+- **Dynamic lights** are Quake III's; of FAKK2's light types only `additive` is
+  honoured, the lens flare bits are ignored. Debug lines and sword swipes are accepted
+  and not drawn.
 
 Not implemented: fog and the far plane, the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
-sprites, beams, decals, level of detail, animation.
+beams, decals, level of detail, skeletal animation.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
   triggers the player must walk into. The test player can now be given key presses, but
   only a forward walk has been compared.
-- What is sent to clients (snapshots, sounds). The test player shows `print` text on the
-  console as a client would and discards everything else.
+- What is sent to clients (snapshots, sounds) and what the client game module makes of
+  it. The test player shows `print` text on the console as a client would and discards
+  everything else; the real client draws the module's picture, which has not been
+  compared with the retail game's.
 - Save and load.

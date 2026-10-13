@@ -453,8 +453,8 @@ static void R_SetFarClip( void )
 			continue;
 		}
 		mod = R_GetModelByHandle( ent->e.hModel );
-		if ( mod->type == MOD_TAN ) {
-			float	reach = R_TanFarthestPoint( ent, mod );
+		if ( mod->type == MOD_TIKI ) {
+			float	reach = R_TikiFarthestPoint( ent, mod );
 
 			if ( reach > tr.viewParms.zFar ) {
 				tr.viewParms.zFar = reach;
@@ -1307,8 +1307,17 @@ void R_AddEntitySurfaces (void) {
 				case MOD_MESH:
 					R_AddMD3Surfaces( ent );
 					break;
-				case MOD_TAN:
-					R_AddTanSurfaces( ent );
+				case MOD_TIKI:
+					R_AddTikiSurfaces( ent );
+					break;
+				case MOD_SPRITE:
+					// a .spr model is a sprite with that shader, sized by the entity's scale
+					if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+						break;
+					}
+					ent->e.reType = RT_SPRITE;
+					ent->e.radius = R_SpriteRadius( tr.currentModel->spriteShader, ent->e.scale );
+					R_AddDrawSurf( &entitySurface, tr.currentModel->spriteShader, R_SpriteFogNum( ent ), 0 );
 					break;
 				case MOD_MDR:
 					R_MDRAddAnimSurfaces( ent );

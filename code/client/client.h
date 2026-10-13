@@ -27,7 +27,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../ui/ui_public.h"
 #include "keys.h"
 #include "snd_public.h"
-#include "../cgame/cg_public.h"
+// FAKK2's client game interface, from Ritual's SDK
+#include "../fakk/cgame/cg_public.h"
 #include "../game/bg_public.h"
 
 #ifdef USE_HTTP
@@ -64,6 +65,10 @@ typedef struct {
 
 	int				serverCommandNum;		// execute all commands up to this before
 											// making the snapshot current
+
+	// FAKK2: sounds the game started in this frame
+	int				number_of_sounds;
+	server_sound_t	sounds[MAX_SERVER_SOUNDS];
 } clSnapshot_t;
 
 
@@ -357,7 +362,6 @@ extern	qboolean	cl_oldGameSet;
 
 //=============================================================================
 
-extern	vm_t			*cgvm;	// interface to cgame dll or vm
 extern	vm_t			*uivm;	// interface to ui dll or vm
 extern	refexport_t		re;		// interface to refresh .dll
 
@@ -617,7 +621,14 @@ qboolean CL_GameCommand( void );
 void CL_CGameRendering( stereoFrame_t stereo );
 void CL_SetCGameTime( void );
 void CL_FirstSnapshot( void );
-void CL_ShaderStateChanged(void);
+
+//
+// cl_tiki.c
+//
+struct tiki_s;
+qhandle_t CL_RegisterTikiModel( const char *name, struct tiki_s **tiki );
+struct tiki_s *CL_TikiForHandle( qhandle_t handle );
+void CL_ClearTikiHandles( void );
 
 //
 // cl_ui.c

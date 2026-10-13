@@ -72,6 +72,19 @@ typedef enum {
 	RT_MAX_REF_ENTITY_TYPE
 } refEntityType_t;
 
+// dynamic light types, combinable bits (FAKK2)
+typedef enum {
+	lensflare = ( 1 << 0 ),
+	viewlensflare = ( 1 << 1 ),
+	additive = ( 1 << 2 )
+} dlighttype_t;
+
+struct tikiFrame_s;
+struct dtiki_s;
+
+// This is FAKK2's layout, field for field: the client game module fills it
+// in and the renderer reads it, so the two must agree to the byte. Only the
+// animation fields are used by this renderer so far.
 typedef struct {
 	refEntityType_t	reType;
 	int			renderfx;
@@ -85,12 +98,41 @@ typedef struct {
 	vec3_t		axis[3];			// rotation vectors
 	qboolean	nonNormalizedAxes;	// axis are not normalized, i.e. they have scale
 	float		origin[3];			// also used as MODEL_BEAM's "from"
-	int			frame;				// also used as MODEL_BEAM's diameter
+	int			anim;				// animation
+	int			oldanim;			// old animation
+	short		oldframe;			// old frame
+	short		frame;				// also used as MODEL_BEAM's diameter
+	float		scale;				// scale of the thing
+
+	qboolean	useAngles;
+
+	// torso animation
+	int			torso_anim;
+	int			torso_oldanim;
+	short		torso_frame;
+	short		torso_oldframe;
+
+	// data for animation cross-blending
+	float		crossblend_lerp;
+	float		crossblend_backlerp;	// 0.0 = current, 1.0 = old
+
+	int			crossblend_anim;
+	short		crossblend_frame;
+	short		crossblend_oldframe;
+	int			uselegs;			// non-zero means use leg animation
+
+	float		torso_crossblend_lerp;
+	float		torso_crossblend_backlerp;	// 0.0 = current, 1.0 = old
+
+	int			torso_crossblend_anim;
+	short		torso_crossblend_frame;
+	short		torso_crossblend_oldframe;
+	int			usetorso;			// non-zero means use torso animation
 
 	// previous data for frame interpolation
 	float		oldorigin[3];		// also used as MODEL_BEAM's "to"
-	int			oldframe;
 	float		backlerp;			// 0.0 = current, 1.0 = old
+	float		torso_backlerp;		// 0.0 = current, 1.0 = old
 
 	// texturing
 	int			skinNum;			// inline skin index
@@ -101,6 +143,19 @@ typedef struct {
 	byte		shaderRGBA[4];		// colors used by rgbgen entity shaders
 	float		shaderTexCoord[2];	// texture coordinates used by tcMod entity modifiers
 	float		shaderTime;			// subtracted from refdef time to control effect start times
+
+	int			entityNumber;		// the real entity number
+
+	byte		surfaces[MAX_MODEL_SURFACES];	// the surface state of the entity
+	short		shader_data[2];		// data passed in from shader manipulation
+
+	int			bone_tag[NUM_BONE_CONTROLLERS];
+	vec4_t		bone_quat[NUM_BONE_CONTROLLERS];
+
+	// renderer use only
+	struct tikiFrame_s	*of, *nf;
+	struct dtiki_s		*tiki;
+	int			bonestart;
 
 	// extra sprite information
 	float		radius;
@@ -185,11 +240,12 @@ typedef enum {
 	GLHW_PERMEDIA2			// where you don't have src*dst
 } glHardwareType_t;
 
+// FAKK2's layout: the client game module reads this as the engine fills it.
 typedef struct {
 	char					renderer_string[MAX_STRING_CHARS];
 	char					vendor_string[MAX_STRING_CHARS];
 	char					version_string[MAX_STRING_CHARS];
-	char					extensions_string[BIG_INFO_STRING];
+	char					extensions_string[MAX_STRING_CHARS * 2];
 
 	int						maxTextureSize;			// queried from GL
 	int						numTextureUnits;		// multitexture ability

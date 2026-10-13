@@ -222,6 +222,57 @@ void RE_AddRefEntityToScene( const refEntity_t *ent ) {
 	r_numentities++;
 }
 
+/*
+=====================
+RE_AddRefSpriteToScene
+
+FAKK2: the entity's model is a .spr, which names the sprite's shader. The
+model type sorts it out when the scene is drawn.
+=====================
+*/
+void RE_AddRefSpriteToScene( const refEntity_t *ent ) {
+	RE_AddRefEntityToScene( ent );
+}
+
+/*
+=====================
+RE_GetRenderEntity
+
+FAKK2: the entity with that number among those added since the scene was
+cleared. The client game module places attached entities from the tags of
+the parent it already added.
+=====================
+*/
+refEntity_t *RE_GetRenderEntity( int entityNumber ) {
+	int		i;
+
+	for ( i = r_firstSceneEntity ; i < r_numentities ; i++ ) {
+		if ( backEndData->entities[i].e.entityNumber == entityNumber ) {
+			return &backEndData->entities[i].e;
+		}
+	}
+	return NULL;
+}
+
+/*
+=====================
+RE_DebugLine, RE_Swipe*
+
+Not drawn yet.
+=====================
+*/
+void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float b, float alpha ) {
+}
+
+void RE_SwipeBegin( float thistime, float life, qhandle_t shader ) {
+}
+
+void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time ) {
+}
+
+void RE_SwipeEnd( void ) {
+}
+
 
 /*
 =====================
@@ -229,7 +280,7 @@ RE_AddDynamicLightToScene
 
 =====================
 */
-void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive ) {
+static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, float g, float b, int additive ) {
 	dlight_t	*dl;
 
 	if ( !tr.registered ) {
@@ -258,20 +309,12 @@ void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float r, floa
 =====================
 RE_AddLightToScene
 
+FAKK2's type bits: "additive" selects an additive light; the lens flare
+bits are not drawn yet.
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
-	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
-}
-
-/*
-=====================
-RE_AddAdditiveLightToScene
-
-=====================
-*/
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
-	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int type ) {
+	RE_AddDynamicLightToScene( org, intensity, r, g, b, ( type & additive ) != 0 );
 }
 
 /*

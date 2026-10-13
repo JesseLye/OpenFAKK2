@@ -129,7 +129,8 @@ Con_MessageMode3_f
 ================
 */
 void Con_MessageMode3_f (void) {
-	chat_playerNum = VM_Call( cgvm, CG_CROSSHAIR_PLAYER );
+	// FAKK2's client game module does not report the player under the crosshair
+	chat_playerNum = -1;
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
 		chat_playerNum = -1;
 		return;
@@ -146,7 +147,8 @@ Con_MessageMode4_f
 ================
 */
 void Con_MessageMode4_f (void) {
-	chat_playerNum = VM_Call( cgvm, CG_LAST_ATTACKER );
+	// FAKK2's client game module does not report the last attacker
+	chat_playerNum = -1;
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
 		chat_playerNum = -1;
 		return;
