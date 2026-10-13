@@ -277,6 +277,7 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 	ent->numClusters = 0;
 	ent->lastCluster = 0;
 	ent->areanum = -1;
+	gEnt->areanum = -1;	// the game reads this too
 	ent->areanum2 = -1;
 
 	//get all leafs, including solids
@@ -297,13 +298,16 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 			// but nothing should evern need more than that
 			if (ent->areanum != -1 && ent->areanum != area) {
 				if (ent->areanum2 != -1 && ent->areanum2 != area && sv.state == SS_LOADING) {
-					Com_DPrintf ("Object %i touching 3 areas at %f %f %f\n",
+					Com_DPrintf ("Object %i touching 3 areas at %.2f %.2f %.2f with absmin %.2f %.2f %.2f and absmax %.2f %.2f %.2f\n",
 					gEnt->s.number,
-					gEnt->absmin[0], gEnt->absmin[1], gEnt->absmin[2]);
+					gEnt->currentOrigin[0], gEnt->currentOrigin[1], gEnt->currentOrigin[2],
+					gEnt->absmin[0], gEnt->absmin[1], gEnt->absmin[2],
+					gEnt->absmax[0], gEnt->absmax[1], gEnt->absmax[2]);
 				}
 				ent->areanum2 = area;
 			} else {
 				ent->areanum = area;
+				gEnt->areanum = area;	// the game reads this too
 			}
 		}
 	}

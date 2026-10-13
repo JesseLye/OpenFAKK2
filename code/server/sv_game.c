@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "server.h"
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
+#include "../tiki/tiki.h"
 
 #include "../botlib/botlib.h"
 
@@ -539,8 +540,47 @@ static int SV_GameSoundIndex( const char *name ) {
 	return SV_FindIndex( name, CS_SOUNDS, MAX_SOUNDS, qtrue );
 }
 
+// the model definition behind each model config string, NULL for inline
+// brush models and for names that failed to load
+static tiki_t		*sv_tikis[MAX_MODELS];
+
+static qboolean SV_IsTikiName( const char *name ) {
+	size_t	len = strlen( name );
+
+	return len > 4 && !Q_stricmp( name + len - 4, ".tik" );
+}
+
 static int SV_GameModelIndex( const char *name ) {
-	return SV_FindIndex( name, CS_MODELS, MAX_MODELS, qtrue );
+	tiki_t	*tiki = NULL;
+	int		index;
+
+	if ( !name || !name[0] ) {
+		return 0;
+	}
+
+	// a model definition that fails to load gets no index; the game treats -1
+	// as "this entity cannot be spawned"
+	if ( SV_IsTikiName( name ) ) {
+		tiki = TIKI_Register( name );
+		if ( !tiki ) {
+			return -1;
+		}
+	}
+
+	index = SV_FindIndex( name, CS_MODELS, MAX_MODELS, qtrue );
+
+	// bound on every call: config strings are reused from level to level
+	if ( index > 0 ) {
+		sv_tikis[index] = tiki;
+	}
+	return index;
+}
+
+static tiki_t *SV_Tiki( int modelindex ) {
+	if ( modelindex <= 0 || modelindex >= MAX_MODELS ) {
+		return NULL;
+	}
+	return sv_tikis[modelindex];
 }
 
 static void SV_GameSetLightStyle( int i, const char *data ) {
@@ -601,50 +641,67 @@ static unsigned short SV_GameCalcCRC( const unsigned char *start, int count ) {
 /*
 ===========================================================================
 
-Model, alias and sound queries that are not implemented yet.
-
-Each returns the value that means "nothing found" so the game keeps running,
-but models have no animations, tags, bounds or init commands until the TIKI
-loader exists. They are kept together so the gap is visible.
+Model queries. The game addresses models by config string index.
 
 ===========================================================================
 */
 
-static qboolean SV_Stub_IsModel( int index ) { (void)index; return qfalse; }
-static int SV_Stub_ModelCount( int modelindex ) { (void)modelindex; return 0; }
-static qboolean SV_Stub_InitCommands( int modelindex, tiki_cmd_t *tiki_cmd ) { (void)modelindex; tiki_cmd->num_cmds = 0; return qfalse; }
-static void SV_Stub_CalculateBounds( int modelindex, float scale, vec3_t mins, vec3_t maxs ) { (void)modelindex; (void)scale; VectorClear( mins ); VectorClear( maxs ); }
-static const char *SV_Stub_Anim_NameForNum( int modelindex, int animnum ) { (void)modelindex; (void)animnum; return ""; }
-static int SV_Stub_Anim_NumForName( int modelindex, const char *name ) { (void)modelindex; (void)name; return -1; }
-static int SV_Stub_Anim_NumFrames( int modelindex, int animnum ) { (void)modelindex; (void)animnum; return 0; }
-static float SV_Stub_Anim_Time( int modelindex, int animnum ) { (void)modelindex; (void)animnum; return 0; }
-static void SV_Stub_Anim_Delta( int modelindex, int animnum, vec3_t delta ) { (void)modelindex; (void)animnum; VectorClear( delta ); }
-static int SV_Stub_Anim_Flags( int modelindex, int animnum ) { (void)modelindex; (void)animnum; return 0; }
-static qboolean SV_Stub_Anim_HasCommands( int modelindex, int animnum ) { (void)modelindex; (void)animnum; return qfalse; }
-static qboolean SV_Stub_Frame_Commands( int modelindex, int animnum, int framenum, tiki_cmd_t *tiki_cmd ) { (void)modelindex; (void)animnum; (void)framenum; tiki_cmd->num_cmds = 0; return qfalse; }
-static void SV_Stub_Frame_Delta( int modelindex, int animnum, int framenum, vec3_t delta ) { (void)modelindex; (void)animnum; (void)framenum; VectorClear( delta ); }
-static float SV_Stub_Frame_Time( int modelindex, int animnum, int framenum ) { (void)modelindex; (void)animnum; (void)framenum; return 0; }
-static void SV_Stub_Frame_Bounds( int modelindex, int animnum, int framenum, float scale, vec3_t mins, vec3_t maxs ) { (void)modelindex; (void)animnum; (void)framenum; (void)scale; VectorClear( mins ); VectorClear( maxs ); }
-static int SV_Stub_NameToNum( int modelindex, const char *name ) { (void)modelindex; (void)name; return -1; }
-static const char *SV_Stub_NumToName( int modelindex, int num ) { (void)modelindex; (void)num; return ""; }
-static int SV_Stub_SurfaceInt( int modelindex, int num ) { (void)modelindex; (void)num; return 0; }
+static qboolean SV_GameIsModel( int index ) { return SV_Tiki( index ) != NULL; }
+static int SV_GameNumAnims( int modelindex ) { return TIKI_NumAnims( SV_Tiki( modelindex ) ); }
+static int SV_GameNumSkins( int modelindex ) { return TIKI_NumSkins( SV_Tiki( modelindex ) ); }
+static int SV_GameNumSurfaces( int modelindex ) { return TIKI_NumSurfaces( SV_Tiki( modelindex ) ); }
+static int SV_GameNumTags( int modelindex ) { return TIKI_NumTags( SV_Tiki( modelindex ) ); }
+static qboolean SV_GameInitCommands( int modelindex, tiki_cmd_t *tiki_cmd ) { return TIKI_InitCommands( SV_Tiki( modelindex ), qtrue, tiki_cmd ); }
+static void SV_GameCalculateBounds( int modelindex, float scale, vec3_t mins, vec3_t maxs ) { TIKI_CalculateBounds( SV_Tiki( modelindex ), scale, mins, maxs ); }
+static const char *SV_GameAnim_NameForNum( int modelindex, int animnum ) { return TIKI_Anim_NameForNum( SV_Tiki( modelindex ), animnum ); }
+static int SV_GameAnim_NumForName( int modelindex, const char *name ) { return TIKI_Anim_NumForName( SV_Tiki( modelindex ), name ); }
+static int SV_GameAnim_Random( int modelindex, const char *name ) { return TIKI_Anim_Random( SV_Tiki( modelindex ), name ); }
+static int SV_GameAnim_NumFrames( int modelindex, int animnum ) { return TIKI_Anim_NumFrames( SV_Tiki( modelindex ), animnum ); }
+static float SV_GameAnim_Time( int modelindex, int animnum ) { return TIKI_Anim_Time( SV_Tiki( modelindex ), animnum ); }
+static void SV_GameAnim_Delta( int modelindex, int animnum, vec3_t delta ) { TIKI_Anim_Delta( SV_Tiki( modelindex ), animnum, delta ); }
+static int SV_GameAnim_Flags( int modelindex, int animnum ) { return TIKI_Anim_Flags( SV_Tiki( modelindex ), animnum ); }
+static qboolean SV_GameAnim_HasCommands( int modelindex, int animnum ) { return TIKI_Anim_HasCommands( SV_Tiki( modelindex ), animnum, qtrue ); }
+static qboolean SV_GameFrame_Commands( int modelindex, int animnum, int framenum, tiki_cmd_t *tiki_cmd ) { return TIKI_Frame_Commands( SV_Tiki( modelindex ), animnum, framenum, qtrue, tiki_cmd ); }
+static void SV_GameFrame_Delta( int modelindex, int animnum, int framenum, vec3_t delta ) { TIKI_Frame_Delta( SV_Tiki( modelindex ), animnum, framenum, delta ); }
+static float SV_GameFrame_Time( int modelindex, int animnum, int framenum ) { return TIKI_Frame_Time( SV_Tiki( modelindex ), animnum, framenum ); }
+static void SV_GameFrame_Bounds( int modelindex, int animnum, int framenum, float scale, vec3_t mins, vec3_t maxs ) { TIKI_Frame_Bounds( SV_Tiki( modelindex ), animnum, framenum, scale, mins, maxs ); }
+static int SV_GameSurface_NameToNum( int modelindex, const char *name ) { return TIKI_Surface_NameToNum( SV_Tiki( modelindex ), name ); }
+static const char *SV_GameSurface_NumToName( int modelindex, int num ) { return TIKI_Surface_NumToName( SV_Tiki( modelindex ), num ); }
+static int SV_GameSurface_Flags( int modelindex, int num ) { return TIKI_Surface_Flags( SV_Tiki( modelindex ), num ); }
+static int SV_GameSurface_NumSkins( int modelindex, int num ) { return TIKI_Surface_NumSkins( SV_Tiki( modelindex ), num ); }
+static int SV_GameTag_NumForName( int modelindex, const char *name ) { return TIKI_Tag_NumForName( SV_Tiki( modelindex ), name ); }
+static const char *SV_GameTag_NameForNum( int modelindex, int num ) { return TIKI_Tag_NameForNum( SV_Tiki( modelindex ), num ); }
 
-static orientation_t SV_Stub_Tag_Orientation( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat ) {
-	orientation_t	orient;
-
-	(void)modelindex; (void)anim; (void)frame; (void)num; (void)scale; (void)bone_tag; (void)bone_quat;
-	VectorClear( orient.origin );
-	AxisClear( orient.axis );
-	return orient;
+// bone controllers and animation blending are not applied yet
+static orientation_t SV_GameTag_Orientation( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat ) {
+	(void)bone_tag; (void)bone_quat;
+	return TIKI_Tag_Orientation( SV_Tiki( modelindex ), anim, frame, num, scale );
 }
 
-static orientation_t SV_Stub_Tag_OrientationEx( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat,
+static orientation_t SV_GameTag_OrientationEx( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat,
 	int crossblend_anim, int crossblend_frame, float crossblend_lerp, qboolean uselegs, qboolean usetorso, int torso_anim, int torso_frame,
 	int torso_crossblend_anim, int torso_crossblend_frame, float torso_crossblend_lerp ) {
+	(void)bone_tag; (void)bone_quat;
 	(void)crossblend_anim; (void)crossblend_frame; (void)crossblend_lerp; (void)uselegs; (void)usetorso; (void)torso_anim; (void)torso_frame;
 	(void)torso_crossblend_anim; (void)torso_crossblend_frame; (void)torso_crossblend_lerp;
-	return SV_Stub_Tag_Orientation( modelindex, anim, frame, num, scale, bone_tag, bone_quat );
+	return TIKI_Tag_Orientation( SV_Tiki( modelindex ), anim, frame, num, scale );
 }
+
+static const char *SV_GameNameForNum( int modelindex ) {
+	if ( modelindex <= 0 || modelindex >= MAX_MODELS ) {
+		return "";
+	}
+	return sv.configstrings[CS_MODELS + modelindex];
+}
+
+/*
+===========================================================================
+
+Alias and sound queries that are not implemented yet. Each returns the
+value that means "nothing found" so the game keeps running.
+
+===========================================================================
+*/
 
 static qboolean SV_Stub_Alias_Add( int modelindex, const char *alias, const char *name, const char *parameters ) { (void)modelindex; (void)alias; (void)name; (void)parameters; return qfalse; }
 static const char *SV_Stub_Alias_FindRandom( int modelindex, const char *alias ) { (void)modelindex; (void)alias; return NULL; }
@@ -653,7 +710,6 @@ static const char *SV_Stub_Alias_FindDialog( int modelindex, const char *alias, 
 static void *SV_Stub_Alias_GetList( int modelindex ) { (void)modelindex; return NULL; }
 static void SV_Stub_Alias_UpdateDialog( int model_index, const char *alias, int number_of_times_played, byte been_played_this_loop, int last_time_played ) { (void)model_index; (void)alias; (void)number_of_times_played; (void)been_played_this_loop; (void)last_time_played; }
 static void SV_Stub_Alias_AddActorDialog( int model_index, const char *alias, int actor_number, int number_of_times_played, byte been_played_this_loop, int last_time_played ) { (void)model_index; (void)alias; (void)actor_number; (void)number_of_times_played; (void)been_played_this_loop; (void)last_time_played; }
-static const char *SV_Stub_NameForNum( int modelindex ) { (void)modelindex; return ""; }
 static qboolean SV_Stub_GlobalAlias_Add( const char *alias, const char *name, const char *parameters ) { (void)alias; (void)name; (void)parameters; return qfalse; }
 static const char *SV_Stub_GlobalAlias_FindRandom( const char *alias ) { (void)alias; return NULL; }
 static void SV_Stub_GlobalAlias_Void( void ) { }
@@ -662,8 +718,116 @@ static void QDECL SV_Stub_CenterPrintf( gentity_t *ent, const char *fmt, ... ) {
 static void QDECL SV_Stub_LocationPrintf( gentity_t *ent, int x, int y, const char *fmt, ... ) { (void)ent; (void)x; (void)y; (void)fmt; }
 static void SV_Stub_Sound( vec3_t *org, int entnum, int channel, const char *sound_name, float volume, float attenuation ) { (void)org; (void)entnum; (void)channel; (void)sound_name; (void)volume; (void)attenuation; }
 static void SV_Stub_StopSound( int entnum, int channel ) { (void)entnum; (void)channel; }
-static float SV_Stub_SoundLength( const char *path ) { (void)path; return 0; }
-static byte *SV_Stub_SoundAmplitudes( const char *name, int *number_of_amplitudes ) { (void)name; *number_of_amplitudes = 0; return NULL; }
+
+/*
+===========================================================================
+
+Lip-sync data
+
+Each dialog sound may have a text file beside it with the extension .lip:
+the sound's length in seconds, the number of mouth amplitudes, then one
+amplitude (0-255) per line. The game uses the length to time dialog and
+the amplitudes to animate mouths.
+
+===========================================================================
+*/
+
+#define	LIP_MAX_AMPLITUDES	16384
+
+typedef struct lipSync_s {
+	struct lipSync_s	*next;
+	char				name[MAX_QPATH];
+	qboolean			found;
+	float				length;
+	int					numAmplitudes;
+	byte				*amplitudes;
+} lipSync_t;
+
+static lipSync_t	*sv_lipSyncs;
+
+static lipSync_t *SV_LoadLipSync( const char *soundName ) {
+	lipSync_t	*lip;
+	char		name[MAX_QPATH];
+	void		*buffer;
+	char		*p, *end;
+	int			i;
+
+	if ( !soundName || !soundName[0] ) {
+		return NULL;
+	}
+	COM_StripExtension( soundName, name, sizeof( name ) );
+	Q_strcat( name, sizeof( name ), ".lip" );
+
+	for ( lip = sv_lipSyncs ; lip ; lip = lip->next ) {
+		if ( !Q_stricmp( lip->name, name ) ) {
+			return lip;
+		}
+	}
+
+	lip = calloc( 1, sizeof( *lip ) );
+	if ( !lip ) {
+		Com_Error( ERR_FATAL, "SV_LoadLipSync: out of memory" );
+	}
+	Q_strncpyz( lip->name, name, sizeof( lip->name ) );
+	lip->next = sv_lipSyncs;
+	sv_lipSyncs = lip;
+
+	FS_ReadFile( name, &buffer );
+	if ( !buffer ) {
+		return lip;
+	}
+
+	p = buffer;
+	lip->length = (float)strtod( p, &end );
+	if ( end != p ) {
+		long	count;
+
+		p = end;
+		count = strtol( p, &end, 10 );
+		if ( end != p && count >= 0 && count <= LIP_MAX_AMPLITUDES ) {
+			lip->amplitudes = calloc( 1, count ? count : 1 );
+			if ( !lip->amplitudes ) {
+				Com_Error( ERR_FATAL, "SV_LoadLipSync: out of memory" );
+			}
+			p = end;
+			for ( i = 0 ; i < count ; i++ ) {
+				long	value = strtol( p, &end, 10 );
+
+				if ( end == p ) {
+					break;		// fewer values than declared; the rest stay silent
+				}
+				lip->amplitudes[i] = (byte)( value < 0 ? 0 : value > 255 ? 255 : value );
+				p = end;
+			}
+			lip->numAmplitudes = (int)count;
+			lip->found = qtrue;
+		}
+	}
+	if ( !lip->found ) {
+		Com_Printf( "WARNING: %s is not a valid lip-sync file\n", name );
+	}
+
+	FS_FreeFile( buffer );
+	return lip;
+}
+
+// negative when the sound has no lip-sync data
+static float SV_GameSoundLength( const char *path ) {
+	lipSync_t	*lip = SV_LoadLipSync( path );
+
+	return ( lip && lip->found ) ? lip->length : -1;
+}
+
+static byte *SV_GameSoundAmplitudes( const char *name, int *number_of_amplitudes ) {
+	lipSync_t	*lip = SV_LoadLipSync( name );
+
+	if ( !lip || !lip->found ) {
+		*number_of_amplitudes = 0;
+		return NULL;
+	}
+	*number_of_amplitudes = lip->numAmplitudes;
+	return lip->amplitudes;
+}
 
 //==============================================
 
@@ -723,35 +887,35 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->SetLightStyle = SV_GameSetLightStyle;
 	import->GameDir = SV_GameDir;
 
-	import->IsModel = SV_Stub_IsModel;
+	import->IsModel = SV_GameIsModel;
 	import->setmodel = SV_GameSetModel;
-	import->NumAnims = SV_Stub_ModelCount;
-	import->NumSkins = SV_Stub_ModelCount;
-	import->NumSurfaces = SV_Stub_ModelCount;
-	import->NumTags = SV_Stub_ModelCount;
-	import->InitCommands = SV_Stub_InitCommands;
-	import->CalculateBounds = SV_Stub_CalculateBounds;
-	import->Anim_NameForNum = SV_Stub_Anim_NameForNum;
-	import->Anim_NumForName = SV_Stub_Anim_NumForName;
-	import->Anim_Random = SV_Stub_Anim_NumForName;
-	import->Anim_NumFrames = SV_Stub_Anim_NumFrames;
-	import->Anim_Time = SV_Stub_Anim_Time;
-	import->Anim_Delta = SV_Stub_Anim_Delta;
-	import->Anim_AbsoluteDelta = SV_Stub_Anim_Delta;
-	import->Anim_Flags = SV_Stub_Anim_Flags;
-	import->Anim_HasCommands = SV_Stub_Anim_HasCommands;
-	import->Frame_Commands = SV_Stub_Frame_Commands;
-	import->Frame_Delta = SV_Stub_Frame_Delta;
-	import->Frame_Time = SV_Stub_Frame_Time;
-	import->Frame_Bounds = SV_Stub_Frame_Bounds;
-	import->Surface_NameToNum = SV_Stub_NameToNum;
-	import->Surface_NumToName = SV_Stub_NumToName;
-	import->Surface_Flags = SV_Stub_SurfaceInt;
-	import->Surface_NumSkins = SV_Stub_SurfaceInt;
-	import->Tag_NumForName = SV_Stub_NameToNum;
-	import->Tag_NameForNum = SV_Stub_NumToName;
-	import->Tag_Orientation = SV_Stub_Tag_Orientation;
-	import->Tag_OrientationEx = SV_Stub_Tag_OrientationEx;
+	import->NumAnims = SV_GameNumAnims;
+	import->NumSkins = SV_GameNumSkins;
+	import->NumSurfaces = SV_GameNumSurfaces;
+	import->NumTags = SV_GameNumTags;
+	import->InitCommands = SV_GameInitCommands;
+	import->CalculateBounds = SV_GameCalculateBounds;
+	import->Anim_NameForNum = SV_GameAnim_NameForNum;
+	import->Anim_NumForName = SV_GameAnim_NumForName;
+	import->Anim_Random = SV_GameAnim_Random;
+	import->Anim_NumFrames = SV_GameAnim_NumFrames;
+	import->Anim_Time = SV_GameAnim_Time;
+	import->Anim_Delta = SV_GameAnim_Delta;
+	import->Anim_AbsoluteDelta = SV_GameAnim_Delta;
+	import->Anim_Flags = SV_GameAnim_Flags;
+	import->Anim_HasCommands = SV_GameAnim_HasCommands;
+	import->Frame_Commands = SV_GameFrame_Commands;
+	import->Frame_Delta = SV_GameFrame_Delta;
+	import->Frame_Time = SV_GameFrame_Time;
+	import->Frame_Bounds = SV_GameFrame_Bounds;
+	import->Surface_NameToNum = SV_GameSurface_NameToNum;
+	import->Surface_NumToName = SV_GameSurface_NumToName;
+	import->Surface_Flags = SV_GameSurface_Flags;
+	import->Surface_NumSkins = SV_GameSurface_NumSkins;
+	import->Tag_NumForName = SV_GameTag_NumForName;
+	import->Tag_NameForNum = SV_GameTag_NameForNum;
+	import->Tag_Orientation = SV_GameTag_Orientation;
+	import->Tag_OrientationEx = SV_GameTag_OrientationEx;
 
 	import->Alias_Add = SV_Stub_Alias_Add;
 	import->Alias_FindRandom = SV_Stub_Alias_FindRandom;
@@ -761,7 +925,7 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->Alias_GetList = SV_Stub_Alias_GetList;
 	import->Alias_UpdateDialog = SV_Stub_Alias_UpdateDialog;
 	import->Alias_AddActorDialog = SV_Stub_Alias_AddActorDialog;
-	import->NameForNum = SV_Stub_NameForNum;
+	import->NameForNum = SV_GameNameForNum;
 	import->GlobalAlias_Add = SV_Stub_GlobalAlias_Add;
 	import->GlobalAlias_FindRandom = SV_Stub_GlobalAlias_FindRandom;
 	import->GlobalAlias_Dump = SV_Stub_GlobalAlias_Void;
@@ -771,8 +935,8 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->locationprintf = SV_Stub_LocationPrintf;
 	import->Sound = SV_Stub_Sound;
 	import->StopSound = SV_Stub_StopSound;
-	import->SoundLength = SV_Stub_SoundLength;
-	import->SoundAmplitudes = SV_Stub_SoundAmplitudes;
+	import->SoundLength = SV_GameSoundLength;
+	import->SoundAmplitudes = SV_GameSoundAmplitudes;
 
 	import->CalcCRC = SV_GameCalcCRC;
 	import->DebugLines = &sv_debugLines;

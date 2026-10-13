@@ -87,6 +87,9 @@ function(fakk_module TARGET OUTPUT_NAME DEF_FILE)
         target_compile_options(${TARGET} PRIVATE /W3 /Zc:forScope- /permissive /EHsc)
         target_compile_definitions(${TARGET} PRIVATE WIN32 _WINDOWS)
         target_link_libraries(${TARGET} PRIVATE winmm)
+        # keep frame pointers and write a linker map so crash reports can be resolved
+        target_compile_options(${TARGET} PRIVATE /Oy-)
+        target_link_options(${TARGET} PRIVATE /MAP)
     endif()
 
     set_output_dirs(${TARGET} SUBDIRECTORY fakk)

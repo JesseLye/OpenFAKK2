@@ -14,8 +14,9 @@ Early. The engine does **not** run the game yet.
 | Engine base | ioquake3 `87a99d18`, rebranded. Only the dedicated server (`openfakk2ded`) builds; the client and renderers are disabled until they are ported |
 | Game data | Retail pk3s mount; BSP v12 collision data loads for all 30 retail maps |
 | Game modules | `gamex86.dll` / `cgamex86.dll` build from Ritual's 1.02 SDK source (x86, MSVC). Under the retail engine the rebuilt `gamex86.dll` matches retail console output at map spawn on four maps; `cgamex86.dll` is untested |
-| Engine ↔ game interface | Server side (`GAME_API_VERSION 4`): the game module loads, initialises and spawns a map, but model, alias and sound queries are stubs, so every model is reported invalid. Client side (`CGAME_IMPORT_API_VERSION 3`): not implemented |
-| BSP v12 rendering, TIKI (`.tik` `.tan` `.skb` `.ska`), `.ftx`, `.urc` UI, sound/music | Not implemented |
+| Engine ↔ game interface | Server side (`GAME_API_VERSION 4`): the game module loads, initialises and spawns maps. With `developer 1`, the game's spawn log matches the retail engine on zoo, training and cemetery, and on swamp1 apart from one extra warning. Aliases, sounds and client prints are still stubs. Client side (`CGAME_IMPORT_API_VERSION 3`): not implemented |
+| TIKI models (`.tik` `.tan` `.skb` `.ska`) | Definitions, animations and skeletons load for the server's queries; bounds and radius match the retail engine's cached values on 742 of 743 models. Skeletal tag placement is provisional. No rendering |
+| BSP v12 rendering, `.ftx`, `.urc` UI, sound/music | Not implemented |
 
 ## Sources
 

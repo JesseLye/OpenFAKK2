@@ -46,3 +46,6 @@ add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
 # The sockets platform abstraction layer necessarily uses deprecated APIs
 add_compile_definitions(_WINSOCK_DEPRECATED_NO_WARNINGS)
+
+# Linker maps let module-relative addresses from a crash report be resolved
+add_link_options(/MAP)

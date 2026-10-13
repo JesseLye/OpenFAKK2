@@ -54,6 +54,7 @@ set(SERVER_SOURCES
     ${SOURCE_DIR}/server/sv_net_chan.c
     ${SOURCE_DIR}/server/sv_snapshot.c
     ${SOURCE_DIR}/server/sv_world.c
+    ${SOURCE_DIR}/tiki/tiki.c
 )
 
 set(BOTLIB_SOURCES

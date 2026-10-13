@@ -812,6 +812,76 @@ void Sys_GLimpInit( void )
 
 /*
 ==============
+Sys_CrashReport
+
+Prints where a fatal exception happened as module-relative addresses, which
+can be looked up in a linker map. The handler only reports; the exception
+continues to the normal signal handling.
+==============
+*/
+static void Sys_PrintCodeAddress( const char *label, void *address )
+{
+	HMODULE	module = NULL;
+	char	path[MAX_PATH] = "?";
+	const char	*name;
+
+	if ( GetModuleHandleExA( GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)address, &module ) && module ) {
+		GetModuleFileNameA( module, path, sizeof( path ) );
+	}
+	name = strrchr( path, '\\' );
+	name = name ? name + 1 : path;
+	fprintf( stderr, "  %s %s+0x%x\n", label, name, (unsigned)( (char *)address - (char *)module ) );
+}
+
+static LONG CALLBACK Sys_CrashReport( PEXCEPTION_POINTERS info )
+{
+	static qboolean	reported;
+	DWORD			code = info->ExceptionRecord->ExceptionCode;
+
+	if ( reported || ( code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION
+		&& code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_PRIV_INSTRUCTION ) ) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+	reported = qtrue;
+
+	fprintf( stderr, "Fatal exception 0x%08x\n", (unsigned)code );
+	if ( code == EXCEPTION_ACCESS_VIOLATION && info->ExceptionRecord->NumberParameters >= 2 ) {
+		fprintf( stderr, "  %s address 0x%p\n", info->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
+			(void *)info->ExceptionRecord->ExceptionInformation[1] );
+	}
+	Sys_PrintCodeAddress( "at", info->ExceptionRecord->ExceptionAddress );
+
+#if defined( _M_IX86 )
+	{
+		// walk saved frame pointers; frames built without one are skipped
+		MEMORY_BASIC_INFORMATION	mbi;
+		DWORD	*frame = (DWORD *)info->ContextRecord->Ebp;
+		int		depth;
+
+		for ( depth = 0 ; depth < 24 && frame ; depth++ ) {
+			DWORD	*next;
+
+			if ( !VirtualQuery( frame, &mbi, sizeof( mbi ) ) || mbi.State != MEM_COMMIT || ( mbi.Protect & ( PAGE_NOACCESS | PAGE_GUARD ) ) ) {
+				break;
+			}
+			if ( !frame[1] ) {
+				break;
+			}
+			Sys_PrintCodeAddress( "called from", (void *)(size_t)frame[1] );
+			next = (DWORD *)(size_t)frame[0];
+			if ( next <= frame ) {
+				break;
+			}
+			frame = next;
+		}
+	}
+#endif
+	fflush( stderr );
+
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+/*
+==============
 Sys_PlatformInit
 
 Windows specific initialisation
@@ -824,6 +894,8 @@ void Sys_PlatformInit( void )
 #endif
 
 	Sys_SetFloatEnv();
+
+	AddVectoredExceptionHandler( 1, Sys_CrashReport );
 
 #ifndef DEDICATED
 	if(timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR)
