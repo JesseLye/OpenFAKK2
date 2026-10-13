@@ -181,6 +181,10 @@ Read from `fakk2.exe` and followed:
   out everything above Julie's waist.
 - **`CM_InlineModel`** (`0x426750`) is the plain collision function; the model-index
   rule above is what makes the game's argument an inline model number.
+- **`Anim_CrossblendTime`** (`0x44e3b0`) returns the animation definition's cached
+  cross-blend time in milliseconds (the `crossblend` keyword, 200 ms by default); the
+  module times its cross-blends with it and hands the renderer and the tag functions
+  the animation being left and how far along the blend is.
 
 Not read, done another way:
 
@@ -193,8 +197,7 @@ Not read, done another way:
   by their order in the frame, `S_StartLocalSound` resolves an alias before a file name,
   and the music calls do nothing.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
-- **Animation cross-blend times** are reported as 0, so animations change without
-  blending. (The tag functions honour the blending arguments the module passes; see
+- **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
   `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks
   for a cross-blend of 0 towards animation 0 — the SDK module never calls it, and
@@ -390,8 +393,12 @@ What is implemented, and on what basis:
   the bone controllers apply only when `useAngles` is set (the controller quaternion
   multiplies the composed rotation, as for tags). Frames are interpolated by slerp
   from the old frame towards the current one (`0x43ca60`, the shorter way round, linear
-  within 1e-6 of parallel). Still assumed: turning normals with the vertex's bones.
-  Cross-blending and level of detail are not applied in the renderer.
+  within 1e-6 of parallel), and not at all without `r_lerpmodels`; the result is then
+  blended from the cross-blend frame the same way by the cross-blend lerp (the share of
+  the animation itself), when that lerp is not negative (the same branches of
+  `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
+  backlerp the module also fills in). Still assumed: turning normals with the vertex's
+  bones. Level of detail is not applied in the renderer.
 - **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
   size is the image's width times the shader's `spriteScale` times the entity's scale.
   That is OpenMoHAA's rule; the retail renderer's has not been read.

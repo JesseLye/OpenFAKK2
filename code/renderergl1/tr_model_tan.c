@@ -1106,12 +1106,38 @@ typedef struct {
 // frame is drawn
 static skelBonePose_t	skel_pose[SKEL_MAX_BONES];
 
-// one of the two animations an entity plays at once
+// one of the two animations an entity plays at once, and what it blends from
 typedef struct {
 	const skelAnim_t	*anim;
 	int					frame, oldframe;
 	float				backlerp;
+	const skelAnim_t	*crossAnim;		// NULL when not cross-blending
+	int					crossFrame;
+	float				crossLerp;		// share of the animation itself
 } skelAnimSel_t;
+
+// what an entity's animation fields ask for (0x4872d0): no frame
+// interpolation without r_lerpmodels or when the frames are the same, a
+// cross-blend only while its lerp is not negative and its frame exists
+static void R_SkelSelectAnim( tikiModel_t *tiki, skelAnimSel_t *sel, int anim, int frame, int oldframe, float backlerp,
+	int crossAnim, int crossFrame, float crossLerp ) {
+	sel->anim = R_TikiSkelAnim( tiki, anim );
+	sel->frame = frame;
+	sel->oldframe = oldframe;
+	sel->backlerp = ( oldframe == frame || !r_lerpmodels->integer ) ? 0 : backlerp;
+	sel->crossAnim = NULL;
+	sel->crossFrame = 0;
+	sel->crossLerp = 0;
+	if ( crossLerp >= 0 ) {
+		const skelAnim_t	*ca = R_TikiSkelAnim( tiki, crossAnim );
+
+		if ( ca && crossFrame >= 0 && crossFrame < ca->numFrames && !( ca == sel->anim && crossFrame == frame ) ) {
+			sel->crossAnim = ca;
+			sel->crossFrame = crossFrame;
+			sel->crossLerp = crossLerp;
+		}
+	}
+}
 
 // everything the pose above was composed from
 typedef struct {
@@ -1221,15 +1247,11 @@ static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 	Com_Memset( &key, 0, sizeof( key ) );
 	key.model = tiki;
 	key.entity = ent;
-	key.legs.anim = R_TikiSkelAnim( tiki, e->anim );
-	key.legs.frame = e->frame;
-	key.legs.oldframe = e->oldframe;
-	key.legs.backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
+	R_SkelSelectAnim( tiki, &key.legs, e->anim, e->frame, e->oldframe, e->backlerp,
+		e->crossblend_anim, e->crossblend_frame, e->crossblend_lerp );
 	if ( e->usetorso ) {
-		key.torso.anim = R_TikiSkelAnim( tiki, e->torso_anim );
-		key.torso.frame = e->torso_frame;
-		key.torso.oldframe = e->torso_oldframe;
-		key.torso.backlerp = e->torso_oldframe == e->torso_frame ? 0 : e->torso_backlerp;
+		R_SkelSelectAnim( tiki, &key.torso, e->torso_anim, e->torso_frame, e->torso_oldframe, e->torso_backlerp,
+			e->torso_crossblend_anim, e->torso_crossblend_frame, e->torso_crossblend_lerp );
 	}
 	if ( !key.torso.anim ) {
 		key.torso = key.legs;
@@ -1271,6 +1293,18 @@ static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 			Vector4Copy( lerped, quat );
 			for ( i = 0 ; i < 3 ; i++ ) {
 				offset[i] = offset[i] * ( 1.0f - backlerp ) + oldOffset[i] * backlerp;
+			}
+		}
+		if ( sel->crossAnim ) {
+			vec4_t	crossQuat, lerped;
+			vec3_t	crossOffset;
+
+			// then from the animation being left towards that
+			Skel_FrameBone( sel->crossAnim, sel->crossFrame, b, crossQuat, crossOffset );
+			Skel_QuatSlerp( crossQuat, quat, sel->crossLerp, lerped );
+			Vector4Copy( lerped, quat );
+			for ( i = 0 ; i < 3 ; i++ ) {
+				offset[i] = offset[i] * sel->crossLerp + crossOffset[i] * ( 1.0f - sel->crossLerp );
 			}
 		}
 

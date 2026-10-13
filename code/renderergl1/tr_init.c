@@ -79,6 +79,7 @@ cvar_t	*r_lodscale;
 
 cvar_t	*r_norefresh;
 cvar_t	*r_drawentities;
+cvar_t	*r_lerpmodels;
 cvar_t	*r_drawworld;
 cvar_t	*r_speeds;
 cvar_t	*r_fullbright;
@@ -1124,6 +1125,7 @@ void R_Register( void )
 	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", CVAR_CHEAT );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
+	r_lerpmodels = ri.Cvar_Get ("r_lerpmodels", "1", 0 );
 	r_ignore = ri.Cvar_Get( "r_ignore", "1", CVAR_CHEAT );
 	r_nocull = ri.Cvar_Get ("r_nocull", "0", CVAR_CHEAT);
 	r_novis = ri.Cvar_Get ("r_novis", "0", CVAR_CHEAT);

@@ -62,6 +62,7 @@ int			TIKI_Anim_NumFrames( const tiki_t *tiki, int animnum );
 float		TIKI_Anim_Time( const tiki_t *tiki, int animnum );
 void		TIKI_Anim_Delta( const tiki_t *tiki, int animnum, vec3_t delta );
 int			TIKI_Anim_Flags( const tiki_t *tiki, int animnum );
+int			TIKI_Anim_CrossblendTime( const tiki_t *tiki, int animnum );
 qboolean	TIKI_Anim_HasCommands( const tiki_t *tiki, int animnum, qboolean server );
 
 qboolean	TIKI_Frame_Commands( const tiki_t *tiki, int animnum, int framenum, qboolean server, tiki_cmd_t *out );

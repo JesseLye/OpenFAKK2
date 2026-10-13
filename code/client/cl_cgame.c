@@ -699,8 +699,7 @@ static int CL_CG_Anim_NumFrames( int tikihandle, int animnum ) { return TIKI_Ani
 static float CL_CG_Anim_Time( int tikihandle, int animnum ) { return TIKI_Anim_Time( CL_Tiki( tikihandle ), animnum ); }
 static void CL_CG_Anim_Delta( int tikihandle, int animnum, vec3_t delta ) { TIKI_Anim_Delta( CL_Tiki( tikihandle ), animnum, delta ); }
 static int CL_CG_Anim_Flags( int tikihandle, int animnum ) { return TIKI_Anim_Flags( CL_Tiki( tikihandle ), animnum ); }
-// the definitions' cross-blend times are not read yet, so animations change without blending
-static int CL_CG_Anim_CrossblendTime( int tikihandle, int animnum ) { return 0; }
+static int CL_CG_Anim_CrossblendTime( int tikihandle, int animnum ) { return TIKI_Anim_CrossblendTime( CL_Tiki( tikihandle ), animnum ); }
 static qboolean CL_CG_Anim_HasCommands( int tikihandle, int animnum ) { return TIKI_Anim_HasCommands( CL_Tiki( tikihandle ), animnum, qfalse ); }
 
 static qboolean CL_CG_Frame_Commands( int tikihandle, int animnum, int framenum, tiki_cmd_t *tiki_cmd ) { return TIKI_Frame_Commands( CL_Tiki( tikihandle ), animnum, framenum, qfalse, tiki_cmd ); }

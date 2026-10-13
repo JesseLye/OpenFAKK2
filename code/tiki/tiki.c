@@ -1365,6 +1365,13 @@ int TIKI_Anim_Flags( const tiki_t *tiki, int animnum ) {
 	return anim ? anim->flags : 0;
 }
 
+// milliseconds, the definition's cached value (fakk2.exe 0x44e3b0 reads it straight)
+int TIKI_Anim_CrossblendTime( const tiki_t *tiki, int animnum ) {
+	const tikiAnim_t	*anim = TIKI_GetAnim( tiki, animnum );
+
+	return anim ? anim->crossblend : 0;
+}
+
 qboolean TIKI_Anim_HasCommands( const tiki_t *tiki, int animnum, qboolean server ) {
 	const tikiAnim_t	*anim = TIKI_GetAnim( tiki, animnum );
 
