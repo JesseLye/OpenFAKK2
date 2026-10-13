@@ -1,0 +1,6 @@
+probe:
+waitforplayer
+wait 10
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

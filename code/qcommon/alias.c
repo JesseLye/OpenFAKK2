@@ -3,10 +3,9 @@
 Alias lists for Heavy Metal: F.A.K.K. 2. See alias.h.
 
 Adding an alias, its parameters and the printed messages follow fakk2.exe.
-Range lookup and the random pick follow OpenMoHAA's implementation of the
-same Ritual code and have not been checked against fakk2.exe. Dialog
-selection (Alias_ListFindDialog) is provisional: it does not yet apply the
-timeout, maximum-use and per-actor rules.
+Dialog selection follows fakk2.exe as well. Range lookup and the random pick
+follow OpenMoHAA's implementation of the same Ritual code and have not been
+checked against fakk2.exe.
 ===========================================================================
 */
 
@@ -355,14 +354,163 @@ void Alias_ListDump( AliasList_t *list ) {
 	Com_Printf( "%d total aliases\n", list->num_in_list );
 }
 
-// provisional: see the note at the top of the file
+/*
+===========================================================================
+
+Dialog selection
+
+A dialog alias is played at most once per "loop" through its variants. Use
+is tracked on the alias itself when it is global (or no actor is given) and
+otherwise separately for each actor. When every variant has been played, the
+ones whose timeout has passed and whose use limit is not reached become
+available again; a variant marked "stop" never does.
+
+Follows fakk2.exe (Alias_ListFindDialog at 0x41bdc0 and its helpers), except
+where noted.
+
+===========================================================================
+*/
+
+// whether use is tracked on the alias rather than per actor. The retail
+// helper (0x41bc00) was not examined; this is the evident reading.
+static qboolean Alias_IsGlobal( const AliasListNode_t *node, int actor_number ) {
+	return node->global_flag || actor_number < 0;
+}
+
+static AliasActorNode_t *Alias_FindActor( AliasListNode_t *node, int actor_number ) {
+	AliasActorNode_t	*actor;
+
+	for ( actor = node->actor_list ; actor ; actor = actor->next ) {
+		if ( actor->actor_number == actor_number ) {
+			return actor;
+		}
+	}
+	return NULL;
+}
+
+static AliasActorNode_t *Alias_AddActor( AliasListNode_t *node, int actor_number ) {
+	AliasActorNode_t	*actor = Alias_Alloc( sizeof( *actor ) );
+
+	actor->actor_number = actor_number;
+	actor->next = node->actor_list;
+	node->actor_list = actor;
+	return actor;
+}
+
+// counts the variants not yet played this loop, starting per-actor tracking
+// for an actor seen for the first time
+static int Alias_DialogAvailable( AliasListNode_t **nodes, int numNodes, int actor_number ) {
+	int		i, available = 0;
+
+	for ( i = 0 ; i < numNodes ; i++ ) {
+		AliasListNode_t	*node = nodes[i];
+
+		if ( Alias_IsGlobal( node, actor_number ) ) {
+			if ( !node->been_played_this_loop ) {
+				available++;
+			}
+		} else {
+			AliasActorNode_t	*actor = Alias_FindActor( node, actor_number );
+
+			if ( !actor ) {
+				actor = Alias_AddActor( node, actor_number );
+			}
+			if ( !actor->been_played_this_loop ) {
+				available++;
+			}
+		}
+	}
+	return available;
+}
+
+static qboolean Alias_DialogMayReplay( const AliasListNode_t *node, int timesPlayed, int lastTimePlayed, int now ) {
+	if ( node->stop_flag ) {
+		return qfalse;
+	}
+	if ( !( node->timeout < ( now - lastTimePlayed ) * 0.001f ) ) {
+		return qfalse;
+	}
+	return node->maximum_use == -1 || timesPlayed < node->maximum_use;
+}
+
+// starts a new loop: variants allowed to play again are made available
+static void Alias_DialogReset( AliasListNode_t **nodes, int numNodes, int actor_number ) {
+	int		now = Sys_Milliseconds();
+	int		i;
+
+	for ( i = 0 ; i < numNodes ; i++ ) {
+		AliasListNode_t	*node = nodes[i];
+
+		if ( Alias_IsGlobal( node, actor_number ) ) {
+			if ( Alias_DialogMayReplay( node, node->number_of_times_played, node->last_time_played, now ) ) {
+				node->been_played_this_loop = 0;
+			}
+		} else {
+			AliasActorNode_t	*actor = Alias_FindActor( node, actor_number );
+
+			if ( actor && Alias_DialogMayReplay( node, actor->number_of_times_played, actor->last_time_played, now ) ) {
+				actor->been_played_this_loop = 0;
+			}
+		}
+	}
+}
+
 const char *Alias_ListFindDialog( AliasList_t *list, const char *alias, int random, int actor_number ) {
-	(void)actor_number;
+	AliasListNode_t	*found[MAX_RANDOM_ALIASES];
+	float			totalWeight;
+	int				numFound, available, pick = 0, seen = 0;
+	int				i;
+
+	numFound = Alias_ListFindRandomRange( list, alias, found, &totalWeight );
+	if ( !numFound ) {
+		return NULL;
+	}
+
+	available = Alias_DialogAvailable( found, numFound, actor_number );
+	if ( !available ) {
+		Alias_DialogReset( found, numFound, actor_number );
+		available = Alias_DialogAvailable( found, numFound, actor_number );
+		if ( !available ) {
+			return NULL;
+		}
+	}
 
 	if ( random ) {
-		return Alias_ListFindRandom( list, alias );
+		// The retail code converts a random fraction to an index here; the
+		// multiplier was not recovered and is taken to be the available count.
+		pick = (int)( ( (float)Com_UnseededRand() / 32768.0f ) * available );
 	}
-	return Alias_ListFind( list, alias );
+
+	for ( i = 0 ; i < numFound ; i++ ) {
+		AliasListNode_t	*node = found[i];
+
+		if ( Alias_IsGlobal( node, actor_number ) ) {
+			if ( node->been_played_this_loop ) {
+				continue;
+			}
+			if ( seen++ != pick ) {
+				continue;
+			}
+			node->been_played_this_loop = 1;
+			node->last_time_played = Sys_Milliseconds();
+			node->number_of_times_played++;
+			return node->real_name;
+		} else {
+			AliasActorNode_t	*actor = Alias_FindActor( node, actor_number );
+
+			if ( !actor || actor->been_played_this_loop ) {
+				continue;
+			}
+			if ( seen++ != pick ) {
+				continue;
+			}
+			actor->been_played_this_loop = 1;
+			actor->last_time_played = Sys_Milliseconds();
+			actor->number_of_times_played++;
+			return node->real_name;
+		}
+	}
+	return NULL;
 }
 
 void Alias_ListUpdateDialog( AliasList_t *list, const char *alias, int number_of_times_played, byte been_played_this_loop, int last_time_played ) {

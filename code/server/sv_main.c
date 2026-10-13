@@ -152,6 +152,12 @@ void SV_AddServerCommand( client_t *client, const char *cmd ) {
 	if( client->state < CS_PRIMED )
 		return;
 
+	// the headless test player has nobody to acknowledge reliable commands
+	if ( SV_IsTestPlayer( client ) ) {
+		SV_TestPlayer_ServerCommand( cmd );
+		return;
+	}
+
 	client->reliableSequence++;
 	// if we would be losing an old command that hasn't been acknowledged,
 	// we must drop the connection
@@ -1129,6 +1135,9 @@ void SV_Frame( int msec ) {
 		sv.timeResidual -= frameMsec;
 		svs.time += frameMsec;
 		sv.time += frameMsec;
+
+		// the test player, if any, supplies its input for this frame
+		SV_TestPlayer_Frame( frameMsec );
 
 		// let everything in the world think and move
 		SV_GameRunFrame( frameMsec );

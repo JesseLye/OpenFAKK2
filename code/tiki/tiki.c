@@ -53,6 +53,12 @@ comparing against the definitions the retail engine cached in the game's
 // a "last" frame selector, resolved to a frame number once the animation is loaded
 #define	TIKI_FRAME_CMD_LAST		-4
 
+// Blend time given to an animation that does not set one. In the retail
+// engine's cached definitions 8933 of 8951 animations carry this value, and
+// only four (in one obsolete model) are flagged delta driven; the keyword
+// that sets that flag has not been identified.
+#define	TIKI_DEFAULT_CROSSBLEND_MS	200
+
 typedef struct {
 	int		frame;
 	int		numArgs;
@@ -805,6 +811,7 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 				anim = TIKI_NewAnim( tiki );
 				animIndex = tiki->numAnims - 1;
 				anim->weight = 1.0f;
+				anim->crossblend = TIKI_DEFAULT_CROSSBLEND_MS;
 				Q_strncpyz( anim->alias, tokens[0], sizeof( anim->alias ) );
 				if ( tiki->path[0] ) {
 					Com_sprintf( anim->fullname, sizeof( anim->fullname ), "%s/%s", tiki->path, tokens[1] );
@@ -989,10 +996,6 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 			anim->boneData = NULL;
 			anim->numFrames = anim->numTags = anim->numBones = 0;
 			continue;
-		}
-
-		if ( anim->totalDelta[0] || anim->totalDelta[1] || anim->totalDelta[2] ) {
-			anim->flags |= TIKI_ANIM_DELTA_DRIVEN;
 		}
 
 		// mins and maxs are accumulated separately: a frame without geometry
