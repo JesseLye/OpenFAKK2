@@ -31,3 +31,8 @@ window while it runs.
 Both sides run `probe.scr`, which waits for the player, waits ten seconds of game time
 and dumps `levelvars` and `pendingevents`, so they are sampled at the same point. The
 retail result is cached per map; pass `-Refresh` to run the retail game again.
+
+`probe-walk.scr` is a second probe that also presses a key: it prints the player with
+`whatis 0`, holds `+forward` for three seconds and prints it again. Copy it into both
+sandbox `maps` folders and pass `+script thread probe-walk.scr::probe` to
+`run-retail-client.ps1` and `run-openfakk2.ps1` (with `+set sv_testplayer 1`).

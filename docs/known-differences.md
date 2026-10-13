@@ -90,6 +90,8 @@ corresponding retail code has not been examined.
 - **Traces skip entities whose solid type is `SOLID_NOT` or `SOLID_TRIGGER`.** Inferred
   from an actor seated in a non-solid chair (`homes1`) and items inside brush entities
   (`towncenter_evil`).
+- **A client is sent its own entity in snapshots.** Inferred from the player's entity
+  carrying `SVF_SENT` under retail; Quake III never sends it.
 - **A temporary box model takes its entity's contents.** Inferred from solid pods that
   solid-only traces must hit (`otto`, `oracle`).
 - **Alias range lookup and weighted pick** come from OpenMoHAA's version of the same code.
@@ -146,10 +148,25 @@ The test player imitates that with `sv_testplayerdelay` (450 ms of game time, ch
 that the dumps line up with retail's on the retail maps). Scripts that use
 `waitforplayer` are released at that moment, so entering at map start instead leaves any
 later-started script waiting forever.
-## Not yet comparable
+### With scripted input
 
-- Anything that needs input: movement, weapons, using objects, triggers the player must
-  walk into. The test player stands still.
-- What is sent to clients (snapshots, sounds, on-screen text). The test player discards
-  it; `sv_testplayer 2` only prints the reliable commands.
+A level script can press the player's keys at chosen game times (`stuffcmd "+forward"`),
+and the game's `whatis <entity>` command prints an entity's state. `probe-walk.scr` reads
+the player, walks forward for three seconds, and reads it again. On `zoo`:
+
+- Before walking, all 18 fields `whatis` prints for the player match retail.
+- After walking, 17 match. The position differs by 2.6 units after 275.6 travelled
+  (retail x = -2076.42, OpenFAKK2 x = -2079.06), about half a server frame of movement.
+  Probably the key press landing in a different part of the frame; not investigated.
+
+What the retail client puts in a movement command has not been read from the binary.
+Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
+127, and a turn rate of 140 degrees per second for `+left` / `+right`.
+
+## Not yet comparable
+- Input beyond walking in a straight line: turning, jumping, weapons, using objects,
+  triggers the player must walk into. The test player can now be given key presses, but
+  only a forward walk has been compared.
+- What is sent to clients (snapshots, sounds). The test player shows `print` text on the
+  console as a client would and discards everything else.
 - Save and load.

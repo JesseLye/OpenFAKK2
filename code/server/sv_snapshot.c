@@ -282,6 +282,9 @@ static void SV_AddEntToSnapshot( svEntity_t *svEnt, sharedEntity_t *gEnt, snapsh
 
 	eNums->snapshotEntities[ eNums->numSnapshotEntities ] = gEnt->s.number;
 	eNums->numSnapshotEntities++;
+
+	// the game can ask whether an entity has ever reached a client
+	gEnt->svFlags |= SVF_SENT;
 }
 
 /*
@@ -419,7 +422,6 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	int							i;
 	sharedEntity_t				*ent;
 	entityState_t				*state;
-	svEntity_t					*svEnt;
 	sharedEntity_t				*clent;
 	int							clientNum;
 	playerState_t				*ps;
@@ -446,15 +448,14 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	ps = SV_GameClientNum( client - svs.clients );
 	frame->ps = *ps;
 
-	// never send client's own entity, because it can
-	// be regenerated from the playerstate
+	// Quake III never sends a client its own entity. FAKK2 is third person and
+	// the client draws the player from it, so it is sent like any other. (Seen
+	// from the outside: under the retail engine the player's entity carries
+	// SVF_SENT.)
 	clientNum = frame->ps.clientNum;
 	if ( clientNum < 0 || clientNum >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
 	}
-	svEnt = &sv.svEntities[ clientNum ];
-
-	svEnt->snapshotCounter = sv.snapshotCounter;
 
 	// find the client's viewpoint
 	VectorCopy( ps->origin, org );

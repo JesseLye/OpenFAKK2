@@ -18,6 +18,16 @@ sv_testplayerdelay milliseconds of game time. It matters because scripts
 that wait for the player are released when the player enters, and commands
 given on the command line after the map run before that.
 
+The player can be given input with the key commands a real client binds
+(+forward, +back, +moveleft, +moveright, +moveup, +movedown, +left, +right,
++attackleft, +attackright, +use, +speed, and their "-" forms). A level
+script can issue them with stuffcmd at chosen game times, and the same
+script drives the retail client, so both can be put through the same moves.
+How the retail client turns held keys into a movement command has not been
+examined. That +speed means run was confirmed by comparing distance walked;
+the other values used here (moves of 127, Quake III's 140 degrees per second
+turn rate) are assumptions still to be checked against it.
+
 The player occupies its slot like a bot would in Quake III (address type
 NA_BOT), which is what keeps packets from being sent anywhere.
 ===========================================================================
@@ -31,6 +41,102 @@ NA_BOT), which is what keeps packets from being sent anywhere.
 static cvar_t	*sv_testplayer;
 static cvar_t	*sv_testplayerdelay;
 static int		testPlayerEnterTime;
+
+// usercmd_t->buttons bits, as the game module defines them
+#define	TP_BUTTON_ATTACKRIGHT	( 1 << 0 )
+#define	TP_BUTTON_ATTACKLEFT	( 1 << 1 )
+#define	TP_BUTTON_RUN			( 1 << 3 )
+#define	TP_BUTTON_USE			( 1 << 5 )
+#define	TP_BUTTON_ANY			( 1 << 7 )
+
+#define	TP_MOVE_SPEED			127
+#define	TP_YAW_SPEED			140.0f	// degrees per second
+
+typedef enum {
+	TPK_FORWARD, TPK_BACK, TPK_MOVELEFT, TPK_MOVERIGHT, TPK_MOVEUP, TPK_MOVEDOWN,
+	TPK_LEFT, TPK_RIGHT, TPK_ATTACKLEFT, TPK_ATTACKRIGHT, TPK_USE, TPK_SPEED,
+	TPK_COUNT
+} testPlayerKey_t;
+
+static const char	*testPlayerKeyNames[TPK_COUNT] = {
+	"forward", "back", "moveleft", "moveright", "moveup", "movedown",
+	"left", "right", "attackleft", "attackright", "use", "speed"
+};
+
+static qboolean	testPlayerKeys[TPK_COUNT];
+static float	testPlayerYaw;
+
+/*
+===============
+SV_TestPlayer_Key_f
+
+Handles every "+key" and "-key" command.
+===============
+*/
+static void SV_TestPlayer_Key_f( void ) {
+	const char	*cmd = Cmd_Argv( 0 );
+	int			i;
+
+	for ( i = 0 ; i < TPK_COUNT ; i++ ) {
+		if ( !Q_stricmp( cmd + 1, testPlayerKeyNames[i] ) ) {
+			testPlayerKeys[i] = cmd[0] == '+';
+			return;
+		}
+	}
+}
+
+static void SV_TestPlayer_RegisterKeys( void ) {
+	static qboolean	registered;
+	int				i;
+
+	if ( registered ) {
+		return;
+	}
+	registered = qtrue;
+	for ( i = 0 ; i < TPK_COUNT ; i++ ) {
+		// command names must outlive the registration
+		Cmd_AddCommand( CopyString( va( "+%s", testPlayerKeyNames[i] ) ), SV_TestPlayer_Key_f );
+		Cmd_AddCommand( CopyString( va( "-%s", testPlayerKeyNames[i] ) ), SV_TestPlayer_Key_f );
+	}
+}
+
+static void SV_TestPlayer_BuildCmd( usercmd_t *cmd, int frameMsec ) {
+	qboolean	any = qfalse;
+	int			i;
+
+	Com_Memset( cmd, 0, sizeof( *cmd ) );
+	cmd->serverTime = sv.time;
+	cmd->msec = (byte)( frameMsec > 255 ? 255 : frameMsec );
+
+	for ( i = 0 ; i < TPK_COUNT ; i++ ) {
+		any |= testPlayerKeys[i];
+	}
+
+	testPlayerYaw += ( testPlayerKeys[TPK_LEFT] - testPlayerKeys[TPK_RIGHT] ) * TP_YAW_SPEED * frameMsec * 0.001f;
+	cmd->angles[YAW] = (short)ANGLE2SHORT( testPlayerYaw );
+
+	cmd->forwardmove = (signed char)( ( testPlayerKeys[TPK_FORWARD] - testPlayerKeys[TPK_BACK] ) * TP_MOVE_SPEED );
+	cmd->rightmove = (signed char)( ( testPlayerKeys[TPK_MOVERIGHT] - testPlayerKeys[TPK_MOVELEFT] ) * TP_MOVE_SPEED );
+	cmd->upmove = (signed char)( ( testPlayerKeys[TPK_MOVEUP] - testPlayerKeys[TPK_MOVEDOWN] ) * TP_MOVE_SPEED );
+
+	if ( testPlayerKeys[TPK_ATTACKLEFT] ) {
+		cmd->buttons |= TP_BUTTON_ATTACKLEFT;
+	}
+	if ( testPlayerKeys[TPK_ATTACKRIGHT] ) {
+		cmd->buttons |= TP_BUTTON_ATTACKRIGHT;
+	}
+	if ( testPlayerKeys[TPK_USE] ) {
+		cmd->buttons |= TP_BUTTON_USE;
+	}
+	// the retail client walks unless +speed is held: with +forward alone its
+	// player covers 92 units a second, the walk animation's pace
+	if ( testPlayerKeys[TPK_SPEED] ) {
+		cmd->buttons |= TP_BUTTON_RUN;
+	}
+	if ( any ) {
+		cmd->buttons |= TP_BUTTON_ANY;
+	}
+}
 
 static qboolean SV_TestPlayer_Enabled( void ) {
 	if ( !sv_testplayer ) {
@@ -59,6 +165,14 @@ nobody to acknowledge it.
 void SV_TestPlayer_ServerCommand( const char *cmd ) {
 	if ( sv_testplayer && sv_testplayer->integer >= 2 ) {
 		Com_Printf( "testplayer <- %s\n", cmd );
+	}
+
+	// A client shows "print" commands on its console. Doing the same keeps the
+	// server's log comparable with the retail client's, which is where output
+	// meant for the player (such as "whatis") ends up.
+	if ( !Q_strncmp( cmd, "print ", 6 ) ) {
+		Cmd_TokenizeString( cmd );
+		Com_Printf( "%s", Cmd_Argv( 1 ) );
 	}
 }
 
@@ -109,6 +223,10 @@ void SV_TestPlayer_Spawn( void ) {
 		return;
 	}
 
+	SV_TestPlayer_RegisterKeys();
+	Com_Memset( testPlayerKeys, 0, sizeof( testPlayerKeys ) );
+	testPlayerYaw = 0;
+
 	Com_Printf( "Test player connected\n" );
 	testPlayerEnterTime = sv.time + ( sv_testplayerdelay->integer > 0 ? sv_testplayerdelay->integer : 0 );
 }
@@ -117,8 +235,7 @@ void SV_TestPlayer_Spawn( void ) {
 ===============
 SV_TestPlayer_Frame
 
-Called before each game frame: the player presses nothing and looks straight
-ahead.
+Called before each game frame with whatever keys are currently held.
 ===============
 */
 void SV_TestPlayer_Frame( int frameMsec ) {
@@ -140,9 +257,7 @@ void SV_TestPlayer_Frame( int frameMsec ) {
 	cl->lastPacketTime = svs.time;
 	cl->reliableAcknowledge = cl->reliableSequence;
 
-	Com_Memset( &cmd, 0, sizeof( cmd ) );
-	cmd.serverTime = sv.time;
-	cmd.msec = (byte)( frameMsec > 255 ? 255 : frameMsec );
+	SV_TestPlayer_BuildCmd( &cmd, frameMsec );
 
 	SV_ClientThink( cl, &cmd );
 }

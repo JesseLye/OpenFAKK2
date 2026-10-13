@@ -1,0 +1,12 @@
+probe:
+waitforplayer
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "+forward"
+wait 3
+stuffcmd "-forward"
+wait 1
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end
