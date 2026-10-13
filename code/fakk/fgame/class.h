@@ -393,10 +393,10 @@ class SafePtr : public SafePtrBase
 		SafePtr& operator=( const SafePtr& obj );
 		SafePtr& operator=( T * const obj );
 
-		friend int operator==( SafePtr<T> a, T *b );
-		friend int operator!=( SafePtr<T> a, T *b );
-		friend int operator==( T *a, SafePtr<T> b );
-		friend int operator!=( T *a, SafePtr<T> b );
+		friend int operator==( SafePtr<T> a, T *b ) { return a.ptr == b; }
+		friend int operator!=( SafePtr<T> a, T *b ) { return a.ptr != b; }
+		friend int operator==( T *a, SafePtr<T> b ) { return a == b.ptr; }
+		friend int operator!=( T *a, SafePtr<T> b ) { return a != b.ptr; }
 
       operator	T*() const;
 		T* operator->() const;
@@ -427,50 +427,6 @@ inline SafePtr<T>& SafePtr<T>::operator=( T * const obj )
 	{
    InitSafePtr( obj );
 	return *this;
-	}
-
-template<class T>
-inline int operator==
-	(
-	SafePtr<T> a,
-	T* b
-	)
-
-	{
-	return a.ptr == b;
-	}
-
-template<class T>
-inline int operator!=
-	(
-	SafePtr<T> a,
-	T* b
-	)
-
-	{
-	return a.ptr != b;
-	}
-
-template<class T>
-inline int operator==
-	(
-	T* a,
-	SafePtr<T> b
-	)
-
-	{
-	return a == b.ptr;
-	}
-
-template<class T>
-inline int operator!=
-	(
-	T* a,
-	SafePtr<T> b
-	)
-
-	{
-	return a != b.ptr;
 	}
 
 template<class T>

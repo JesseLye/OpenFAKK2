@@ -103,7 +103,7 @@
 
 CLASS_DECLARATION( InventoryItem, HealthInventoryItem, "" )
    {
-      { &EV_InventoryItem_Use,         Use },
+      { &EV_InventoryItem_Use,         &HealthInventoryItem::Use },
 	   { NULL, NULL }
    };
 
@@ -163,7 +163,7 @@ void HealthInventoryItem::Use
 
 CLASS_DECLARATION( InventoryItem, WaterInventoryItem, "" )
    {
-      { &EV_InventoryItem_Use,         Use },
+      { &EV_InventoryItem_Use,         &WaterInventoryItem::Use },
 	   { NULL, NULL }
    };
 
@@ -210,7 +210,7 @@ void WaterInventoryItem::Use
 
 CLASS_DECLARATION( Item, Health, "health_020" )
 	{
-      { &EV_Item_Pickup,      				PickupHealth },
+      { &EV_Item_Pickup,      				&Health::PickupHealth },
 		{ NULL, NULL }
 	};
 
@@ -273,8 +273,8 @@ Event EV_HealthPlant_SetFallVelocity
 
 CLASS_DECLARATION( Health, HealthPlant, NULL )
 	{
-		{ &EV_Trigger_Effect,						Touch },
-		{ &EV_HealthPlant_SetFallVelocity,		SetFallVelocity },
+		{ &EV_Trigger_Effect,						&HealthPlant::Touch },
+		{ &EV_HealthPlant_SetFallVelocity,		&HealthPlant::SetFallVelocity },
 		{ NULL,											NULL }
 	};
 

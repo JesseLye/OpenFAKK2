@@ -33,6 +33,19 @@ set(FAKK_SHARED_SOURCES
 file(GLOB FAKK_FGAME_SOURCES CONFIGURE_DEPENDS
     ${FAKK_DIR}/fgame/*.cpp)
 
+# On disk in the SDK but absent from Ritual's fgame.dsp; they target older
+# engine interfaces and were not part of the shipped 1.02 build.
+list(REMOVE_ITEM FAKK_FGAME_SOURCES
+    ${FAKK_DIR}/fgame/b_files.cpp
+    ${FAKK_DIR}/fgame/b_nav.cpp
+    ${FAKK_DIR}/fgame/b_navgen.cpp
+    ${FAKK_DIR}/fgame/bullet.cpp
+    ${FAKK_DIR}/fgame/container.cpp
+    ${FAKK_DIR}/fgame/deadbody.cpp
+    ${FAKK_DIR}/fgame/fists.cpp
+    ${FAKK_DIR}/fgame/testweapon.cpp
+)
+
 set(FAKK_CGAME_SOURCES
     ${FAKK_DIR}/cgame/cg_beam.cpp
     ${FAKK_DIR}/cgame/cg_commands.cpp

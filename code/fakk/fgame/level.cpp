@@ -485,7 +485,7 @@ void Level::SpawnEntities
    // Init the level variables
    Init();
 
-   spawnpos = strchr( themapname, '$' );
+   spawnpos = ( char * )strchr( themapname, '$' );
    if ( spawnpos )
       {
       mapname = str( themapname, 0, spawnpos - themapname );

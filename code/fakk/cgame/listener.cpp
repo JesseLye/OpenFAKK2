@@ -958,7 +958,7 @@ void EventArgDef::Setup
       while( 1 )
          {
          // find opening '['
-         tokptr = strchr( ptr, '[' );
+         tokptr = ( char * )strchr( ptr, '[' );
          if ( !tokptr )
             {
             break;
@@ -2574,8 +2574,8 @@ void Event::Archive
 
 CLASS_DECLARATION( Class, Listener, NULL )
 	{
-	   { &EV_Remove,				Listener::Remove },
-		{ &EV_ScriptRemove,		Listener::ScriptRemove },
+	   { &EV_Remove,				&Listener::Remove },
+		{ &EV_ScriptRemove,		&Listener::ScriptRemove },
 		{ NULL, NULL }
 	};
 

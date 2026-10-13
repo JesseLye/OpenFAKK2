@@ -420,10 +420,10 @@ void CG_SetLightStyle( int num, const char *s )
    if ( !s )
       return;
 
-	r = strchr( s, 'R' );
-	g = strchr( s, 'G' );
-	b = strchr( s, 'B' );
-	a = strchr( s, 'A' );
+	r = ( char * )strchr( s, 'R' );
+	g = ( char * )strchr( s, 'G' );
+	b = ( char * )strchr( s, 'B' );
+	a = ( char * )strchr( s, 'A' );
 
    n = 0;
    if (r)

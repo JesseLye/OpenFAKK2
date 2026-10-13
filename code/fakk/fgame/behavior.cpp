@@ -729,7 +729,7 @@ void Idle::End
 
 CLASS_DECLARATION( Behavior, Pain, NULL )
 	{
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_AnimDone,	&Pain::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -908,7 +908,7 @@ void Pain::End
 
 CLASS_DECLARATION( Behavior, Watch, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Watch::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -984,7 +984,7 @@ void Watch::End
 
 CLASS_DECLARATION( Behavior, Turn, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Turn::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -1146,7 +1146,7 @@ void Aim::End
 
 CLASS_DECLARATION( Behavior, TurnTo, NULL )
 	{
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_AnimDone,	&TurnTo::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -1338,7 +1338,7 @@ void TurnTo::End
 
 CLASS_DECLARATION( Behavior, HeadWatch, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&HeadWatch::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -1503,7 +1503,7 @@ void HeadWatch::End
 
 CLASS_DECLARATION( Behavior, TorsoTurn, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&TorsoTurn::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -1675,8 +1675,8 @@ void TorsoTurn::End
 
 CLASS_DECLARATION( Behavior, GotoPathNode, NULL )
 	{
-		{ &EV_Behavior_AnimDone,	AnimDone },
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_AnimDone,	&GotoPathNode::AnimDone },
+		{ &EV_Behavior_Args,			&GotoPathNode::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -1888,7 +1888,7 @@ void GotoPathNode::End
 
 CLASS_DECLARATION( Behavior, Flee, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Flee::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -2040,7 +2040,7 @@ void Flee::End
 
 CLASS_DECLARATION( Behavior, PlayAnim, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&PlayAnim::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -2110,7 +2110,7 @@ void PlayAnim::End
 
 CLASS_DECLARATION( Behavior, Talk, NULL )
 	{
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_AnimDone,	&Talk::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -2322,7 +2322,7 @@ void Talk::End
 
 CLASS_DECLARATION( Behavior, FindCover, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FindCover::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -2539,7 +2539,7 @@ void FindCover::End
 
 CLASS_DECLARATION( Behavior, FindFlee, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FindFlee::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -2740,7 +2740,7 @@ void FindFlee::End
 
 CLASS_DECLARATION( Behavior, FindEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FindEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -2972,8 +2972,8 @@ void FindEnemy::End
 
 CLASS_DECLARATION( Behavior, AimAndShoot, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_Args,			&AimAndShoot::SetArgs },
+		{ &EV_Behavior_AnimDone,	&AimAndShoot::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -3216,8 +3216,8 @@ void AimAndShoot::End
 
 CLASS_DECLARATION( Behavior, AimAndMelee, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_Args,			&AimAndMelee::SetArgs },
+		{ &EV_Behavior_AnimDone,	&AimAndMelee::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -3346,7 +3346,7 @@ void AimAndMelee::End
 
 CLASS_DECLARATION( Behavior, JumpToPathNode, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&JumpToPathNode::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -3660,7 +3660,7 @@ void FlyToPoint::End
 
 CLASS_DECLARATION( Behavior, FlyCloseToEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyCloseToEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -3763,7 +3763,7 @@ void FlyCloseToEnemy::End
 
 CLASS_DECLARATION( Behavior, FlyCloseToPlayer, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyCloseToPlayer::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -3870,7 +3870,7 @@ void FlyCloseToPlayer::End
 
 CLASS_DECLARATION( Behavior, FlyWander, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyWander::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4015,7 +4015,7 @@ void FlyWander::End
 
 CLASS_DECLARATION( Behavior, FlyCircle, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyCircle::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4163,7 +4163,7 @@ void FlyCircle::End
 
 CLASS_DECLARATION( Behavior, FlyDive, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyDive::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4310,7 +4310,7 @@ void FlyDive::End
 
 CLASS_DECLARATION( Behavior, FlyClimb, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&FlyClimb::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4424,7 +4424,7 @@ void FlyClimb::End
 
 CLASS_DECLARATION( Behavior, Land, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Land::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4503,7 +4503,7 @@ void Land::End
 
 CLASS_DECLARATION( Behavior, Wander, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Wander::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4613,7 +4613,7 @@ void Wander::End
 
 CLASS_DECLARATION( Behavior, GetCloseToEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&GetCloseToEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4723,7 +4723,7 @@ void GetCloseToEnemy::End
 
 CLASS_DECLARATION( Behavior, GotoDeadEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&GotoDeadEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -4808,7 +4808,7 @@ void GotoDeadEnemy::End
 
 CLASS_DECLARATION( Behavior, Investigate, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Investigate::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -5032,7 +5032,7 @@ void Investigate::End
 
 CLASS_DECLARATION( Behavior, TurnInvestigate, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&TurnInvestigate::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -5145,8 +5145,8 @@ void TurnInvestigate::End
 
 CLASS_DECLARATION( Behavior, TurnToEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_Args,			&TurnToEnemy::SetArgs },
+		{ &EV_Behavior_AnimDone,	&TurnToEnemy::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -5287,8 +5287,8 @@ void TurnToEnemy::End
 
 CLASS_DECLARATION( Behavior, PickupEntity, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_Args,			&PickupEntity::SetArgs },
+		{ &EV_Behavior_AnimDone,	&PickupEntity::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -5357,8 +5357,8 @@ void PickupEntity::End
 
 CLASS_DECLARATION( Behavior, ThrowEntity, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_Args,			&ThrowEntity::SetArgs },
+		{ &EV_Behavior_AnimDone,	&ThrowEntity::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -5783,7 +5783,7 @@ void BurrowAttack::End
 
 CLASS_DECLARATION( Behavior, CircleEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&CircleEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -6088,7 +6088,7 @@ void ShockWater::End
 
 CLASS_DECLARATION( Behavior, Shock, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Shock::SetArgs },
 		{ NULL, NULL }
 	};
 	
@@ -6234,7 +6234,7 @@ void Shock::End
 
 CLASS_DECLARATION( Behavior, CircleAttack, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&CircleAttack::SetArgs },
 		{ NULL, NULL }
 	};
 	
@@ -6408,7 +6408,7 @@ void CircleAttack::End
 
 CLASS_DECLARATION( Behavior, DragEnemy, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&DragEnemy::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -6652,7 +6652,7 @@ void DragEnemy::End
 
 CLASS_DECLARATION( Behavior, Spin, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Spin::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -6715,7 +6715,7 @@ void Spin::End
 
 CLASS_DECLARATION( Behavior, Digest, NULL )
 	{
-		{ &EV_Behavior_AnimDone,	AnimDone },
+		{ &EV_Behavior_AnimDone,	&Digest::AnimDone },
 		{ NULL, NULL }
 	};
 
@@ -7232,7 +7232,7 @@ void Teleport::End
 
 CLASS_DECLARATION( Behavior, TeleportToPosition, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&TeleportToPosition::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -7390,7 +7390,7 @@ void TeleportToPosition::End
 
 CLASS_DECLARATION( Behavior, GhostAttack, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&GhostAttack::SetArgs },
 		{ NULL, NULL }
 	};
 
@@ -7647,7 +7647,7 @@ void GhostAttack::End
 
 CLASS_DECLARATION( Behavior, Levitate, NULL )
 	{
-		{ &EV_Behavior_Args,			SetArgs },
+		{ &EV_Behavior_Args,			&Levitate::SetArgs },
 		{ NULL, NULL }
 	};
 

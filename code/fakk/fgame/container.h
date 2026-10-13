@@ -99,18 +99,18 @@ class Container
 
 		void		FreeObjectList( void );
 		void		ClearObjectList( void );
-		int		NumObjects( void );
+		int		NumObjects( void ) const;
 		void		Resize( int maxelements );
-		void		SetObjectAt( int index, Type& obj );
-		int		AddObject( Type& obj );
-		int		AddUniqueObject( Type& obj );
-		void  	AddObjectAt( int index, Type& obj );
-		int		IndexOfObject( Type& obj );
-		qboolean	ObjectInList( Type& obj );
-		Type&		ObjectAt( int index );
+		void		SetObjectAt( int index, const Type& obj );
+		int		AddObject( const Type& obj );
+		int		AddUniqueObject( const Type& obj );
+		void  	AddObjectAt( int index, const Type& obj );
+		int		IndexOfObject( const Type& obj );
+		qboolean	ObjectInList( const Type& obj );
+		Type&		ObjectAt( int index ) const;
 		Type		*AddressOfObjectAt( int index );
 		void		RemoveObjectAt( int index );
-		void		RemoveObject( Type& obj );
+		void		RemoveObject( const Type& obj );
 		void		Sort( int ( __cdecl *compare )( const void *elem1, const void *elem2 ) );
 #if defined( GAME_DLL )
       void     Archive( Archiver &arc );
@@ -173,7 +173,7 @@ template< class Type >
 int Container<Type>::NumObjects
 	(
 	void
-	)
+	) const
 
 	{
 	return numobjects;
@@ -224,7 +224,7 @@ template< class Type >
 void Container<Type>::SetObjectAt
 	(
 	int index,
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -239,7 +239,7 @@ void Container<Type>::SetObjectAt
 template< class Type >
 int Container<Type>::AddObject
 	(
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -262,7 +262,7 @@ int Container<Type>::AddObject
 template< class Type >
 int Container<Type>::AddUniqueObject
 	(
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -278,7 +278,7 @@ template< class Type >
 void Container<Type>::AddObjectAt
 	(
 	int index,
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -299,7 +299,7 @@ void Container<Type>::AddObjectAt
 template< class Type >
 int Container<Type>::IndexOfObject
 	(
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -319,7 +319,7 @@ int Container<Type>::IndexOfObject
 template< class Type >
 qboolean Container<Type>::ObjectInList
 	(
-	Type& obj
+	const Type& obj
 	)
 
 	{
@@ -335,7 +335,7 @@ template< class Type >
 Type& Container<Type>::ObjectAt
 	(
 	int index
-	)
+	) const
 
 	{
 	if ( ( index <= 0 ) || ( index > numobjects ) )
@@ -399,7 +399,7 @@ void Container<Type>::RemoveObjectAt
 template< class Type >
 void Container<Type>::RemoveObject
 	(
-	Type& obj
+	const Type& obj
 	)
 
 	{

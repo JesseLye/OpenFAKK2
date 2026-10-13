@@ -35,7 +35,7 @@
 
 CLASS_DECLARATION( Weapon, Fists, NULL )
 	{
-	   { &EV_Weapon_Shoot,     Shoot },
+	   { &EV_Weapon_Shoot,     &Fists::Shoot },
 		{ NULL, NULL }
 	};
 

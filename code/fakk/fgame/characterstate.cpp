@@ -234,7 +234,7 @@ Expression::Expression()
 
 Expression::Expression
    (
-   Expression &exp
+   const Expression &exp
    )
    
    {

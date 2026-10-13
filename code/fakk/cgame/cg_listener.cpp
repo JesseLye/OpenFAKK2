@@ -799,8 +799,8 @@ Vector Event::GetVector
 
 CLASS_DECLARATION( Class, Listener, NULL )
 	{
-	   { &EV_Remove,				Listener::Remove },
-		{ &EV_ScriptRemove,		Listener::ScriptRemove },
+	   { &EV_Remove,				&Listener::Remove },
+		{ &EV_ScriptRemove,		&Listener::ScriptRemove },
 		{ NULL, NULL }
 	};
 

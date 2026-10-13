@@ -341,10 +341,10 @@ class Expression : public Class
 
    public :
                               Expression();
-                              Expression( Expression &exp );
+                              Expression( const Expression &exp );
                               Expression( Script &script, State &state );
 
-      void		               operator=( Expression &exp );
+      void		               operator=( const Expression &exp );
 
       bool                    getResult( State &state, Entity &ent, Container<Conditional *> *sent_conditionals );
       const char              *getValue( void );
@@ -352,7 +352,7 @@ class Expression : public Class
 
 inline void Expression::operator=
 	(
-   Expression &exp
+   const Expression &exp
    )
    
    {

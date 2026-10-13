@@ -29,8 +29,8 @@ cvar_t *gun_wmodel;
 
 CLASS_DECLARATION( Weapon, TestWeapon, NULL )
 	{
-	   { &EV_Weapon_Shoot,			   Shoot },
-		{ &EV_Weapon_DoneFiring,	   Done },
+	   { &EV_Weapon_Shoot,			   &TestWeapon::Shoot },
+		{ &EV_Weapon_DoneFiring,	   &TestWeapon::Done },
 		{ NULL, NULL }
 	};
 
