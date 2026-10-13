@@ -420,6 +420,7 @@ void		SV_GameClientCommand( int clientNum );
 void		SV_GameClientThink( int clientNum, usercmd_t *cmd );
 void		SV_GameSendServerCommand( int clientNum, const char *text );
 void		SV_SetBrushModel( sharedEntity_t *ent, const char *name );
+clipHandle_t	SV_InlineModelHandle( int modelindex );
 qboolean	SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2 );
 void		SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open );
 qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);

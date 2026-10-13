@@ -111,6 +111,27 @@ SV_SetBrushModel
 sets mins and maxs for inline bmodels
 =================
 */
+/*
+=================
+SV_InlineModelHandle
+
+Entities refer to models by config string index. Inline brush models are the
+ones named "*<number>".
+=================
+*/
+clipHandle_t SV_InlineModelHandle( int modelindex ) {
+	const char	*name;
+
+	if ( modelindex <= 0 || modelindex >= MAX_MODELS ) {
+		Com_Error( ERR_DROP, "SV_InlineModelHandle: bad model index %i", modelindex );
+	}
+	name = sv.configstrings[CS_MODELS + modelindex];
+	if ( !name || name[0] != '*' ) {
+		Com_Error( ERR_DROP, "SV_InlineModelHandle: model %i (%s) isn't a brush model", modelindex, name ? name : "" );
+	}
+	return CM_InlineModel( atoi( name + 1 ) );
+}
+
 void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 	clipHandle_t	h;
 	vec3_t			mins, maxs;
@@ -123,10 +144,9 @@ void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 		Com_Error( ERR_DROP, "SV_SetBrushModel: %s isn't a brush model", name );
 	}
 
-
-	ent->s.modelindex = atoi( name + 1 );
-
-	h = CM_InlineModel( ent->s.modelindex );
+	// s.modelindex stays the model's config string index; the inline model
+	// number lives only in the name
+	h = CM_InlineModel( atoi( name + 1 ) );
 	CM_ModelBounds( h, mins, maxs );
 	VectorCopy (mins, ent->mins);
 	VectorCopy (maxs, ent->maxs);
@@ -598,12 +618,14 @@ static void SV_GameSetModel( gentity_t *ent, const char *name ) {
 	if ( !name ) {
 		Com_Error( ERR_DROP, "SV_GameSetModel: NULL name" );
 	}
-	if ( name[0] == '*' ) {
-		ent->s.modelindex = SV_GameModelIndex( name );
-		SV_SetBrushModel( ent, name );
-		return;
-	}
 	ent->s.modelindex = SV_GameModelIndex( name );
+	if ( name[0] == '*' ) {
+		SV_SetBrushModel( ent, name );
+	}
+}
+
+static void SV_GameSetBrushModel( gentity_t *ent, const char *name ) {
+	SV_GameSetModel( ent, name );
 }
 
 static void SV_GameSetFarPlane( int farplane ) {
@@ -868,7 +890,7 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->getConfigstring = SV_GameGetConfigstring;
 	import->setUserinfo = SV_SetUserinfo;
 	import->getUserinfo = SV_GetUserinfo;
-	import->SetBrushModel = SV_SetBrushModel;
+	import->SetBrushModel = SV_GameSetBrushModel;
 	import->trace = SV_GameTrace;
 	import->pointcontents = SV_PointContents;
 	import->pointbrushnum = SV_GamePointBrushNum;
