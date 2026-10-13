@@ -27,18 +27,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // A user mod should never modify this file
 
 #ifdef STANDALONE
-  #define PRODUCT_NAME				"iofoo3"
-  #define BASEGAME					"foobar"
-  #define CLIENT_WINDOW_TITLE		"changeme"
-  #define CLIENT_WINDOW_MIN_TITLE	"changeme2"
-  #define HOMEPATH_NAME_UNIX_LEGACY	".foo"
-  #define HOMEPATH_NAME				"FooBar"
-  #define GAMENAME_FOR_MASTER		"foobar"	// must NOT contain whitespace
-  #define CINEMATICS_LOGO		"foologo.roq"
+  #define PRODUCT_NAME				"OpenFAKK2"
+  #define BASEGAME					"fakk"
+  #define CLIENT_WINDOW_TITLE		"Heavy Metal: F.A.K.K. 2"
+  #define CLIENT_WINDOW_MIN_TITLE	"FAKK2"
+  #define HOMEPATH_NAME_UNIX_LEGACY	".openfakk2"
+  #define HOMEPATH_NAME				"OpenFAKK2"
+  #define GAMENAME_FOR_MASTER		"fakk2"	// must NOT contain whitespace
+  #define CINEMATICS_LOGO		"logo.roq"
   #define CINEMATICS_INTRO		"intro.roq"
-//  #define LEGACY_PROTOCOL	// You probably don't need this for your standalone game
-//  #define PROTOCOL_HANDLER		"foobar"
-  #define CONFIG_PREFIX			"fooconfig"
+  #define PROTOCOL_HANDLER		"fakk2"
+  #define CONFIG_PREFIX			"config"
 #else
   #define PRODUCT_NAME				"ioq3"
   #define BASEGAME					"baseq3"

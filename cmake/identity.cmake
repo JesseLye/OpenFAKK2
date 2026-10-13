@@ -1,10 +1,10 @@
-set(PROJECT_NAME ioq3)
-set(PROJECT_VERSION 1.36)
+set(PROJECT_NAME openfakk2)
+set(PROJECT_VERSION 0.1)
 
-set(SERVER_NAME ioq3ded)
-set(CLIENT_NAME ioquake3)
+set(SERVER_NAME openfakk2ded)
+set(CLIENT_NAME openfakk2)
 
-set(BASEGAME baseq3)
+set(BASEGAME fakk)
 
 set(CGAME_MODULE cgame)
 set(GAME_MODULE qagame)
@@ -13,9 +13,9 @@ set(UI_MODULE ui)
 set(WINDOWS_ICON_PATH ${CMAKE_SOURCE_DIR}/misc/windows/quake3.ico)
 
 set(MACOS_ICON_PATH ${CMAKE_SOURCE_DIR}/misc/macos/quake3_flat.icns)
-set(MACOS_BUNDLE_ID org.ioquake.${CLIENT_NAME})
+set(MACOS_BUNDLE_ID org.openfakk2.${CLIENT_NAME})
 
-set(COPYRIGHT "QUAKE III ARENA Copyright © 1999-2000 id Software, Inc. All rights reserved.")
+set(COPYRIGHT "Heavy Metal: F.A.K.K. 2 Copyright © 2000 Ritual Entertainment, Inc. Engine based on ioquake3.")
 
-set(CONTACT_EMAIL "info@ioquake.org")
-set(PROTOCOL_HANDLER_SCHEME quake3)
+set(CONTACT_EMAIL "")
+set(PROTOCOL_HANDLER_SCHEME fakk2)
