@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
 #include "../tiki/tiki.h"
+#include "../qcommon/alias.h"
 
 #include "../botlib/botlib.h"
 
@@ -723,22 +724,64 @@ static const char *SV_GameNameForNum( int modelindex ) {
 /*
 ===========================================================================
 
-Alias and sound queries that are not implemented yet. Each returns the
-value that means "nothing found" so the game keeps running.
+Aliases. Each model has its own list; the game addresses it by model index.
 
 ===========================================================================
 */
 
-static qboolean SV_Stub_Alias_Add( int modelindex, const char *alias, const char *name, const char *parameters ) { (void)modelindex; (void)alias; (void)name; (void)parameters; return qfalse; }
-static const char *SV_Stub_Alias_FindRandom( int modelindex, const char *alias ) { (void)modelindex; (void)alias; return NULL; }
-static void SV_Stub_Alias_Void( int modelindex ) { (void)modelindex; }
-static const char *SV_Stub_Alias_FindDialog( int modelindex, const char *alias, int random, int entity_number ) { (void)modelindex; (void)alias; (void)random; (void)entity_number; return NULL; }
-static void *SV_Stub_Alias_GetList( int modelindex ) { (void)modelindex; return NULL; }
-static void SV_Stub_Alias_UpdateDialog( int model_index, const char *alias, int number_of_times_played, byte been_played_this_loop, int last_time_played ) { (void)model_index; (void)alias; (void)number_of_times_played; (void)been_played_this_loop; (void)last_time_played; }
-static void SV_Stub_Alias_AddActorDialog( int model_index, const char *alias, int actor_number, int number_of_times_played, byte been_played_this_loop, int last_time_played ) { (void)model_index; (void)alias; (void)actor_number; (void)number_of_times_played; (void)been_played_this_loop; (void)last_time_played; }
-static qboolean SV_Stub_GlobalAlias_Add( const char *alias, const char *name, const char *parameters ) { (void)alias; (void)name; (void)parameters; return qfalse; }
-static const char *SV_Stub_GlobalAlias_FindRandom( const char *alias ) { (void)alias; return NULL; }
-static void SV_Stub_GlobalAlias_Void( void ) { }
+static AliasList_t *SV_ModelAliases( int modelindex, qboolean create ) {
+	tiki_t		*tiki = SV_Tiki( modelindex );
+	AliasList_t	**slot = TIKI_AliasList( tiki );
+
+	if ( !slot ) {
+		return NULL;
+	}
+	if ( !*slot && create ) {
+		*slot = AliasList_New( TIKI_Name( tiki ) );
+	}
+	return *slot;
+}
+
+static qboolean SV_GameAlias_Add( int modelindex, const char *alias, const char *name, const char *parameters ) {
+	return Alias_ListAdd( SV_ModelAliases( modelindex, qtrue ), alias, name, parameters );
+}
+
+static const char *SV_GameAlias_FindRandom( int modelindex, const char *alias ) {
+	return Alias_ListFindRandom( SV_ModelAliases( modelindex, qfalse ), alias );
+}
+
+static void SV_GameAlias_Dump( int modelindex ) {
+	Alias_ListDump( SV_ModelAliases( modelindex, qfalse ) );
+}
+
+static void SV_GameAlias_Clear( int modelindex ) {
+	Alias_ListClear( SV_ModelAliases( modelindex, qfalse ) );
+}
+
+static const char *SV_GameAlias_FindDialog( int modelindex, const char *alias, int random, int entity_number ) {
+	return Alias_ListFindDialog( SV_ModelAliases( modelindex, qfalse ), alias, random, entity_number );
+}
+
+static void *SV_GameAlias_GetList( int modelindex ) {
+	return SV_ModelAliases( modelindex, qfalse );
+}
+
+static void SV_GameAlias_UpdateDialog( int model_index, const char *alias, int number_of_times_played, byte been_played_this_loop, int last_time_played ) {
+	Alias_ListUpdateDialog( SV_ModelAliases( model_index, qfalse ), alias, number_of_times_played, been_played_this_loop, last_time_played );
+}
+
+static void SV_GameAlias_AddActorDialog( int model_index, const char *alias, int actor_number, int number_of_times_played, byte been_played_this_loop, int last_time_played ) {
+	Alias_ListAddActorDialog( SV_ModelAliases( model_index, qfalse ), alias, actor_number, number_of_times_played, been_played_this_loop, last_time_played );
+}
+
+/*
+===========================================================================
+
+Sound playback and client prints that are not implemented yet.
+
+===========================================================================
+*/
+
 
 static void QDECL SV_Stub_CenterPrintf( gentity_t *ent, const char *fmt, ... ) { (void)ent; (void)fmt; }
 static void QDECL SV_Stub_LocationPrintf( gentity_t *ent, int x, int y, const char *fmt, ... ) { (void)ent; (void)x; (void)y; (void)fmt; }
@@ -943,19 +986,19 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->Tag_Orientation = SV_GameTag_Orientation;
 	import->Tag_OrientationEx = SV_GameTag_OrientationEx;
 
-	import->Alias_Add = SV_Stub_Alias_Add;
-	import->Alias_FindRandom = SV_Stub_Alias_FindRandom;
-	import->Alias_Dump = SV_Stub_Alias_Void;
-	import->Alias_Clear = SV_Stub_Alias_Void;
-	import->Alias_FindDialog = SV_Stub_Alias_FindDialog;
-	import->Alias_GetList = SV_Stub_Alias_GetList;
-	import->Alias_UpdateDialog = SV_Stub_Alias_UpdateDialog;
-	import->Alias_AddActorDialog = SV_Stub_Alias_AddActorDialog;
+	import->Alias_Add = SV_GameAlias_Add;
+	import->Alias_FindRandom = SV_GameAlias_FindRandom;
+	import->Alias_Dump = SV_GameAlias_Dump;
+	import->Alias_Clear = SV_GameAlias_Clear;
+	import->Alias_FindDialog = SV_GameAlias_FindDialog;
+	import->Alias_GetList = SV_GameAlias_GetList;
+	import->Alias_UpdateDialog = SV_GameAlias_UpdateDialog;
+	import->Alias_AddActorDialog = SV_GameAlias_AddActorDialog;
 	import->NameForNum = SV_GameNameForNum;
-	import->GlobalAlias_Add = SV_Stub_GlobalAlias_Add;
-	import->GlobalAlias_FindRandom = SV_Stub_GlobalAlias_FindRandom;
-	import->GlobalAlias_Dump = SV_Stub_GlobalAlias_Void;
-	import->GlobalAlias_Clear = SV_Stub_GlobalAlias_Void;
+	import->GlobalAlias_Add = Alias_Add;
+	import->GlobalAlias_FindRandom = Alias_FindRandom;
+	import->GlobalAlias_Dump = Alias_Dump;
+	import->GlobalAlias_Clear = Alias_Clear;
 
 	import->centerprintf = SV_Stub_CenterPrintf;
 	import->locationprintf = SV_Stub_LocationPrintf;

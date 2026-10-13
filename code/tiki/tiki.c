@@ -15,6 +15,7 @@ comparing against the definitions the retail engine cached in the game's
 
 #include "tiki.h"
 #include "../qcommon/qcommon.h"
+#include "../qcommon/alias.h"
 
 #define	TIKI_MAX_SURFACES		32
 #define	TIKI_MAX_SKINS			4
@@ -134,6 +135,8 @@ struct tiki_s {
 
 	tikiCommandList_t	serverInit;
 	tikiCommandList_t	clientInit;
+
+	AliasList_t			*aliases;
 };
 
 typedef struct {
@@ -244,6 +247,7 @@ static void TIKI_Free( tiki_t *tiki ) {
 	free( tiki->boneParents );
 	TIKI_FreeCommands( &tiki->serverInit );
 	TIKI_FreeCommands( &tiki->clientInit );
+	Alias_ListDelete( tiki->aliases );
 	free( tiki );
 }
 
@@ -1037,9 +1041,11 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 	}
 	tiki->numAnims = j;
 
-	// Animations are numbered in name order. The retail engine relies on this
-	// when it looks one up, and the numbers are shared with the game modules.
-	// Insertion sort keeps definitions with the same name in file order.
+	// Animations are numbered in name order, compared the way Q_stricmp does
+	// (case folded to upper, so '_' sorts after letters). All 205 retail
+	// models with more than one animation are cached in exactly this order,
+	// and the numbers are shared with the game modules. Insertion sort keeps
+	// definitions with the same name in file order.
 	for ( i = 1 ; i < tiki->numAnims ; i++ ) {
 		tikiAnim_t	moved = tiki->anims[i];
 
@@ -1048,7 +1054,6 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 		}
 		tiki->anims[j] = moved;
 	}
-
 	// models without geometry report frames whose mins exceed their maxs
 	if ( !haveBounds || tiki->mins[0] > tiki->maxs[0] || tiki->mins[1] > tiki->maxs[1] || tiki->mins[2] > tiki->maxs[2] ) {
 		VectorSet( tiki->mins, -4, -4, -4 );
@@ -1133,6 +1138,10 @@ static const tikiAnimFrame_t *TIKI_GetFrame( const tiki_t *tiki, int animnum, in
 
 const char *TIKI_Name( const tiki_t *tiki ) {
 	return tiki ? tiki->name : "";
+}
+
+struct AliasList_s **TIKI_AliasList( tiki_t *tiki ) {
+	return tiki ? &tiki->aliases : NULL;
 }
 
 int TIKI_NumAnims( const tiki_t *tiki ) {
@@ -1225,24 +1234,6 @@ int TIKI_Anim_NumForName( const tiki_t *tiki, const char *name ) {
 
 /*
 ===============
-TIKI_Rand
-
-The retail engine draws from the C runtime's rand() and never seeds it, so a
-given sequence of game events always picks the same animation variants. This
-is the same generator, kept private so that nothing else disturbs it.
-===============
-*/
-#define	TIKI_RAND_MAX	0x7fff
-
-static unsigned int	tiki_randSeed = 1;
-
-static int TIKI_Rand( void ) {
-	tiki_randSeed = tiki_randSeed * 214013u + 2531011u;
-	return (int)( ( tiki_randSeed >> 16 ) & TIKI_RAND_MAX );
-}
-
-/*
-===============
 TIKI_Anim_Random
 
 Picks among the animations whose name starts with the given one, weighted by
@@ -1287,7 +1278,7 @@ int TIKI_Anim_Random( const tiki_t *tiki, const char *name ) {
 		return -1;
 	}
 
-	pick = (float)TIKI_Rand() * total * ( 1.0f / TIKI_RAND_MAX );
+	pick = (float)Com_UnseededRand() * total * ( 1.0f / 32767.0f );
 	for ( i = 0 ; i < numMatches - 1 ; i++ ) {
 		pick -= weights[i];
 		if ( pick <= 0 ) {

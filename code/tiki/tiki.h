@@ -35,6 +35,9 @@ tiki_t		*TIKI_Register( const char *name );
 
 const char	*TIKI_Name( const tiki_t *tiki );
 
+// each model owns one alias list, created on demand by its user
+struct AliasList_s	**TIKI_AliasList( tiki_t *tiki );
+
 int			TIKI_NumAnims( const tiki_t *tiki );
 int			TIKI_NumSkins( const tiki_t *tiki );
 int			TIKI_NumSurfaces( const tiki_t *tiki );

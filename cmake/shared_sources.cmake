@@ -4,6 +4,7 @@ include(utils/add_git_dependency)
 include(utils/disable_warnings)
 
 set(COMMON_SOURCES
+    ${SOURCE_DIR}/qcommon/alias.c
     ${SOURCE_DIR}/qcommon/cm_load.c
     ${SOURCE_DIR}/qcommon/cm_patch.c
     ${SOURCE_DIR}/qcommon/cm_polylib.c

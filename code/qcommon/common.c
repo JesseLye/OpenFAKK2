@@ -3578,6 +3578,23 @@ void Field_AutoComplete( field_t *field )
 
 /*
 ==================
+Com_UnseededRand
+
+The retail engine picks animation and sound variants with the C runtime's
+rand() and never seeds it, so the same sequence of game events always makes
+the same picks. This reproduces that generator (MSVC's, range 0-32767) and
+is reserved for those picks so nothing else disturbs the sequence.
+==================
+*/
+int Com_UnseededRand( void ) {
+	static unsigned int	seed = 1;
+
+	seed = seed * 214013u + 2531011u;
+	return (int)( ( seed >> 16 ) & 0x7fff );
+}
+
+/*
+==================
 Com_RandomBytes
 
 fills string array with len random bytes, preferably from the OS randomizer

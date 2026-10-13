@@ -826,6 +826,7 @@ void 		Com_Quit_f( void ) Q_NO_RETURN;
 void		Com_GameRestart(int checksumFeed, qboolean disconnect);
 
 int			Com_Milliseconds( void );	// will be journaled properly
+int			Com_UnseededRand( void );	// the retail engine's variant-picking generator
 unsigned	Com_BlockChecksum( const void *buffer, int length );
 char		*Com_MD5File(const char *filename, int length, const char *prefix, int prefix_len);
 int			Com_Filter(char *filter, char *name, int casesensitive);
