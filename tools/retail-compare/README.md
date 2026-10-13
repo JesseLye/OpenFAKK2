@@ -28,11 +28,20 @@ window while it runs.
 
     tools\retail-compare\compare-player.ps1 -Map training
 
-Both sides run `probe.scr`, which waits for the player, waits ten seconds of game time
-and dumps `levelvars` and `pendingevents`, so they are sampled at the same point. The
-retail result is cached per map; pass `-Refresh` to run the retail game again.
+Both sides run a probe script, which waits for the player and prints state at fixed game
+times, so they are sampled at the same point. The script compares level variables,
+pending events by kind, and every `whatis` reading field by field (numbers within
+`-Tolerance`). The retail result is cached per map and probe; pass `-Refresh` to run the
+retail game again. Choose the probe with `-Probe`:
 
-`probe-walk.scr` is a second probe that also presses a key: it prints the player with
-`whatis 0`, holds `+forward` for three seconds and prints it again. Copy it into both
-sandbox `maps` folders and pass `+script thread probe-walk.scr::probe` to
-`run-retail-client.ps1` and `run-openfakk2.ps1` (with `+set sv_testplayer 1`).
+- `probe` (default) waits ten seconds and dumps `levelvars` and `pendingevents`.
+- `probe-walk` prints the player with `whatis 0`, holds `+forward` for three seconds and
+  prints it again.
+- `probe-entities` runs `whatis` on entities 0 to 299 after ten seconds.
+- `probe-entry` prints the player six times in the first five seconds after entry.
+
+`-RetailTwice` runs the retail game a second time in place of OpenFAKK2. The game seeds
+its random numbers from the clock, so retail differs from itself on some maps; this shows
+by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.
+
+A probe must end with `pendingevents`; that is how the script knows it has finished.

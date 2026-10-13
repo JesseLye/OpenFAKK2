@@ -153,7 +153,11 @@ void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 	VectorCopy (maxs, ent->maxs);
 	ent->bmodel = qtrue;
 
-	ent->contents = -1;		// we don't know exactly what is in the brushes
+	// we don't know exactly what is in the brushes, so everything, unless the
+	// game has already said (fakk2.exe 0x444510)
+	if ( !ent->contents ) {
+		ent->contents = -1;
+	}
 
 	SV_LinkEntity( ent );		// FIXME: remove
 }
@@ -321,8 +325,9 @@ static game_import_t	gameImport;
 static debugline_t	*sv_debugLines;
 static int			sv_numDebugLines;
 
-static int			sv_farPlane;
-static qboolean		sv_skyPortal;
+// read when snapshots are built
+int					sv_farPlaneSquared;
+qboolean			sv_skyPortal;
 
 #define	GAME_PRINT_BUFFER	4096
 
@@ -634,7 +639,8 @@ static void SV_GameSetBrushModel( gentity_t *ent, const char *name ) {
 }
 
 static void SV_GameSetFarPlane( int farplane ) {
-	sv_farPlane = farplane;
+	// kept squared, with a margin, for the distance test (fakk2.exe 0x444740)
+	sv_farPlaneSquared = farplane ? ( farplane + 32 ) * ( farplane + 32 ) : 0;
 }
 
 static void SV_GameSetSkyPortal( qboolean skyportal ) {

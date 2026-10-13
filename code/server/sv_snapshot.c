@@ -266,11 +266,15 @@ static int QDECL SV_QsortEntityNumbers( const void *a, const void *b ) {
 /*
 ===============
 SV_AddEntToSnapshot
+
+Follows fakk2.exe (0x448000). An entity reached a second time in the same
+snapshot is one seen both directly and through a portal.
 ===============
 */
-static void SV_AddEntToSnapshot( svEntity_t *svEnt, sharedEntity_t *gEnt, snapshotEntityNumbers_t *eNums ) {
-	// if we have already added this entity to this snapshot, don't add again
+static void SV_AddEntToSnapshot( svEntity_t *svEnt, sharedEntity_t *gEnt, snapshotEntityNumbers_t *eNums,
+								 qboolean portal, qboolean sky ) {
 	if ( svEnt->snapshotCounter == sv.snapshotCounter ) {
+		gEnt->s.renderfx = ( gEnt->s.renderfx & ~RF_PORTALENTITY ) | RF_DUALENTITY;
 		return;
 	}
 	svEnt->snapshotCounter = sv.snapshotCounter;
@@ -280,28 +284,55 @@ static void SV_AddEntToSnapshot( svEntity_t *svEnt, sharedEntity_t *gEnt, snapsh
 		return;
 	}
 
+	gEnt->s.renderfx &= ~( RF_SKYENTITY | RF_PORTALENTITY | RF_DUALENTITY );
+	if ( portal ) {
+		gEnt->s.renderfx |= RF_PORTALENTITY;
+	} else if ( sky ) {
+		gEnt->s.renderfx |= RF_SKYENTITY;
+	}
+
 	eNums->snapshotEntities[ eNums->numSnapshotEntities ] = gEnt->s.number;
 	eNums->numSnapshotEntities++;
+}
 
-	// the game can ask whether an entity has ever reached a client
-	gEnt->svFlags |= SVF_SENT;
+/*
+===============
+SV_EntityParent
+
+The entity this one is attached or bound to, if any.
+===============
+*/
+static sharedEntity_t *SV_EntityParent( const sharedEntity_t *ent ) {
+	int		parent = ent->s.parent;
+
+	if ( parent == ENTITYNUM_NONE ) {
+		parent = ent->s.bindparent;
+		if ( parent == ENTITYNUM_NONE ) {
+			return NULL;
+		}
+	}
+	return SV_GentityNum( parent );
 }
 
 /*
 ===============
 SV_AddEntitiesVisibleFromPoint
+
+Follows fakk2.exe (0x448090). portalEnt is the portal being looked through, if
+any; sky is set for the pass made from the sky portal's origin.
 ===============
 */
-static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *frame, 
-									snapshotEntityNumbers_t *eNums, qboolean portal ) {
+static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *frame,
+									snapshotEntityNumbers_t *eNums, svEntity_t *portalEnt, qboolean sky ) {
 	int		e, i;
-	sharedEntity_t *ent;
-	svEntity_t	*svEnt;
+	sharedEntity_t *ent, *parent, *skyOrigin;
+	svEntity_t	*svEnt, *visEnt;
 	int		l;
 	int		clientarea, clientcluster;
 	int		leafnum;
 	byte	*clientpvs;
-	byte	*bitvector;
+	vec3_t	delta;
+	float	radius;
 
 	// during an error shutdown message we may need to transmit
 	// the shutdown message after the server has shutdown, so
@@ -318,12 +349,12 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 	frame->areabytes = CM_WriteAreaBits( frame->areabits, clientarea );
 
 	clientpvs = CM_ClusterPVS (clientcluster);
+	skyOrigin = NULL;
 
 	for ( e = 0 ; e < sv.num_entities ; e++ ) {
 		ent = SV_GentityNum(e);
 
-		// never send entities that aren't linked in
-		if ( !ent->linked ) {
+		if ( !ent->inuse ) {
 			continue;
 		}
 
@@ -332,73 +363,132 @@ static void SV_AddEntitiesVisibleFromPoint( vec3_t origin, clientSnapshot_t *fra
 			ent->s.number = e;
 		}
 
+		// set for every entity in use whenever a snapshot is built, whether or
+		// not the entity ends up in it
+		ent->svFlags |= SVF_SENT;
+
+		// never send entities that aren't linked in, and
 		// entities can be flagged to explicitly not be sent to the client
-		if ( ent->svFlags & SVF_NOCLIENT ) {
+		if ( !ent->linked || ( ent->svFlags & SVF_NOCLIENT ) ) {
+			continue;
+		}
+
+		// an attached entity is not sent when its parent is hidden
+		parent = SV_EntityParent( ent );
+		if ( parent && ( ( parent->svFlags & SVF_NOCLIENT ) || ( parent->s.renderfx & RF_DONTDRAW ) ) ) {
 			continue;
 		}
 
 		svEnt = SV_SvEntityForGentity( ent );
 
-		// don't double add an entity through portals
-		if ( svEnt->snapshotCounter == sv.snapshotCounter ) {
+		if ( ent->s.renderfx & RF_SKYORIGIN ) {
+			// the sky portal's camera: sent when the level uses a sky portal,
+			// and everything visible from it is added afterwards
+			if ( sv_skyPortal && !sky && !portalEnt ) {
+				if ( skyOrigin ) {
+					Com_Error( ERR_DROP, "SV_AddEntitiesVisibleFromPoint: duplicate sky origins" );
+				}
+				skyOrigin = ent;
+				SV_AddEntToSnapshot( svEnt, ent, eNums, qfalse, qfalse );
+			}
 			continue;
 		}
 
-		// broadcast entities are always sent
-		if ( ent->svFlags & SVF_BROADCAST ) {
-			SV_AddEntToSnapshot( svEnt, ent, eNums );
+		// broadcast entities are always sent, as are ones not yet sent once
+		if ( ent->svFlags & ( SVF_BROADCAST | SVF_SENDONCE ) ) {
+			SV_AddEntToSnapshot( svEnt, ent, eNums, portalEnt != NULL, sky );
+			continue;
+		}
+
+		// an attached entity goes wherever its parent goes, and is otherwise
+		// tested for visibility at its parent's position
+		visEnt = svEnt;
+		if ( parent ) {
+			visEnt = SV_SvEntityForGentity( parent );
+			if ( visEnt->snapshotCounter == sv.snapshotCounter ) {
+				SV_AddEntToSnapshot( svEnt, ent, eNums, portalEnt != NULL, sky );
+				continue;
+			}
+		}
+
+		// nothing to draw or hear
+		if ( !( ent->svFlags & SVF_SENDPVS ) && !ent->s.modelindex && !ent->s.loopSound ) {
+			continue;
+		}
+
+		// a looping sound with this minimum distance is heard everywhere
+		if ( ent->s.loopSound && ent->s.loopSoundMinDist == 10000.0f ) {
+			SV_AddEntToSnapshot( svEnt, ent, eNums, portalEnt != NULL, sky );
 			continue;
 		}
 
 		// ignore if not touching a PV leaf
 		// check area
-		if ( !CM_AreasConnected( clientarea, svEnt->areanum ) ) {
+		if ( !CM_AreasConnected( clientarea, visEnt->areanum ) ) {
 			// doors can legally straddle two areas, so
 			// we may need to check another one
-			if ( !CM_AreasConnected( clientarea, svEnt->areanum2 ) ) {
+			if ( !CM_AreasConnected( clientarea, visEnt->areanum2 ) ) {
 				continue;		// blocked by a door
 			}
 		}
 
-		bitvector = clientpvs;
+		// beyond the level's far plane
+		if ( sv_farPlaneSquared ) {
+			if ( parent ) {
+				VectorSubtract( parent->centroid, origin, delta );
+				radius = parent->radius;
+			} else {
+				VectorSubtract( ent->centroid, origin, delta );
+				radius = ent->radius;
+			}
+			if ( (float)sv_farPlaneSquared < DotProduct( delta, delta ) - radius * radius ) {
+				continue;
+			}
+		}
 
 		// check individual leafs
-		if ( !svEnt->numClusters ) {
-			continue;
-		}
 		l = 0;
-		for ( i=0 ; i < svEnt->numClusters ; i++ ) {
-			l = svEnt->clusternums[i];
-			if ( bitvector[l >> 3] & (1 << (l&7) ) ) {
+		for ( i=0 ; i < visEnt->numClusters ; i++ ) {
+			l = visEnt->clusternums[i];
+			if ( clientpvs[l >> 3] & (1 << (l&7) ) ) {
 				break;
 			}
 		}
 
 		// if we haven't found it to be visible,
 		// check overflow clusters that coudln't be stored
-		if ( i == svEnt->numClusters ) {
-			if ( svEnt->lastCluster ) {
-				for ( ; l <= svEnt->lastCluster ; l++ ) {
-					if ( bitvector[l >> 3] & (1 << (l&7) ) ) {
-						break;
-					}
-				}
-				if ( l == svEnt->lastCluster ) {
-					continue;	// not visible
-				}
-			} else {
+		if ( i == visEnt->numClusters ) {
+			if ( !visEnt->lastCluster ) {
 				continue;
+			}
+			// (the retail loop is bounded by the entity's own last cluster even
+			// when its parent's clusters are the ones being tested)
+			for ( ; l <= svEnt->lastCluster ; l++ ) {
+				if ( clientpvs[l >> 3] & (1 << (l&7) ) ) {
+					break;
+				}
+			}
+			if ( l == visEnt->lastCluster ) {
+				continue;	// not visible
 			}
 		}
 
-		// add it
-		SV_AddEntToSnapshot( svEnt, ent, eNums );
+		// add it; one already present was also seen from another viewpoint
+		if ( svEnt->snapshotCounter == sv.snapshotCounter ) {
+			SV_AddEntToSnapshot( svEnt, ent, eNums, portalEnt != NULL, sky );
+			continue;
+		}
+		SV_AddEntToSnapshot( svEnt, ent, eNums, portalEnt != NULL, sky );
 
 		// if it's a portal entity, add everything visible from its camera position
-		if ( ent->svFlags & SVF_PORTAL ) {
-			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, qtrue );
+		if ( ( ent->svFlags & SVF_PORTAL ) && svEnt != portalEnt ) {
+			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, svEnt, qfalse );
 		}
 
+	}
+
+	if ( skyOrigin && !sky && !portalEnt ) {
+		SV_AddEntitiesVisibleFromPoint( skyOrigin->s.origin, frame, eNums, NULL, qtrue );
 	}
 }
 
@@ -448,22 +538,26 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	ps = SV_GameClientNum( client - svs.clients );
 	frame->ps = *ps;
 
-	// Quake III never sends a client its own entity. FAKK2 is third person and
-	// the client draws the player from it, so it is sent like any other. (Seen
-	// from the outside: under the retail engine the player's entity carries
-	// SVF_SENT.)
 	clientNum = frame->ps.clientNum;
 	if ( clientNum < 0 || clientNum >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
 	}
 
 	// find the client's viewpoint
-	VectorCopy( ps->origin, org );
-	org[2] += ps->viewheight;
+	if ( ps->pm_flags & PMF_CAMERA_VIEW ) {
+		VectorCopy( ps->camera_origin, org );
+	} else {
+		VectorCopy( ps->origin, org );
+		org[2] += ps->viewheight;
+	}
+
+	// Quake III never sends a client its own entity. FAKK2 is third person and
+	// the client draws the player from it, so it goes in first (fakk2.exe 0x447dd0).
+	SV_AddEntToSnapshot( SV_SvEntityForGentity( clent ), clent, &entityNumbers, qfalse, qfalse );
 
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints
-	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, NULL, qfalse );
 
 	// if there were portals visible, there may be out of order entities
 	// in the list which will need to be resorted for the delta compression
@@ -626,6 +720,9 @@ void SV_SendClientMessages(void)
 		
 		if(!c->state)
 			continue;		// not connected
+
+		if(SV_IsTestPlayer(c) && SV_TestPlayer_Stalled(c))
+			continue;		// imitating a client that is still loading
 
 		if(svs.time - c->lastSnapshotTime < c->snapshotMsec * com_timescale->value)
 			continue;		// It's not time yet

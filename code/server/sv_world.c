@@ -192,6 +192,56 @@ void SV_UnlinkEntity( sharedEntity_t *gEnt ) {
 
 /*
 ===============
+SV_PackBounds
+
+Encodes a bounding box in entityState_t->solid for client prediction. The
+game modules decode it with their IntegerToBoundingBox.
+===============
+*/
+#define	BBOX_XBITS			9
+#define	BBOX_YBITS			8
+#define	BBOX_ZBOTTOMBITS	5
+#define	BBOX_ZTOPBITS		9
+
+static int SV_PackBounds( const vec3_t mins, const vec3_t maxs ) {
+	int		x, y, zd, zu;
+
+	x = Com_Clamp( 0, ( 1 << BBOX_XBITS ) - 1, (int)maxs[0] );
+	y = Com_Clamp( 0, ( 1 << BBOX_YBITS ) - 1, (int)maxs[1] );
+	zd = Com_Clamp( 0, ( 1 << BBOX_ZBOTTOMBITS ) - 1, (int)( mins[2] + ( 1 << ( BBOX_ZBOTTOMBITS - 1 ) ) ) );
+	zu = Com_Clamp( 0, ( 1 << BBOX_ZTOPBITS ) - 1, (int)maxs[2] );
+
+	return x | ( y << BBOX_XBITS ) | ( zd << ( BBOX_XBITS + BBOX_YBITS ) )
+		| ( zu << ( BBOX_XBITS + BBOX_YBITS + BBOX_ZBOTTOMBITS ) );
+}
+
+/*
+===============
+SV_RotateBounds
+
+Replaces a box with the bounds of its eight corners under the given rotation.
+===============
+*/
+static void SV_RotateBounds( float mat[3][3], vec3_t mins, vec3_t maxs ) {
+	vec3_t	rotmins, rotmaxs, corner, rotated;
+	int		i, j;
+
+	ClearBounds( rotmins, rotmaxs );
+	for ( i = 0 ; i < 8 ; i++ ) {
+		corner[0] = ( i & 1 ) ? mins[0] : maxs[0];
+		corner[1] = ( i & 2 ) ? mins[1] : maxs[1];
+		corner[2] = ( i & 4 ) ? mins[2] : maxs[2];
+		for ( j = 0 ; j < 3 ; j++ ) {
+			rotated[j] = corner[0] * mat[0][j] + corner[1] * mat[1][j] + corner[2] * mat[2][j];
+		}
+		AddPointToBounds( rotated, rotmins, rotmaxs );
+	}
+	VectorCopy( rotmins, mins );
+	VectorCopy( rotmaxs, maxs );
+}
+
+/*
+===============
 SV_LinkEntity
 
 ===============
@@ -202,7 +252,7 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 	int			leafs[MAX_TOTAL_ENT_LEAFS];
 	int			cluster;
 	int			num_leafs;
-	int			i, j, k;
+	int			i;
 	int			area;
 	int			lastLeaf;
 	float		*origin, *angles;
@@ -214,34 +264,33 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 		SV_UnlinkEntity( gEnt );	// unlink from old position
 	}
 
+	// nothing more to do for an entity that has been freed
+	if ( !gEnt->inuse ) {
+		return;
+	}
+
 	// encode the size into the entityState_t for client prediction
-	if ( gEnt->bmodel ) {
-		gEnt->s.solid = SOLID_BMODEL;		// a solid_box will never create this value
-	} else if ( gEnt->contents & ( CONTENTS_SOLID | CONTENTS_BODY ) ) {
-		// assume that x/y are equal and symetric
-		i = gEnt->maxs[0];
-		if (i<1)
-			i = 1;
-		if (i>255)
-			i = 255;
-
-		// z is not symetric
-		j = (-gEnt->mins[2]);
-		if (j<1)
-			j = 1;
-		if (j>255)
-			j = 255;
-
-		// and z maxs can be negative...
-		k = (gEnt->maxs[2]+32);
-		if (k<1)
-			k = 1;
-		if (k>255)
-			k = 255;
-
-		gEnt->s.solid = (k<<16) | (j<<8) | i;
-	} else {
+	switch ( gEnt->solid ) {
+	case SOLID_TRIGGER:
 		gEnt->s.solid = 0;
+		break;
+	case SOLID_BBOX:
+		if ( gEnt->contents == 0 || gEnt->contents == CONTENTS_SHOOTABLE_ONLY || gEnt->contents == CONTENTS_CORPSE ) {
+			gEnt->s.solid = 0;
+		} else {
+			gEnt->s.solid = SV_PackBounds( gEnt->mins, gEnt->maxs );
+		}
+		break;
+	case SOLID_BSP:
+		if ( gEnt->contents == -1 || !( gEnt->contents & ( CONTENTS_SHOOTABLE_ONLY | CONTENTS_CORPSE ) ) ) {
+			gEnt->s.solid = SOLID_BMODEL;		// a solid_box will never create this value
+		} else {
+			gEnt->s.solid = 0;
+		}
+		break;
+	default:
+		gEnt->s.solid = gEnt->solid;
+		break;
 	}
 
 	// get the position
@@ -249,15 +298,14 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 	angles = gEnt->currentAngles;
 
 	// set the abs box
-	if ( gEnt->bmodel && (angles[0] || angles[1] || angles[2]) ) {
-		// expand for rotation
-		float		max;
-
-		max = RadiusFromBounds( gEnt->mins, gEnt->maxs );
-		for (i=0 ; i<3 ; i++) {
-			gEnt->absmin[i] = origin[i] - max;
-			gEnt->absmax[i] = origin[i] + max;
-		}
+	if ( gEnt->solid == SOLID_BSP && (angles[0] || angles[1] || angles[2]) ) {
+		// the bounds of the rotated box, using the rotation the game keeps
+		// in the entity state and the state's origin
+		VectorCopy( gEnt->mins, gEnt->absmin );
+		VectorCopy( gEnt->maxs, gEnt->absmax );
+		SV_RotateBounds( gEnt->s.mat, gEnt->absmin, gEnt->absmax );
+		VectorAdd( gEnt->absmin, gEnt->s.origin, gEnt->absmin );
+		VectorAdd( gEnt->absmax, gEnt->s.origin, gEnt->absmax );
 	} else {
 		// normal
 		VectorAdd (origin, gEnt->mins, gEnt->absmin);	
@@ -297,7 +345,8 @@ void SV_LinkEntity( sharedEntity_t *gEnt ) {
 			// doors may legally straggle two areas,
 			// but nothing should evern need more than that
 			if (ent->areanum != -1 && ent->areanum != area) {
-				if (ent->areanum2 != -1 && ent->areanum2 != area && sv.state == SS_LOADING) {
+				if (ent->areanum2 != -1 && ent->areanum2 != area && sv.state == SS_LOADING
+					&& gEnt->s.parent == ENTITYNUM_NONE) {
 					Com_DPrintf ("Object %i touching 3 areas at %.2f %.2f %.2f with absmin %.2f %.2f %.2f and absmax %.2f %.2f %.2f\n",
 					gEnt->s.number,
 					gEnt->currentOrigin[0], gEnt->currentOrigin[1], gEnt->currentOrigin[2],

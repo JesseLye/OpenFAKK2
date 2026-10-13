@@ -271,6 +271,9 @@ extern	cvar_t	*sv_privatePassword;
 extern	cvar_t	*sv_allowDownload;
 extern	cvar_t	*sv_maxclients;
 
+extern	int			sv_farPlaneSquared;	// 0 when the level has no far plane
+extern	qboolean	sv_skyPortal;
+
 extern	cvar_t	*sv_privateClients;
 extern	cvar_t	*sv_hostname;
 extern	cvar_t	*sv_master[MAX_MASTER_SERVERS];
@@ -384,6 +387,7 @@ void SV_ClientThink (client_t *cl, usercmd_t *cmd);
 // sv_testplayer.c
 //
 qboolean	SV_IsTestPlayer( const client_t *cl );
+qboolean	SV_TestPlayer_Stalled( const client_t *cl );
 void		SV_TestPlayer_ServerCommand( const char *cmd );
 void		SV_TestPlayer_Spawn( void );
 void		SV_TestPlayer_Frame( int frameMsec );
