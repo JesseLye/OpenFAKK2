@@ -11158,10 +11158,12 @@ void Actor::SetActorFlag( int flag, qboolean flag_value )
 			return;
 		}
 	
+	// The shift count must be reduced explicitly: the original relied on x86
+	// masking it to 5 bits, which is undefined behaviour in C.
 	if ( flag_value )
-		*flags |= 1 << flag;
+		*flags |= 1u << ( flag % 32 );
 	else
-		*flags &= ~( 1 << flag );
+		*flags &= ~( 1u << ( flag % 32 ) );
 	}
 
 qboolean Actor::GetActorFlag( int flag )
@@ -11190,7 +11192,7 @@ qboolean Actor::GetActorFlag( int flag )
 			return false;
 		}
 
-	if ( *flags & ( 1 << flag ) )
+	if ( *flags & ( 1u << ( flag % 32 ) ) )
 		return true;
 	else
 		return false;
