@@ -600,13 +600,15 @@ static void CL_CG_S_SetGlobalAmbientVolumeLevel( float volume ) {
 }
 
 static void CL_CG_MUSIC_NewSoundtrack( const char *name ) {
-	Com_DPrintf( "MUSIC_NewSoundtrack: %s (music is not played yet)\n", name );
+	MUSIC_NewSoundtrack( name );
 }
 
 static void CL_CG_MUSIC_UpdateMood( int current_mood, int fallback_mood ) {
+	MUSIC_UpdateMood( current_mood, fallback_mood );
 }
 
 static void CL_CG_MUSIC_UpdateVolume( float volume, float fade_time ) {
+	MUSIC_UpdateVolume( volume, fade_time );
 }
 
 // The camera look offsets (mouse look while the view is fixed) have not been

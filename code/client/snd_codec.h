@@ -54,6 +54,7 @@ typedef void *(*CODEC_LOAD)(const char *filename, snd_info_t *info);
 typedef snd_stream_t *(*CODEC_OPEN)(const char *filename);
 typedef int (*CODEC_READ)(snd_stream_t *stream, int bytes, void *buffer);
 typedef void (*CODEC_CLOSE)(snd_stream_t *stream);
+typedef qboolean (*CODEC_SEEK)(snd_stream_t *stream, int sampleFrame);
 
 // Codec data structure
 struct snd_codec_s
@@ -64,6 +65,7 @@ struct snd_codec_s
 	CODEC_READ read;
 	CODEC_CLOSE close;
 	snd_codec_t *next;
+	CODEC_SEEK seek;		// optional: moves a stream to a sample frame (FAKK2's music resumes songs)
 };
 
 // Codec management
@@ -74,6 +76,7 @@ void *S_CodecLoad(const char *filename, snd_info_t *info);
 snd_stream_t *S_CodecOpenStream(const char *filename);
 void S_CodecCloseStream(snd_stream_t *stream);
 int S_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
+qboolean S_CodecSeekStream(snd_stream_t *stream, int sampleFrame);
 
 // Util functions (used by codecs)
 snd_stream_t *S_CodecUtilOpen(const char *filename, snd_codec_t *codec);
@@ -111,6 +114,7 @@ void *S_MP3_CodecLoad(const char *filename, snd_info_t *info);
 snd_stream_t *S_MP3_CodecOpenStream(const char *filename);
 void S_MP3_CodecCloseStream(snd_stream_t *stream);
 int S_MP3_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer);
+qboolean S_MP3_CodecSeekStream(snd_stream_t *stream, int sampleFrame);
 #endif // USE_CODEC_MP3
 
 #endif // !_SND_CODEC_H_

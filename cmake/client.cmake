@@ -31,6 +31,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/snd_wavelet.c
     ${SOURCE_DIR}/client/snd_main.c
     ${SOURCE_DIR}/client/snd_info.c
+    ${SOURCE_DIR}/client/snd_music.c
     ${SOURCE_DIR}/client/snd_codec.c
     ${SOURCE_DIR}/client/snd_codec_wav.c
     ${SOURCE_DIR}/client/snd_codec_ogg.c

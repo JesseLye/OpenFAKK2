@@ -1943,6 +1943,7 @@ void CL_Vid_Restart_f( void ) {
 
 	// don't let them loop during the restart
 	S_StopAllSounds();
+	MUSIC_StopSongs();	// FAKK2: S_StopAllSounds runs every frame at the menu, so the music stops here instead
 
 	if(!FS_ConditionalRestart(clc.checksumFeed, qtrue))
 	{

@@ -35,7 +35,8 @@ snd_codec_t mp3_codec =
 	S_MP3_CodecOpenStream,
 	S_MP3_CodecReadStream,
 	S_MP3_CodecCloseStream,
-	NULL
+	NULL,
+	S_MP3_CodecSeekStream
 };
 
 // dr_mp3 reads the file through these, with the snd_stream_t as its user data
@@ -93,14 +94,15 @@ static drmp3_bool32 S_MP3_Tell( void *user, drmp3_int64 *cursor )
 =================
 S_MP3_CodecOpenStream
 
-The sample count is not known until the file has been decoded once, so a
-stream leaves info.samples and info.size at 0; S_MP3_CodecLoad fills them.
+The sample count takes a pass over the file's frame headers (no decoding),
+after which the stream is back at its start.
 =================
 */
 snd_stream_t *S_MP3_CodecOpenStream( const char *filename )
 {
 	snd_stream_t *stream;
 	drmp3 *mp3;
+	drmp3_uint64 frames;
 
 	if ( !filename )
 		return NULL;
@@ -119,15 +121,37 @@ snd_stream_t *S_MP3_CodecOpenStream( const char *filename )
 		return NULL;
 	}
 
+	frames = drmp3_get_pcm_frame_count( mp3 );
+	if ( !frames )
+	{
+		drmp3_uninit( mp3 );
+		Z_Free( mp3 );
+		S_CodecUtilClose( &stream );
+		return NULL;
+	}
+
 	stream->info.rate = mp3->sampleRate;
 	stream->info.width = MP3_SAMPLEWIDTH;
 	stream->info.channels = mp3->channels;
-	stream->info.samples = 0;
-	stream->info.size = 0;
+	stream->info.samples = (int)frames;
+	stream->info.size = stream->info.samples * stream->info.channels * MP3_SAMPLEWIDTH;
 	stream->info.dataofs = 0;
 	stream->ptr = mp3;
 
 	return stream;
+}
+
+/*
+=================
+S_MP3_CodecSeekStream
+=================
+*/
+qboolean S_MP3_CodecSeekStream( snd_stream_t *stream, int sampleFrame )
+{
+	if ( !stream || sampleFrame < 0 )
+		return qfalse;
+
+	return drmp3_seek_to_pcm_frame( (drmp3 *)stream->ptr, (drmp3_uint64)sampleFrame ) ? qtrue : qfalse;
 }
 
 /*
@@ -176,9 +200,8 @@ Decodes the whole file into temporary hunk memory, which the caller frees.
 void *S_MP3_CodecLoad( const char *filename, snd_info_t *info )
 {
 	snd_stream_t *stream;
-	drmp3_uint64 frames;
 	byte *buffer;
-	int bytesRead, frameBytes;
+	int bytesRead;
 
 	if ( !filename || !info )
 		return NULL;
@@ -187,17 +210,6 @@ void *S_MP3_CodecLoad( const char *filename, snd_info_t *info )
 	if ( !stream )
 		return NULL;
 
-	// this decodes through the file once and seeks back to its start
-	frames = drmp3_get_pcm_frame_count( (drmp3 *)stream->ptr );
-	if ( !frames )
-	{
-		S_MP3_CodecCloseStream( stream );
-		return NULL;
-	}
-
-	frameBytes = stream->info.channels * MP3_SAMPLEWIDTH;
-	stream->info.samples = (int)frames;
-	stream->info.size = stream->info.samples * frameBytes;
 	*info = stream->info;
 
 	buffer = Hunk_AllocateTempMemory( info->size );

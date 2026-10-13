@@ -261,6 +261,8 @@ void S_Update( void )
 		}
 	}
 	
+	MUSIC_Update( );	// FAKK2: feeds the songs through the raw streams
+
 	if( si.Update ) {
 		si.Update( );
 	}
@@ -490,7 +492,7 @@ void S_Init( void )
 	Com_Printf( "------ Initializing Sound ------\n" );
 
 	s_volume = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
-	s_musicVolume = Cvar_Get( "s_musicvolume", "0.25", CVAR_ARCHIVE );
+	s_musicVolume = Cvar_Get( "s_musicvolume", "0.60", CVAR_ARCHIVE );	// FAKK2's default
 	s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 	s_doppler = Cvar_Get( "s_doppler", "1", CVAR_ARCHIVE );
 	s_backend = Cvar_Get( "s_backend", "", CVAR_ROM );
@@ -512,6 +514,7 @@ void S_Init( void )
 		Cmd_AddCommand( "s_stop", S_StopAllSounds );
 		Cmd_AddCommand( "s_info", S_SoundInfo );
 		Cmd_AddCommand( "s_soundinfo", S_SoundInfo_f );	// FAKK2
+		MUSIC_Init( );
 
 		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH );
 		if( cv->integer ) {
@@ -547,6 +550,7 @@ S_Shutdown
 */
 void S_Shutdown( void )
 {
+	MUSIC_Shutdown( );
 	if( si.Shutdown ) {
 		si.Shutdown( );
 	}

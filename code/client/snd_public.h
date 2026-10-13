@@ -74,6 +74,15 @@ void SNDDMA_Activate( void );
 
 void S_UpdateBackgroundTrack( void );
 
+// FAKK2's music (snd_music.c)
+void MUSIC_Init( void );
+void MUSIC_NewSoundtrack( const char *name );
+void MUSIC_UpdateMood( int current, int fallback );
+void MUSIC_UpdateVolume( float volume, float fadeTime );
+void MUSIC_Update( void );
+void MUSIC_StopSongs( void );
+void MUSIC_Shutdown( void );
+
 
 #ifdef USE_VOIP
 void S_StartCapture( void );

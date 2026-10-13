@@ -191,6 +191,14 @@ int S_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer)
 	return stream->codec->read(stream, bytes, buffer);
 }
 
+// false when the codec cannot seek
+qboolean S_CodecSeekStream(snd_stream_t *stream, int sampleFrame)
+{
+	if(!stream->codec->seek)
+		return qfalse;
+	return stream->codec->seek(stream, sampleFrame);
+}
+
 //=======================================================================
 // Util functions (used by codecs)
 

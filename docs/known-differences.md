@@ -213,8 +213,33 @@ Not read, done another way:
   whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
   through Miles (`0x45bf00` sends them down a separate path); reverb and ambient-volume
   calls are ignored; looping sounds are keyed by their
-  order in the frame; the music calls do nothing. `s_soundinfo [name]` prints the table's
-  size or a name's entry. The OpenAL backend's version of this compiles but has not been
+  order in the frame. `s_soundinfo [name]` prints the table's size or a name's entry.
+- **Music** follows the retail engine's mood system, read from `fakk2.exe`. The
+  soundtrack the game names in its configstring is a `.mus` file
+  (`MUSIC_LoadSoundtrackFile`, `0x440be0`): `path <dir>` prefixes the files after it, a
+  line `<mood> <file>` or `<file>` (then the mood is the file name without its extension)
+  adds a song, 16 at most, and `!<mood> loop|restart|interrupt|volume <v>|fadetime <t>`
+  sets a song's flags, `interrupt` implying `restart` and a fade time of 0; volume
+  defaults to 1, fade time to 1; loading with no mood yet requested requests
+  normal/normal. `MUSIC_UpdateMood` (`0x441570`) records the current and fallback moods
+  the player state carries, and coming back to the pair that preceded an action mood
+  skips the current mood's song for the fallback's when that song is `interrupt`.
+  `MUSIC_UpdateVolume` (`0x441690`) fades the game's music volume to the new value over
+  the fade time. Each frame (`0x4412a0`): a one-shot song is over once it is within the
+  fallback song's fade time of its end (`0x45e7e0`), and the fallback becomes the
+  requested mood; a requested mood whose song is not the one playing starts it
+  (`0x45e380`) on one of two handles, the song playing fading out over the new song's
+  fade time unless the new song is `interrupt`, which stops it at once (`0x45e2e0`); a
+  looping song starts at full volume and a one-shot fades in over its own fade time; a
+  song without `restart` resumes where it was stopped. A handle's volume (`0x45e5e0`) is
+  the song's volume times `s_musicvolume` (retail default 0.60, now ours) times the
+  game's music volume times its fade, on top of `s_volume`. OpenFAKK2 feeds the two
+  handles through two raw streams a quarter second ahead of real time, on either sound
+  backend. Not followed: the retail engine truncates fade times to whole seconds, and
+  its fade-down of the game's volume starts from 1 rather than the current value. The
+  retail console commands `loadsoundtrack <name>` and `playsong <mood> [fallback]`
+  exist, plus `music_info`. Checked by trace on `swamp1` and from the console; not by
+  ear. The OpenAL backend's version of this compiles but has not been
   run (no OpenAL runtime on the test machine); the software mixer's has.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
 - **Tag functions.** (They honour the blending arguments the module passes; see
