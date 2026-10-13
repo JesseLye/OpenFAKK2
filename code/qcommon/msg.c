@@ -745,7 +745,9 @@ netField_t	entityStateFields[] =
 {
 // The wire layout is OpenFAKK2's own: the retail 1.02 protocol is not
 // documented, and FAKK2 has no multiplayer to stay compatible with. Fields the
-// SDK marks "not sent over" (bone_quat, bindparent, quat, mat) are omitted.
+// SDK marks "not sent over" (bone_quat, bindparent, quat, mat) are omitted, and
+// so are origin and angles, which the reader takes from netorigin and netangles
+// as retail does.
 { NETF(pos.trType), 8 },
 { NETF(pos.trTime), 32 },
 { NETF(pos.trDuration), 32 },
@@ -767,18 +769,12 @@ netField_t	entityStateFields[] =
 { NETF(netorigin[0]), 0 },
 { NETF(netorigin[1]), 0 },
 { NETF(netorigin[2]), 0 },
-{ NETF(origin[0]), 0 },
-{ NETF(origin[1]), 0 },
-{ NETF(origin[2]), 0 },
 { NETF(origin2[0]), 0 },
 { NETF(origin2[1]), 0 },
 { NETF(origin2[2]), 0 },
 { NETF(netangles[0]), 0 },
 { NETF(netangles[1]), 0 },
 { NETF(netangles[2]), 0 },
-{ NETF(angles[0]), 0 },
-{ NETF(angles[1]), 0 },
-{ NETF(angles[2]), 0 },
 { NETF(eType), 8 },
 { NETF(eFlags), 32 },
 { NETF(constantLight), 32 },
@@ -1070,6 +1066,17 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 		toF = (int *)( (byte *)to + field->offset );
 		// no change
 		*toF = *fromF;
+	}
+
+	// FAKK2 (fakk2.exe 0x439e70): the fields that travel are the net ones, and
+	// the quaternions the game modules use are derived here, never sent
+	VectorCopy( to->netorigin, to->origin );
+	VectorCopy( to->netangles, to->angles );
+	EulerToQuat( to->angles, to->quat );
+	for ( i = 0 ; i < NUM_BONE_CONTROLLERS ; i++ ) {
+		if ( to->bone_tag[i] >= 0 ) {
+			EulerToQuat( to->bone_angles[i], to->bone_quat[i] );
+		}
 	}
 
 	if ( print ) {

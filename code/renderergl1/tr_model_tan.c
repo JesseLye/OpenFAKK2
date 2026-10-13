@@ -119,6 +119,7 @@ typedef struct {
 typedef struct {
 	int				numBones;
 	int				*parents;		// -1 for a root; always earlier than the bone
+	qboolean		*legBone;		// takes the legs animation when a torso animation plays too
 	int				numSurfaces;
 	skelSurface_t	*surfaces;
 } skelModel_t;
@@ -283,14 +284,19 @@ static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
 		return NULL;
 	}
 
-	skel = ri.Hunk_Alloc( sizeof( *skel ) + numBones * sizeof( int ), h_low );
+	skel = ri.Hunk_Alloc( sizeof( *skel ) + numBones * ( sizeof( int ) + sizeof( qboolean ) ), h_low );
 	skel->numBones = numBones;
 	skel->parents = (int *)( skel + 1 );
+	skel->legBone = (qboolean *)( skel->parents + numBones );
 	for ( i = 0 ; i < numBones ; i++ ) {
-		int		parent = TAN_Int( data + ofsBones + i * SKB_BONE_SIZE );
+		const byte	*bone = data + ofsBones + i * SKB_BONE_SIZE;
+		int			parent = TAN_Int( bone );
 
 		// a bone may only hang off an earlier bone, which keeps evaluation a single pass
 		skel->parents[i] = ( parent >= 0 && parent < i ) ? parent : -1;
+		// retail's R_AddSkelSurfaces (0x4872d0) animates a bone whose flags are
+		// exactly 1 from the legs animation and every other from the torso's
+		skel->legBone[i] = TAN_Int( bone + 4 ) == 1;
 	}
 
 	surf = data + ofsSurfaces;
@@ -956,6 +962,26 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		ent->e.oldframe = 0;
 	}
 
+	// the torso animation moves the bones the legs animation does not
+	if ( tiki->skeletal && ent->e.usetorso ) {
+		skelAnim_t	*torso = R_TikiSkelAnim( tiki, ent->e.torso_anim );
+
+		if ( !torso ) {
+			ent->e.usetorso = qfalse;
+		} else {
+			if ( ent->e.torso_oldanim != ent->e.torso_anim ) {
+				ent->e.torso_oldframe = ent->e.torso_frame;
+			}
+			if ( ent->e.torso_frame < 0 || ent->e.torso_frame >= torso->numFrames
+				|| ent->e.torso_oldframe < 0 || ent->e.torso_oldframe >= torso->numFrames ) {
+				ri.Printf( PRINT_DEVELOPER, "R_AddTikiSurfaces: no such torso frame %d to %d for '%s'\n",
+					ent->e.torso_oldframe, ent->e.torso_frame, tr.currentModel->name );
+				ent->e.torso_frame = 0;
+				ent->e.torso_oldframe = 0;
+			}
+		}
+	}
+
 	if ( R_TikiCull( &frames[ent->e.frame], &frames[ent->e.oldframe], ent ) == CULL_OUT ) {
 		return;
 	}
@@ -1079,12 +1105,24 @@ typedef struct {
 // order among other entities', so they are kept until a different entity or
 // frame is drawn
 static skelBonePose_t	skel_pose[SKEL_MAX_BONES];
-static const tikiModel_t	*skel_poseModel;
-static const trRefEntity_t	*skel_poseEntity;
-static int				skel_poseAnim, skel_poseFrame, skel_poseOldFrame;
-static float			skel_poseBacklerp;
-static int				skel_poseBoneTag[NUM_BONE_CONTROLLERS];
-static vec4_t			skel_poseBoneQuat[NUM_BONE_CONTROLLERS];
+
+// one of the two animations an entity plays at once
+typedef struct {
+	const skelAnim_t	*anim;
+	int					frame, oldframe;
+	float				backlerp;
+} skelAnimSel_t;
+
+// everything the pose above was composed from
+typedef struct {
+	const tikiModel_t	*model;
+	const trRefEntity_t	*entity;
+	skelAnimSel_t		legs, torso;
+	int					boneTag[NUM_BONE_CONTROLLERS];
+	vec4_t				boneQuat[NUM_BONE_CONTROLLERS];
+} skelPoseKey_t;
+
+static skelPoseKey_t	skel_poseKey;
 
 // r = p * q, Hamilton product on x y z w (fakk2.exe 0x44fe40)
 static void Skel_QuatMultiply( const vec4_t p, const vec4_t q, vec4_t r ) {
@@ -1138,40 +1176,64 @@ R_SkelComputeBones
 Composes the entity's bones for its frame, root first.
 ===============
 */
-static void R_SkelComputeBones( const tikiModel_t *tiki, const skelAnim_t *anim, const trRefEntity_t *ent ) {
+static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 	const refEntity_t	*e = &ent->e;
-	float				backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
+	skelPoseKey_t		key;
 	int					b, i;
 
-	if ( skel_poseModel == tiki && skel_poseEntity == ent && skel_poseAnim == e->anim
-		&& skel_poseFrame == e->frame && skel_poseOldFrame == e->oldframe && skel_poseBacklerp == backlerp
-		&& !memcmp( skel_poseBoneTag, e->bone_tag, sizeof( skel_poseBoneTag ) )
-		&& !memcmp( skel_poseBoneQuat, e->bone_quat, sizeof( skel_poseBoneQuat ) ) ) {
+	// retail's R_AddSkelSurfaces (0x4872d0): the legs animation moves the
+	// bones flagged for it and the torso animation the rest; either alone
+	// moves every bone
+	Com_Memset( &key, 0, sizeof( key ) );
+	key.model = tiki;
+	key.entity = ent;
+	key.legs.anim = R_TikiSkelAnim( tiki, e->anim );
+	key.legs.frame = e->frame;
+	key.legs.oldframe = e->oldframe;
+	key.legs.backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
+	if ( e->usetorso ) {
+		key.torso.anim = R_TikiSkelAnim( tiki, e->torso_anim );
+		key.torso.frame = e->torso_frame;
+		key.torso.oldframe = e->torso_oldframe;
+		key.torso.backlerp = e->torso_oldframe == e->torso_frame ? 0 : e->torso_backlerp;
+	}
+	if ( !key.torso.anim ) {
+		key.torso = key.legs;
+	} else if ( !e->uselegs || !key.legs.anim ) {
+		key.legs = key.torso;
+	}
+	// the bone controllers only count when the entity says so (0x4872d0 tests useAngles)
+	if ( e->useAngles ) {
+		Com_Memcpy( key.boneTag, e->bone_tag, sizeof( key.boneTag ) );
+		Com_Memcpy( key.boneQuat, e->bone_quat, sizeof( key.boneQuat ) );
+	} else {
+		for ( i = 0 ; i < NUM_BONE_CONTROLLERS ; i++ ) {
+			key.boneTag[i] = -1;
+		}
+	}
+
+	if ( !memcmp( &key, &skel_poseKey, sizeof( key ) ) ) {
 		return;
 	}
-	skel_poseModel = tiki;
-	skel_poseEntity = ent;
-	skel_poseAnim = e->anim;
-	skel_poseFrame = e->frame;
-	skel_poseOldFrame = e->oldframe;
-	skel_poseBacklerp = backlerp;
-	Com_Memcpy( skel_poseBoneTag, e->bone_tag, sizeof( skel_poseBoneTag ) );
-	Com_Memcpy( skel_poseBoneQuat, e->bone_quat, sizeof( skel_poseBoneQuat ) );
+	skel_poseKey = key;
 
 	for ( b = 0 ; b < tiki->skel->numBones ; b++ ) {
-		skelBonePose_t	*pose = &skel_pose[b];
-		vec4_t			quat, acc;
-		vec3_t			offset;
-		int				parent = tiki->skel->parents[b];
+		skelBonePose_t		*pose = &skel_pose[b];
+		const skelAnimSel_t	*sel = tiki->skel->legBone[b] ? &key.legs : &key.torso;
+		const skelAnim_t	*anim = sel->anim;
+		float				backlerp = sel->backlerp;
+		vec4_t				quat, acc;
+		vec3_t				offset;
+		int					parent = tiki->skel->parents[b];
 
-		Skel_FrameBone( anim, e->frame, b, quat, offset );
+		Skel_FrameBone( anim, sel->frame, b, quat, offset );
 		if ( backlerp ) {
 			vec4_t	oldQuat;
 			vec3_t	oldOffset;
 			float	dot;
 
 			// normalised lerp, taking the shorter way round
-			Skel_FrameBone( anim, e->oldframe, b, oldQuat, oldOffset );
+			Skel_FrameBone( anim, sel->oldframe, b, oldQuat, oldOffset );
 			dot = quat[0] * oldQuat[0] + quat[1] * oldQuat[1] + quat[2] * oldQuat[2] + quat[3] * oldQuat[3];
 			if ( dot < 0 ) {
 				for ( i = 0 ; i < 4 ; i++ ) {
@@ -1207,10 +1269,10 @@ static void R_SkelComputeBones( const tikiModel_t *tiki, const skelAnim_t *anim,
 
 		// the entity's bone controllers turn their bones further
 		for ( i = 0 ; i < NUM_BONE_CONTROLLERS ; i++ ) {
-			if ( e->bone_tag[i] == b ) {
+			if ( key.boneTag[i] == b ) {
 				vec4_t	turned;
 
-				Skel_QuatMultiply( acc, e->bone_quat[i], turned );
+				Skel_QuatMultiply( acc, key.boneQuat[i], turned );
 				Vector4Copy( turned, acc );
 			}
 		}
@@ -1231,15 +1293,13 @@ void RB_SurfaceSkel( void *surface ) {
 	skelSurface_t		*surf = surface;
 	const trRefEntity_t	*ent = backEnd.currentEntity;
 	tikiModel_t			*tiki = surf->model;
-	const skelAnim_t	*anim;
 	float				*outXyz, *outNormal;
 	int					i, j, numVerts, numIndexes, baseVertex, baseIndex;
 
-	anim = R_TikiSkelAnim( tiki, ent->e.anim );
-	if ( !anim ) {
+	if ( !R_TikiSkelAnim( tiki, ent->e.anim ) ) {
 		return;
 	}
-	R_SkelComputeBones( tiki, anim, ent );
+	R_SkelComputeBones( tiki, ent );
 
 	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
 

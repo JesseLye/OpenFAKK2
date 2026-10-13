@@ -681,6 +681,8 @@ void AnglesToAxis( const vec3_t angles, vec3_t axis[3] );
 
 void AxisClear( vec3_t axis[3] );
 void AxisCopy( vec3_t in[3], vec3_t out[3] );
+void MatToQuat( vec3_t m[3], vec4_t q );
+void EulerToQuat( const vec3_t angles, vec4_t q );
 
 void SetPlaneSignbits( struct cplane_s *out );
 int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *plane);

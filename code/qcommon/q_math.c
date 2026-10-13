@@ -426,6 +426,66 @@ void AnglesToAxis( const vec3_t angles, vec3_t axis[3] ) {
 	VectorSubtract( vec3_origin, right, axis[1] );
 }
 
+/*
+=================
+MatToQuat
+
+FAKK2: a rotation matrix as a quaternion, x y z w (the game modules' convention)
+=================
+*/
+void MatToQuat( vec3_t m[3], vec4_t q ) {
+	static const int	next[3] = { 1, 2, 0 };
+	float				trace = m[0][0] + m[1][1] + m[2][2];
+	float				s;
+	int					i, j, k;
+
+	if ( trace > 0 ) {
+		s = sqrt( trace + 1.0 );
+		q[3] = s * 0.5;
+		s = 0.5 / s;
+		q[0] = ( m[2][1] - m[1][2] ) * s;
+		q[1] = ( m[0][2] - m[2][0] ) * s;
+		q[2] = ( m[1][0] - m[0][1] ) * s;
+		return;
+	}
+
+	i = 0;
+	if ( m[1][1] > m[0][0] ) {
+		i = 1;
+	}
+	if ( m[2][2] > m[i][i] ) {
+		i = 2;
+	}
+	j = next[i];
+	k = next[j];
+
+	s = sqrt( ( m[i][i] - ( m[j][j] + m[k][k] ) ) + 1.0 );
+	q[i] = s * 0.5;
+	s = 0.5 / s;
+	q[3] = ( m[k][j] - m[j][k] ) * s;
+	q[j] = ( m[j][i] + m[i][j] ) * s;
+	q[k] = ( m[k][i] + m[i][k] ) * s;
+}
+
+/*
+=================
+EulerToQuat
+
+FAKK2: entity bone controllers travel as angles and are used as quaternions
+=================
+*/
+void EulerToQuat( const vec3_t angles, vec4_t q ) {
+	vec3_t	axis[3];
+
+	if ( !angles[0] && !angles[1] && !angles[2] ) {
+		q[0] = q[1] = q[2] = 0;
+		q[3] = 1;
+		return;
+	}
+	AnglesToAxis( angles, axis );
+	MatToQuat( axis, q );
+}
+
 void AxisClear( vec3_t axis[3] ) {
 	axis[0][0] = 1;
 	axis[0][1] = 0;

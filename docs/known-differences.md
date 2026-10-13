@@ -165,6 +165,12 @@ Read from `fakk2.exe` and followed:
   layout is the SDK's (`numServerCommands` is never filled in).
 - **`UpdateLoadingScreen`** (`0x423490`) redraws the screen only while the client has not
   yet been primed.
+- **Reading an entity** (`MSG_ReadDeltaEntity`, `0x439e70`) ends by copying `netorigin`
+  to `origin` and `netangles` to `angles`, turning `angles` into the entity's `quat`,
+  and turning `bone_angles[i]` into `bone_quat[i]` for every `bone_tag[i]` that is not
+  -1 (`0x43cbe0` is the SDK's `EulerToQuat`). The quaternions never travel; without
+  this the client game module hands the renderer zero bone controllers, which wiped
+  out everything above Julie's waist.
 - **`CM_InlineModel`** (`0x426750`) is the plain collision function; the model-index
   rule above is what makes the game's argument an inline model number.
 
@@ -365,10 +371,15 @@ What is implemented, and on what basis:
   turned by the parent's axes (`0x43c800`, Quake's axis convention; the matrix is
   `0x43c980`); the root gets the definition's origin and everything is scaled at the
   end. Frame quaternions are stored as shorts over 32768 and offsets over 63. Vertexes
-  are the weighted sum of each bone's placed offset. Not read: the retail renderer's own
-  skinning (`R_AddSkelSurfaces`), so turning normals with the vertex's bones and
-  interpolating frames by normalised quaternion lerp are assumptions, and the
-  cross-blend and torso fields of the entity are ignored.
+  are the weighted sum of each bone's placed offset. From the retail renderer's
+  `R_AddSkelSurfaces` (`0x4872d0`): a bone whose `.skb` flags are exactly 1 (Julie's
+  pelvis, spine and legs) takes the entity's legs animation and every other bone the
+  torso animation, when `usetorso` is set; either animation alone moves every bone;
+  the bone controllers apply only when `useAngles` is set (the controller quaternion
+  multiplies the composed rotation, as for tags). Still assumed: turning normals with
+  the vertex's bones and interpolating frames by normalised quaternion lerp (retail
+  lerps the quaternion shorts in `0x43ca60`, not yet read). Cross-blending and level
+  of detail are not applied.
 - **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
   size is the image's width times the shader's `spriteScale` times the entity's scale.
   That is OpenMoHAA's rule; the retail renderer's has not been read.
