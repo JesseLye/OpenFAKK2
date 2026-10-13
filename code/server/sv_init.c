@@ -87,11 +87,6 @@ void SV_UpdateConfigstrings(client_t *client)
 		if(!client->csUpdated[index])
 			continue;
 
-		// do not always send server info to all clients
-		if ( index == CS_SERVERINFO && client->gentity &&
-			(client->gentity->r.svFlags & SVF_NOSERVERINFO) ) {
-			continue;
-		}
 		SV_SendConfigstring(client, index);
 		client->csUpdated[index] = qfalse;
 	}
@@ -133,10 +128,6 @@ void SV_SetConfigstring (int index, const char *val) {
 			if ( client->state < CS_ACTIVE ) {
 				if ( client->state == CS_PRIMED )
 					client->csUpdated[ index ] = qtrue;
-				continue;
-			}
-			// do not always send server info to all clients
-			if ( index == CS_SERVERINFO && client->gentity && (client->gentity->r.svFlags & SVF_NOSERVERINFO) ) {
 				continue;
 			}
 		
@@ -220,7 +211,7 @@ static void SV_CreateBaseline( void ) {
 
 	for ( entnum = 1; entnum < sv.num_entities ; entnum++ ) {
 		svent = SV_GentityNum(entnum);
-		if (!svent->r.linked) {
+		if (!svent->linked) {
 			continue;
 		}
 		svent->s.number = entnum;
@@ -401,9 +392,14 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	qboolean	isBot;
 	char		systemInfo[16384];
 	const char	*p;
+	struct {
+		sharedEntity_t	*gentities;
+		int				gentitySize;
+		int				num_entities;
+		playerState_t	*gameClients;
+		int				gameClientSize;
+	} located;
 
-	// shut down the existing game if it is running
-	SV_ShutdownGameProgs();
 
 	Com_Printf ("------ Server Initialization ------\n");
 	Com_Printf ("Server: %s\n",server);
@@ -454,11 +450,32 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 		}
 	}
 
-	// wipe the entire per-level structure
+	// wipe the entire per-level structure, keeping what the game module told
+	// us about its entity arrays: it stays loaded across levels and only
+	// reports them again when they change
+	located.gentities = sv.gentities;
+	located.gentitySize = sv.gentitySize;
+	located.num_entities = sv.num_entities;
+	located.gameClients = sv.gameClients;
+	located.gameClientSize = sv.gameClientSize;
+
 	SV_ClearServer();
 	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
 		sv.configstrings[i] = CopyString("");
 	}
+
+	if ( SV_GameLoaded() ) {
+		sv.gentities = located.gentities;
+		sv.gentitySize = located.gentitySize;
+		sv.num_entities = located.num_entities;
+		sv.gameClients = located.gameClients;
+		sv.gameClientSize = located.gameClientSize;
+	}
+
+	// load the game module on the first level, then have it discard the
+	// previous level
+	SV_InitGameProgs();
+	ge->Cleanup();
 
 	// make sure we are not paused
 	Cvar_Set("cl_paused", "0");
@@ -488,8 +505,8 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	// to load during actual gameplay
 	sv.state = SS_LOADING;
 
-	// load and spawn all other entities
-	SV_InitGameProgs();
+	// spawn the level's entities
+	ge->SpawnEntities( server, CM_EntityString(), sv.time );
 
 	// don't allow a map_restart if game is modified
 	sv_gametype->modified = qfalse;
@@ -497,8 +514,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	// run a few frames to allow everything to settle
 	for (i = 0;i < 3; i++)
 	{
-		VM_Call (gvm, GAME_RUN_FRAME, sv.time);
-		SV_BotFrame (sv.time);
+		SV_GameRunFrame( 100 );
 		sv.time += 100;
 		svs.time += 100;
 	}
@@ -523,7 +539,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 			}
 
 			// connect the client again
-			denied = VM_ExplicitArgPtr( gvm, VM_Call( gvm, GAME_CLIENT_CONNECT, i, qfalse, isBot ) );	// firstTime = qfalse
+			denied = SV_GameClientConnect( i, qfalse );	// firstTime = qfalse
 			if ( denied ) {
 				// this generally shouldn't happen, because the client
 				// was connected before the level change
@@ -547,15 +563,14 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 					client->deltaMessage = -1;
 					client->lastSnapshotTime = 0;	// generate a snapshot immediately
 
-					VM_Call( gvm, GAME_CLIENT_BEGIN, i );
+					SV_GameClientBegin( i, &client->lastUsercmd );
 				}
 			}
 		}
 	}	
 
 	// run another frame to allow things to look at all the players
-	VM_Call (gvm, GAME_RUN_FRAME, sv.time);
-	SV_BotFrame (sv.time);
+	SV_GameRunFrame( 100 );
 	sv.time += 100;
 	svs.time += 100;
 
@@ -688,12 +703,6 @@ void SV_Init (void)
 #endif
 	sv_banFile = Cvar_Get("sv_banFile", "serverbans.dat", CVAR_ARCHIVE);
 
-	// initialize bot cvars so they are listed and can be set before loading the botlib
-	SV_BotInitCvars();
-
-	// init the botlib here because we need the pre-compiler in the UI
-	SV_BotInitBotLib();
-	
 	// Load saved bans
 	Cbuf_AddText("rehashbans\n");
 }

@@ -741,59 +741,100 @@ typedef struct {
 // using the stringizing operator to save typing...
 #define	NETF(x) #x,(size_t)&((entityState_t*)0)->x
 
-netField_t	entityStateFields[] = 
+netField_t	entityStateFields[] =
 {
+// The wire layout is OpenFAKK2's own: the retail 1.02 protocol is not
+// documented, and FAKK2 has no multiplayer to stay compatible with. Fields the
+// SDK marks "not sent over" (bone_quat, bindparent, quat, mat) are omitted.
+{ NETF(pos.trType), 8 },
 { NETF(pos.trTime), 32 },
+{ NETF(pos.trDuration), 32 },
 { NETF(pos.trBase[0]), 0 },
 { NETF(pos.trBase[1]), 0 },
+{ NETF(pos.trBase[2]), 0 },
 { NETF(pos.trDelta[0]), 0 },
 { NETF(pos.trDelta[1]), 0 },
-{ NETF(pos.trBase[2]), 0 },
-{ NETF(apos.trBase[1]), 0 },
 { NETF(pos.trDelta[2]), 0 },
-{ NETF(apos.trBase[0]), 0 },
-{ NETF(event), 10 },
-{ NETF(angles2[1]), 0 },
-{ NETF(eType), 8 },
-{ NETF(torsoAnim), 8 },
-{ NETF(eventParm), 8 },
-{ NETF(legsAnim), 8 },
-{ NETF(groundEntityNum), GENTITYNUM_BITS },
-{ NETF(pos.trType), 8 },
-{ NETF(eFlags), 19 },
-{ NETF(otherEntityNum), GENTITYNUM_BITS },
-{ NETF(weapon), 8 },
-{ NETF(clientNum), 8 },
-{ NETF(angles[1]), 0 },
-{ NETF(pos.trDuration), 32 },
 { NETF(apos.trType), 8 },
-{ NETF(origin[0]), 0 },
-{ NETF(origin[1]), 0 },
-{ NETF(origin[2]), 0 },
-{ NETF(solid), 24 },
-{ NETF(powerups), MAX_POWERUPS },
-{ NETF(modelindex), 8 },
-{ NETF(otherEntityNum2), GENTITYNUM_BITS },
-{ NETF(loopSound), 8 },
-{ NETF(generic1), 8 },
-{ NETF(origin2[2]), 0 },
-{ NETF(origin2[0]), 0 },
-{ NETF(origin2[1]), 0 },
-{ NETF(modelindex2), 8 },
-{ NETF(angles[0]), 0 },
-{ NETF(time), 32 },
 { NETF(apos.trTime), 32 },
 { NETF(apos.trDuration), 32 },
+{ NETF(apos.trBase[0]), 0 },
+{ NETF(apos.trBase[1]), 0 },
 { NETF(apos.trBase[2]), 0 },
 { NETF(apos.trDelta[0]), 0 },
 { NETF(apos.trDelta[1]), 0 },
 { NETF(apos.trDelta[2]), 0 },
-{ NETF(time2), 32 },
+{ NETF(netorigin[0]), 0 },
+{ NETF(netorigin[1]), 0 },
+{ NETF(netorigin[2]), 0 },
+{ NETF(origin[0]), 0 },
+{ NETF(origin[1]), 0 },
+{ NETF(origin[2]), 0 },
+{ NETF(origin2[0]), 0 },
+{ NETF(origin2[1]), 0 },
+{ NETF(origin2[2]), 0 },
+{ NETF(netangles[0]), 0 },
+{ NETF(netangles[1]), 0 },
+{ NETF(netangles[2]), 0 },
+{ NETF(angles[0]), 0 },
+{ NETF(angles[1]), 0 },
 { NETF(angles[2]), 0 },
-{ NETF(angles2[0]), 0 },
-{ NETF(angles2[2]), 0 },
+{ NETF(eType), 8 },
+{ NETF(eFlags), 32 },
 { NETF(constantLight), 32 },
-{ NETF(frame), 16 }
+{ NETF(loopSound), 16 },
+{ NETF(loopSoundVolume), 0 },
+{ NETF(loopSoundMinDist), 0 },
+{ NETF(parent), 32 },
+{ NETF(tag_num), 32 },
+{ NETF(attach_use_angles), 1 },
+{ NETF(attach_offset[0]), 0 },
+{ NETF(attach_offset[1]), 0 },
+{ NETF(attach_offset[2]), 0 },
+{ NETF(modelindex), 16 },
+{ NETF(skinNum), 32 },
+{ NETF(anim), 32 },
+{ NETF(frame), 32 },
+{ NETF(crossblend_time), 32 },
+{ NETF(torso_anim), 32 },
+{ NETF(torso_frame), 32 },
+{ NETF(torso_crossblend_time), 32 },
+{ NETF(bone_tag[0]), 32 },
+{ NETF(bone_tag[1]), 32 },
+{ NETF(bone_tag[2]), 32 },
+{ NETF(bone_tag[3]), 32 },
+{ NETF(bone_tag[4]), 32 },
+{ NETF(bone_angles[0][0]), 0 },
+{ NETF(bone_angles[0][1]), 0 },
+{ NETF(bone_angles[0][2]), 0 },
+{ NETF(bone_angles[1][0]), 0 },
+{ NETF(bone_angles[1][1]), 0 },
+{ NETF(bone_angles[1][2]), 0 },
+{ NETF(bone_angles[2][0]), 0 },
+{ NETF(bone_angles[2][1]), 0 },
+{ NETF(bone_angles[2][2]), 0 },
+{ NETF(bone_angles[3][0]), 0 },
+{ NETF(bone_angles[3][1]), 0 },
+{ NETF(bone_angles[3][2]), 0 },
+{ NETF(bone_angles[4][0]), 0 },
+{ NETF(bone_angles[4][1]), 0 },
+{ NETF(bone_angles[4][2]), 0 },
+// surfaces is a byte array; it is sent four entries at a time because every
+// field here is read and written through an int
+{ NETF(surfaces[0]), 32 },
+{ NETF(surfaces[4]), 32 },
+{ NETF(surfaces[8]), 32 },
+{ NETF(surfaces[12]), 32 },
+{ NETF(surfaces[16]), 32 },
+{ NETF(surfaces[20]), 32 },
+{ NETF(surfaces[24]), 32 },
+{ NETF(surfaces[28]), 32 },
+{ NETF(clientNum), 8 },
+{ NETF(groundEntityNum), GENTITYNUM_BITS },
+{ NETF(solid), 24 },
+{ NETF(scale), 0 },
+{ NETF(alpha), 0 },
+{ NETF(renderfx), 32 }
 };
 
 
@@ -824,11 +865,6 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 
 	numFields = ARRAY_LEN( entityStateFields );
 
-	// all fields should be 32 bits to avoid any compiler packing issues
-	// the "number" field is not part of the field list
-	// if this assert fails, someone added a field to the entityState_t
-	// struct without updating the message fields
-	assert( numFields + 1 == sizeof( *from )/4 );
 
 	// a NULL to is a delta remove message
 	if ( to == NULL ) {
@@ -1058,56 +1094,79 @@ plyer_state_t communication
 // using the stringizing operator to save typing...
 #define	PSF(x) #x,(size_t)&((playerState_t*)0)->x
 
-netField_t	playerStateFields[] = 
+netField_t	playerStateFields[] =
 {
-{ PSF(commandTime), 32 },				
+// See entityStateFields: the wire layout is OpenFAKK2's own. groundTrace and
+// ping are server-local and not sent.
+{ PSF(commandTime), 32 },
+{ PSF(pm_type), 8 },
+{ PSF(bobCycle), 8 },
+{ PSF(pm_flags), 32 },
+{ PSF(pm_time), -16 },
+{ PSF(pm_runtime), 32 },
 { PSF(origin[0]), 0 },
 { PSF(origin[1]), 0 },
-{ PSF(bobCycle), 8 },
+{ PSF(origin[2]), 0 },
 { PSF(velocity[0]), 0 },
 { PSF(velocity[1]), 0 },
-{ PSF(viewangles[1]), 0 },
-{ PSF(viewangles[0]), 0 },
-{ PSF(weaponTime), -16 },
-{ PSF(origin[2]), 0 },
 { PSF(velocity[2]), 0 },
-{ PSF(legsTimer), 8 },
-{ PSF(pm_time), -16 },
-{ PSF(eventSequence), 16 },
-{ PSF(torsoAnim), 8 },
-{ PSF(movementDir), 4 },
-{ PSF(events[0]), 8 },
-{ PSF(legsAnim), 8 },
-{ PSF(events[1]), 8 },
-{ PSF(pm_flags), 16 },
-{ PSF(groundEntityNum), GENTITYNUM_BITS },
-{ PSF(weaponstate), 4 },
-{ PSF(eFlags), 16 },
-{ PSF(externalEvent), 10 },
 { PSF(gravity), 16 },
 { PSF(speed), 16 },
-{ PSF(delta_angles[1]), 16 },
-{ PSF(externalEventParm), 8 },
-{ PSF(viewheight), -8 },
-{ PSF(damageEvent), 8 },
-{ PSF(damageYaw), 8 },
-{ PSF(damagePitch), 8 },
-{ PSF(damageCount), 8 },
-{ PSF(generic1), 8 },
-{ PSF(pm_type), 8 },					
 { PSF(delta_angles[0]), 16 },
+{ PSF(delta_angles[1]), 16 },
 { PSF(delta_angles[2]), 16 },
-{ PSF(torsoTimer), 12 },
-{ PSF(eventParms[0]), 8 },
-{ PSF(eventParms[1]), 8 },
+{ PSF(groundEntityNum), GENTITYNUM_BITS },
+{ PSF(walking), 1 },
+{ PSF(groundPlane), 1 },
+{ PSF(feetfalling), 32 },
+{ PSF(falldir[0]), 0 },
+{ PSF(falldir[1]), 0 },
+{ PSF(falldir[2]), 0 },
 { PSF(clientNum), 8 },
-{ PSF(weapon), 5 },
+{ PSF(viewangles[0]), 0 },
+{ PSF(viewangles[1]), 0 },
 { PSF(viewangles[2]), 0 },
-{ PSF(grapplePoint[0]), 0 },
-{ PSF(grapplePoint[1]), 0 },
-{ PSF(grapplePoint[2]), 0 },
-{ PSF(jumppad_ent), GENTITYNUM_BITS },
-{ PSF(loopSound), 16 }
+{ PSF(viewheight), -8 },
+{ PSF(current_music_mood), 8 },
+{ PSF(fallback_music_mood), 8 },
+{ PSF(music_volume), 0 },
+{ PSF(music_volume_fade_time), 0 },
+{ PSF(reverb_type), 8 },
+{ PSF(reverb_level), 0 },
+{ PSF(blend[0]), 0 },
+{ PSF(blend[1]), 0 },
+{ PSF(blend[2]), 0 },
+{ PSF(blend[3]), 0 },
+{ PSF(fov), 0 },
+{ PSF(camera_origin[0]), 0 },
+{ PSF(camera_origin[1]), 0 },
+{ PSF(camera_origin[2]), 0 },
+{ PSF(camera_angles[0]), 0 },
+{ PSF(camera_angles[1]), 0 },
+{ PSF(camera_angles[2]), 0 },
+{ PSF(camera_time), 0 },
+{ PSF(camera_offset[0]), 0 },
+{ PSF(camera_offset[1]), 0 },
+{ PSF(camera_offset[2]), 0 },
+{ PSF(damage_angles[0]), 0 },
+{ PSF(damage_angles[1]), 0 },
+{ PSF(damage_angles[2]), 0 },
+{ PSF(camera_flags), 32 }
+};
+
+// playerState_t arrays, each PS_ARRAY_LEN ints, sent as a change mask followed
+// by the changed values
+#define	PS_ARRAY_LEN	32
+#define	PSA(x) (size_t)&((playerState_t*)0)->x[0]
+
+static const size_t playerStateArrays[] =
+{
+	PSA(stats),
+	PSA(activeItems),
+	PSA(inventory_name_index),
+	PSA(ammo_name_index),
+	PSA(ammo_amount),
+	PSA(max_ammo_amount)
 };
 
 /*
@@ -1119,10 +1178,9 @@ MSG_WriteDeltaPlayerstate
 void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct playerState_s *to ) {
 	int				i;
 	playerState_t	dummy;
-	int				statsbits;
-	int				persistantbits;
-	int				ammobits;
-	int				powerupbits;
+	unsigned		arraybits[ARRAY_LEN( playerStateArrays )];
+	qboolean		anyChanged;
+	int				j;
 	int				numFields;
 	netField_t		*field;
 	int				*fromF, *toF;
@@ -1186,79 +1244,41 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 	//
 	// send the arrays
 	//
-	statsbits = 0;
-	for (i=0 ; i<MAX_STATS ; i++) {
-		if (to->stats[i] != from->stats[i]) {
-			statsbits |= 1<<i;
+	anyChanged = qfalse;
+	for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
+		fromF = (int *)( (byte *)from + playerStateArrays[j] );
+		toF = (int *)( (byte *)to + playerStateArrays[j] );
+		arraybits[j] = 0;
+		for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
+			if ( toF[i] != fromF[i] ) {
+				arraybits[j] |= 1u << i;
+			}
 		}
-	}
-	persistantbits = 0;
-	for (i=0 ; i<MAX_PERSISTANT ; i++) {
-		if (to->persistant[i] != from->persistant[i]) {
-			persistantbits |= 1<<i;
-		}
-	}
-	ammobits = 0;
-	for (i=0 ; i<MAX_WEAPONS ; i++) {
-		if (to->ammo[i] != from->ammo[i]) {
-			ammobits |= 1<<i;
-		}
-	}
-	powerupbits = 0;
-	for (i=0 ; i<MAX_POWERUPS ; i++) {
-		if (to->powerups[i] != from->powerups[i]) {
-			powerupbits |= 1<<i;
+		if ( arraybits[j] ) {
+			anyChanged = qtrue;
 		}
 	}
 
-	if (!statsbits && !persistantbits && !ammobits && !powerupbits) {
+	if ( !anyChanged ) {
 		MSG_WriteBits( msg, 0, 1 );	// no change
 		oldsize += 4;
 		return;
 	}
 	MSG_WriteBits( msg, 1, 1 );	// changed
 
-	if ( statsbits ) {
+	for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
+		if ( !arraybits[j] ) {
+			MSG_WriteBits( msg, 0, 1 );	// no change
+			continue;
+		}
+		toF = (int *)( (byte *)to + playerStateArrays[j] );
 		MSG_WriteBits( msg, 1, 1 );	// changed
-		MSG_WriteBits( msg, statsbits, MAX_STATS );
-		for (i=0 ; i<MAX_STATS ; i++)
-			if (statsbits & (1<<i) )
-				MSG_WriteShort (msg, to->stats[i]);
-	} else {
-		MSG_WriteBits( msg, 0, 1 );	// no change
-	}
-
-
-	if ( persistantbits ) {
-		MSG_WriteBits( msg, 1, 1 );	// changed
-		MSG_WriteBits( msg, persistantbits, MAX_PERSISTANT );
-		for (i=0 ; i<MAX_PERSISTANT ; i++)
-			if (persistantbits & (1<<i) )
-				MSG_WriteShort (msg, to->persistant[i]);
-	} else {
-		MSG_WriteBits( msg, 0, 1 );	// no change
-	}
-
-
-	if ( ammobits ) {
-		MSG_WriteBits( msg, 1, 1 );	// changed
-		MSG_WriteBits( msg, ammobits, MAX_WEAPONS );
-		for (i=0 ; i<MAX_WEAPONS ; i++)
-			if (ammobits & (1<<i) )
-				MSG_WriteShort (msg, to->ammo[i]);
-	} else {
-		MSG_WriteBits( msg, 0, 1 );	// no change
-	}
-
-
-	if ( powerupbits ) {
-		MSG_WriteBits( msg, 1, 1 );	// changed
-		MSG_WriteBits( msg, powerupbits, MAX_POWERUPS );
-		for (i=0 ; i<MAX_POWERUPS ; i++)
-			if (powerupbits & (1<<i) )
-				MSG_WriteLong( msg, to->powerups[i] );
-	} else {
-		MSG_WriteBits( msg, 0, 1 );	// no change
+		MSG_WriteBits( msg, (int)arraybits[j], PS_ARRAY_LEN );
+		for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
+			if ( arraybits[j] & ( 1u << i ) ) {
+				MSG_WriteLong( msg, toF[i] );
+			}
+		}
 	}
 }
 
@@ -1352,46 +1372,18 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 
 	// read the arrays
 	if (MSG_ReadBits( msg, 1 ) ) {
-		// parse stats
-		if ( MSG_ReadBits( msg, 1 ) ) {
-			LOG("PS_STATS");
-			bits = MSG_ReadBits (msg, MAX_STATS);
-			for (i=0 ; i<MAX_STATS ; i++) {
-				if (bits & (1<<i) ) {
-					to->stats[i] = MSG_ReadShort(msg);
-				}
-			}
-		}
+		int		j;
 
-		// parse persistant stats
-		if ( MSG_ReadBits( msg, 1 ) ) {
-			LOG("PS_PERSISTANT");
-			bits = MSG_ReadBits (msg, MAX_PERSISTANT);
-			for (i=0 ; i<MAX_PERSISTANT ; i++) {
-				if (bits & (1<<i) ) {
-					to->persistant[i] = MSG_ReadShort(msg);
-				}
+		for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
+			if ( !MSG_ReadBits( msg, 1 ) ) {
+				continue;
 			}
-		}
-
-		// parse ammo
-		if ( MSG_ReadBits( msg, 1 ) ) {
-			LOG("PS_AMMO");
-			bits = MSG_ReadBits (msg, MAX_WEAPONS);
-			for (i=0 ; i<MAX_WEAPONS ; i++) {
-				if (bits & (1<<i) ) {
-					to->ammo[i] = MSG_ReadShort(msg);
-				}
-			}
-		}
-
-		// parse powerups
-		if ( MSG_ReadBits( msg, 1 ) ) {
-			LOG("PS_POWERUPS");
-			bits = MSG_ReadBits (msg, MAX_POWERUPS);
-			for (i=0 ; i<MAX_POWERUPS ; i++) {
-				if (bits & (1<<i) ) {
-					to->powerups[i] = MSG_ReadLong(msg);
+			LOG("PS_ARRAY");
+			toF = (int *)( (byte *)to + playerStateArrays[j] );
+			bits = MSG_ReadBits( msg, PS_ARRAY_LEN );
+			for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
+				if ( (unsigned)bits & ( 1u << i ) ) {
+					toF[i] = MSG_ReadLong( msg );
 				}
 			}
 		}

@@ -11,10 +11,10 @@ Early. The engine does **not** run the game yet.
 
 | Area | State |
 | --- | --- |
-| Engine base | ioquake3 `87a99d18`, rebranded, builds as `openfakk2` / `openfakk2ded` |
+| Engine base | ioquake3 `87a99d18`, rebranded. Only the dedicated server (`openfakk2ded`) builds; the client and renderers are disabled until they are ported |
 | Game data | Retail pk3s mount; BSP v12 collision data loads for all 30 retail maps |
 | Game modules | `gamex86.dll` / `cgamex86.dll` build from Ritual's 1.02 SDK source (x86, MSVC). Under the retail engine the rebuilt `gamex86.dll` matches retail console output at map spawn on four maps; `cgamex86.dll` is untested |
-| Engine ↔ game interface | Not implemented (`GAME_API_VERSION 4`, `CGAME_IMPORT_API_VERSION 3`) |
+| Engine ↔ game interface | Server side (`GAME_API_VERSION 4`): the game module loads, initialises and spawns a map, but model, alias and sound queries are stubs, so every model is reported invalid. Client side (`CGAME_IMPORT_API_VERSION 3`): not implemented |
 | BSP v12 rendering, TIKI (`.tik` `.tan` `.skb` `.ska`), `.ftx`, `.urc` UI, sound/music | Not implemented |
 
 ## Sources

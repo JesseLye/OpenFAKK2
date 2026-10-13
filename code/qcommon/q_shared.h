@@ -1015,6 +1015,7 @@ typedef struct {
 	int			surfaceFlags;	// surface hit
 	int			contents;	// contents on other side of surface hit
 	int			entityNum;	// entity the contacted sirface is a part of
+	struct gentity_s	*ent;	// entity hit; filled in by the server for the game module
 } trace_t;
 
 // trace->entityNum can also be 0 to (MAX_GENTITIES-1)
@@ -1060,6 +1061,9 @@ typedef enum {
 } soundChannel_t;
 
 
+// The structures from here to entityState_t are the Heavy Metal: F.A.K.K. 2
+// 1.02 definitions. Their layout is shared with the game modules and must not
+// change.
 /*
 ========================================================================
 
@@ -1073,37 +1077,43 @@ typedef enum {
 
 #define	SNAPFLAG_RATE_DELAYED	1
 #define	SNAPFLAG_NOT_ACTIVE		2	// snapshot used during connection and for zombies
-#define SNAPFLAG_SERVERCOUNT	4	// toggled every map_restart so transitions can be detected
+#define  SNAPFLAG_SERVERCOUNT	   4	// toggled every map_restart so transitions can be detected
 
 //
 // per-level limits
 //
-#define	MAX_CLIENTS			64		// absolute limit
+#define	MAX_CLIENTS			128		// absolute limit
 #define MAX_LOCATIONS		64
 
 #define	GENTITYNUM_BITS		10		// don't need to send any more
 #define	MAX_GENTITIES		(1<<GENTITYNUM_BITS)
 
 // entitynums are communicated with GENTITY_BITS, so any reserved
-// values that are going to be communcated over the net need to
+// values thatare going to be communcated over the net need to
 // also be in this range
 #define	ENTITYNUM_NONE		(MAX_GENTITIES-1)
 #define	ENTITYNUM_WORLD		(MAX_GENTITIES-2)
 #define	ENTITYNUM_MAX_NORMAL	(MAX_GENTITIES-2)
 
 
-#define	MAX_MODELS			256		// these are sent over the net as 8 bits
-#define	MAX_SOUNDS			256		// so they cannot be blindly increased
+#define	MAX_MODELS			384		// these are sent over the net as 8 bits
+#define  MAX_IMAGES        64       // so they cannot be blindly increased
+#define  MAX_ACTIVE_ITEMS  32
+#define  MAX_INVENTORY     32
+#define  MAX_AMMO          32
+#define  MAX_ITEMS         MAX_INVENTORY + MAX_AMMO 
+#define  MAX_AMMOCOUNT     32
+#define  MAX_SOUNDS_BITS   8
+#define	MAX_SOUNDS			(1<<MAX_SOUNDS_BITS)
+#define  MAX_LIGHTSTYLES   32
 
-
-#define	MAX_CONFIGSTRINGS	1024
+#define	MAX_CONFIGSTRINGS	1200
 
 // these are the only configstrings that the system reserves, all the
 // other ones are strictly for servergame to clientgame communication
 #define	CS_SERVERINFO		0		// an info string with all the serverinfo cvars
 #define	CS_SYSTEMINFO		1		// an info string for server system to client system configuration (timescale, etc)
-
-#define	RESERVED_CONFIGSTRINGS	2	// game can't modify below this, only the system can
+#define	CS_NAME     		2		// A descriptive name of the current level
 
 #define	MAX_GAMESTATE_CHARS	16000
 typedef struct {
@@ -1115,14 +1125,12 @@ typedef struct {
 //=========================================================
 
 // bit field limits
-#define	MAX_STATS				16
+#define	MAX_STATS				32
 #define	MAX_PERSISTANT			16
 #define	MAX_POWERUPS			16
 #define	MAX_WEAPONS				16		
 
 #define	MAX_PS_EVENTS			2
-
-#define PS_PMOVEFRAMECOUNTBITS	6
 
 // playerState_t is the information needed by both the client and server
 // to predict player motion and actions
@@ -1140,120 +1148,184 @@ typedef struct playerState_s {
 	int			bobCycle;		// for view bobbing and footstep generation
 	int			pm_flags;		// ducked, jump_held, etc
 	int			pm_time;
+   int         pm_runtime;    // used to keep track of how long player has been running
 
 	vec3_t		origin;
 	vec3_t		velocity;
-	int			weaponTime;
 	int			gravity;
 	int			speed;
 	int			delta_angles[3];	// add to command angles to get view direction
 									// changed by spawns, rotating objects, and teleporters
 
 	int			groundEntityNum;// ENTITYNUM_NONE = in air
-
-	int			legsTimer;		// don't change low priority animations until this runs out
-	int			legsAnim;		// mask off ANIM_TOGGLEBIT
-
-	int			torsoTimer;		// don't change low priority animations until this runs out
-	int			torsoAnim;		// mask off ANIM_TOGGLEBIT
-
-	int			movementDir;	// a number 0 to 7 that represents the relative angle
-								// of movement to the view angle (axial and diagonals)
-								// when at rest, the value will remain unchanged
-								// used to twist the legs during strafing
-
-	vec3_t		grapplePoint;	// location of grapple to pull towards if PMF_GRAPPLE_PULL
-
-	int			eFlags;			// copied to entityState_t->eFlags
-
-	int			eventSequence;	// pmove generated events
-	int			events[MAX_PS_EVENTS];
-	int			eventParms[MAX_PS_EVENTS];
-
-	int			externalEvent;	// events set on player from another source
-	int			externalEventParm;
-	int			externalEventTime;
+	qboolean	   walking;
+	qboolean	   groundPlane;
+   int         feetfalling;
+   vec3_t      falldir;
+	trace_t		groundTrace;
 
 	int			clientNum;		// ranges from 0 to MAX_CLIENTS-1
-	int			weapon;			// copied to entityState_t->weapon
-	int			weaponstate;
 
 	vec3_t		viewangles;		// for fixed views
 	int			viewheight;
 
-	// damage feedback
-	int			damageEvent;	// when it changes, latch the other parms
-	int			damageYaw;
-	int			damagePitch;
-	int			damageCount;
-
 	int			stats[MAX_STATS];
-	int			persistant[MAX_PERSISTANT];	// stats that aren't cleared on death
-	int			powerups[MAX_POWERUPS];	// level.time that the powerup runs out
-	int			ammo[MAX_WEAPONS];
+   int         activeItems[MAX_ACTIVE_ITEMS];
+   int         inventory_name_index[MAX_INVENTORY];
+   int         ammo_name_index[MAX_AMMO];
+   int         ammo_amount[MAX_AMMOCOUNT];
+   int         max_ammo_amount[MAX_AMMOCOUNT];
 
-	int			generic1;
-	int			loopSound;
-	int			jumppad_ent;	// jumppad entity hit this frame
+   // Added for FAKK
+   int         current_music_mood;
+   int         fallback_music_mood;
+	float		   music_volume;
+	float		   music_volume_fade_time;
+
+	int			reverb_type;
+	float			reverb_level;
+
+  	float		   blend[4];		   // rgba full screen effect
+   float       fov;              // fov of the player
+
+   vec3_t      camera_origin;    // origin for camera view
+   vec3_t      camera_angles;    // angles for camera view
+   float       camera_time;      // time to switch between camera and normal view
+
+   vec3_t      camera_offset;    // angular offset for camera
+   vec3_t      damage_angles;    // these angles are added directly to the view, without lerping
+   int         camera_flags;     // third-person camera flags
 
 	// not communicated over the net at all
 	int			ping;			// server to game info for scoreboard
-	int			pmove_framecount;
-	int			jumppad_frame;
-	int			entityEventSequence;
 } playerState_t;
 
+#define MAX_SERVER_SOUNDS        32
+#define MAX_SERVER_SOUNDS_BITS   6
+
+typedef struct
+{
+	vec3_t origin;
+	int entity_number; 
+	int channel;
+	short sound_index;
+	float volume;
+	float min_dist;
+	qboolean stop_flag;
+} server_sound_t;
 
 //====================================================================
 
 
 //
 // usercmd_t->button bits, many of which are generated by the client system,
-// so they aren't game/cgame only definitions
+// so they aren't game-only definitions
 //
-#define	BUTTON_ATTACK		1
-#define	BUTTON_TALK			2			// displays talk balloon and disables actions
-#define	BUTTON_USE_HOLDABLE	4
-#define	BUTTON_GESTURE		8
-#define	BUTTON_WALKING		16			// walking can't just be inferred from MOVE_RUN
-										// because a key pressed late in the frame will
-										// only generate a small move value for that frame
-										// walking will use different animations and
-										// won't generate footsteps
-#define BUTTON_AFFIRMATIVE	32
-#define	BUTTON_NEGATIVE		64
+#define	BUTTON_ATTACKRIGHT_BITINDEX 	0
+#define	BUTTON_ATTACKLEFT_BITINDEX  	1
+#define  BUTTON_SNEAK_BITINDEX         2
+#define  BUTTON_RUN_BITINDEX           3
+#define  BUTTON_HOLSTERWEAPON_BITINDEX 4
+#define  BUTTON_USE_BITINDEX           5
+#define	BUTTON_TALK_BITINDEX			   6			// displays talk balloon and disables actions
+#define	BUTTON_ANY_BITINDEX			   7		   // any key whatsoever
 
-#define BUTTON_GETFLAG		128
-#define BUTTON_GUARDBASE	256
-#define BUTTON_PATROL		512
-#define BUTTON_FOLLOWME		1024
+#define	BUTTON_ATTACKRIGHT 	( 1 << BUTTON_ATTACKRIGHT_BITINDEX )
+#define	BUTTON_ATTACKLEFT  	( 1 << BUTTON_ATTACKLEFT_BITINDEX )
+#define  BUTTON_SNEAK         ( 1 << BUTTON_SNEAK_BITINDEX )
+#define  BUTTON_RUN           ( 1 << BUTTON_RUN_BITINDEX )
+#define  BUTTON_HOLSTERWEAPON ( 1 << BUTTON_HOLSTERWEAPON_BITINDEX )
+#define  BUTTON_USE           ( 1 << BUTTON_USE_BITINDEX )
+#define	BUTTON_TALK			   ( 1 << BUTTON_TALK_BITINDEX )			// displays talk balloon and disables actions
+#define	BUTTON_ANY			   ( 1 << BUTTON_ANY_BITINDEX )		   // any key whatsoever
 
-#define	BUTTON_ANY			2048			// any key whatsoever
-
-#define	MOVE_RUN			120			// if forwardmove or rightmove are >= MOVE_RUN,
-										// then BUTTON_WALKING should be set
 
 // usercmd_t is sent to the server each client frame
 typedef struct usercmd_s {
-	int				serverTime;
-	int				angles[3];
-	int 			buttons;
-	byte			weapon;           // weapon 
+	int	serverTime;
+   byte	msec;
+	byte	buttons;
+	byte	weapon;
+	short	angles[3];
+
 	signed char	forwardmove, rightmove, upmove;
 } usercmd_t;
 
 //===================================================================
 
+//
+// Animation flags
+//
+#define  MDL_ANIM_DELTA_DRIVEN   ( 1 << 0 )
+#define  MDL_ANIM_DEFAULT_ANGLES ( 1 << 3 )
+#define  MDL_ANIM_NO_TIMECHECK   ( 1 << 4 )
+
 // if entityState->solid == SOLID_BMODEL, modelindex is an inline model number
 #define	SOLID_BMODEL	0xffffff
+
+#define	RF_THIRD_PERSON	   (1<<0)   	// don't draw through eyes, only mirrors (player bodies, chat sprites)
+#define	RF_FIRST_PERSON	   (1<<1)		// only draw through eyes (view weapon, damage blood blob)
+#define  RF_DEPTHHACK         (1<<2)      // hack the z-depth so that view weapons do not clip into walls
+#define  RF_VIEWLENSFLARE     (1<<3)      // View dependent lensflare
+#define	RF_FRAMELERP		   (1<<4)      // interpolate between current and next state
+#define	RF_BEAM				   (1<<5)      // draw a beam between origin and origin2
+#define  RF_DONTDRAW			   (1<<7)      // don't draw this entity but send it over
+#define  RF_LENSFLARE         (1<<8)      // add a lens flare to this
+#define  RF_EXTRALIGHT        (1<<9)      // use good lighting on this entity
+#define  RF_DETAIL            (1<<10)     // Culls a model based on the distance away from you
+#define  RF_SHADOW            (1<<11)     // whether or not to draw a shadow
+#define	RF_PORTALSURFACE	   (1<<12)   	// don't draw, but use to set portal views
+#define	RF_SKYORIGIN   	   (1<<13)   	// don't draw, but use to set sky portal origin and coordinate system
+#define	RF_SKYENTITY   	   (1<<14)   	// this entity is only visible through a skyportal
+#define	RF_LIGHTOFFSET   	   (1<<15)   	// this entity has a light offset
+#define	RF_CUSTOMSHADERPASS  (1<<16)     // draw the custom shader on top of the base geometry
+#define	RF_MINLIGHT			   (1<<17)		// allways have some light (viewmodel, some items)
+#define	RF_FULLBRIGHT		   (1<<18)		// allways have full lighting
+#define  RF_LIGHTING_ORIGIN	(1<<19)		// use refEntity->lightingOrigin instead of refEntity->origin
+									               // for lighting.  This allows entities to sink into the floor
+									               // with their origin going solid, and allows all parts of a
+									               // player to get the same lighting
+#define	RF_SHADOW_PLANE      (1<<20)		// use refEntity->shadowPlane
+#define	RF_WRAP_FRAMES		   (1<<21)		// mod the model frames by the maxframes to allow continuous
+									               // animation without needing to know the frame count
+#define  RF_PORTALENTITY      (1<<22)     // this entity should only be drawn from a portal
+#define  RF_DUALENTITY        (1<<23)     // this entity is drawn both in the portal and outside it.
+#define  RF_ADDITIVE_DLIGHT   (1<<24)     // this entity has an additive dynamic light
+#define  RF_LIGHTSTYLE_DLIGHT (1<<25)     // this entity has a dynamic light that uses a light style
+#define  RF_SHADOW_PRECISE    (1<<26)     // this entity can have a precise shadow applied to it
+#define  RF_INVISIBLE         (1<<27)     // This entity is invisible, and only negative lights will light it up
+
+//
+// use this mask when propagating renderfx from one entity to another
+//
+#define  RF_FLAGS_NOT_INHERITED ( RF_LENSFLARE | RF_VIEWLENSFLARE | RF_BEAM | RF_EXTRALIGHT | RF_SKYORIGIN | RF_SHADOW | RF_SHADOW_PRECISE | RF_SHADOW_PLANE )
+
+//
+// the following flag is used by the server and is also defined in bg_public.h
+//
+#define  PMF_CAMERA_VIEW      ( 1<<8 )    // use camera view instead of ps view
+
+#define BEAM_LIGHTNING_EFFECT   (1<<0)
+#define BEAM_USEMODEL           (1<<1)
+#define BEAM_PERSIST_EFFECT     (1<<2)
+#define BEAM_SPHERE_EFFECT      (1<<3)
+#define BEAM_RANDOM_DELAY       (1<<4)
+#define BEAM_TOGGLE             (1<<5)
+#define BEAM_RANDOM_TOGGLEDELAY (1<<6)
+#define BEAM_WAVE_EFFECT        (1<<7)
+#define BEAM_USE_NOISE          (1<<8)
+#define BEAM_PARENT             (1<<9)
+#define BEAM_TILESHADER         (1<<10)
+#define BEAM_OFFSET_ENDPOINTS   (1<<11)
 
 typedef enum {
 	TR_STATIONARY,
 	TR_INTERPOLATE,				// non-parametric, but interpolate between snapshots
 	TR_LINEAR,
 	TR_LINEAR_STOP,
-	TR_SINE,					// value = base + sin( time / duration ) * delta
-	TR_GRAVITY
+	TR_SINE,					      // value = base + sin( time / duration ) * delta
+	TR_GRAVITY,
+   TR_LERP                    // Lerp between current origin and last origin
 } trType_t;
 
 typedef struct {
@@ -1261,8 +1333,26 @@ typedef struct {
 	int		trTime;
 	int		trDuration;			// if non 0, trTime + trDuration = stop time
 	vec3_t	trBase;
-	vec3_t	trDelta;			// velocity, etc
+	vec3_t	trDelta;			   // velocity, etc
 } trajectory_t;
+
+#define MAX_MODEL_SURFACES   32 // this needs to be the same in qfiles.h for TIKI_MAX_SURFACES
+
+#define  MDL_SURFACE_SKINOFFSET_BIT0  ( 1 << 0 )
+#define  MDL_SURFACE_SKINOFFSET_BIT1  ( 1 << 1 )
+#define  MDL_SURFACE_NODRAW           ( 1 << 2 )
+#define  MDL_SURFACE_SURFACETYPE_BIT0 ( 1 << 3 )
+#define  MDL_SURFACE_SURFACETYPE_BIT1 ( 1 << 4 )
+#define  MDL_SURFACE_SURFACETYPE_BIT2 ( 1 << 5 )
+#define  MDL_SURFACE_CROSSFADE_SKINS  ( 1 << 6 )
+#define  MDL_SURFACE_SKIN_NO_DAMAGE   ( 1 << 7 )
+
+#define CROUCH_HEIGHT		36
+#define CROUCH_EYE_HEIGHT	30
+#define STAND_HEIGHT			72
+#define STAND_EYE_HEIGHT	66
+
+#define NUM_BONE_CONTROLLERS 5
 
 // entityState_t is the information conveyed from the server
 // in an update message about entities that the client will
@@ -1279,41 +1369,78 @@ typedef struct entityState_s {
 	trajectory_t	pos;	// for calculating position
 	trajectory_t	apos;	// for calculating angles
 
-	int		time;
-	int		time2;
-
+   vec3_t   netorigin;    // these are the ones actually sent over
 	vec3_t	origin;
 	vec3_t	origin2;
 
+   vec3_t   netangles;    // these are the ones actually sent over
 	vec3_t	angles;
-	vec3_t	angles2;
 
-	int		otherEntityNum;	// shotgun sources, etc
-	int		otherEntityNum2;
+	int		constantLight;	   // r + (g<<8) + (b<<16) + (intensity<<24)
+	int      loopSound;		   // constantly loop this sound
+	float		loopSoundVolume;
+	float		loopSoundMinDist;
 
-	int		groundEntityNum;	// ENTITYNUM_NONE = in air
+   int      parent;           // if this entity is attached, this is non-zero
+   int      tag_num;          // if attached, the tag number it is attached to on the parent
+	qboolean attach_use_angles;
+	vec3_t	attach_offset;
 
-	int		constantLight;	// r + (g<<8) + (b<<16) + (intensity<<24)
-	int		loopSound;		// constantly loop this sound
+	int      modelindex;
+	int      skinNum;
+   int      anim;
+   int      frame;
+   int      crossblend_time;  // in milliseconds so it can be transmitted as a short
 
-	int		modelindex;
-	int		modelindex2;
+   int      torso_anim;
+   int      torso_frame;
+   int      torso_crossblend_time; // in milliseconds so it can be transmitted as a short
+
+   int      bone_tag[ NUM_BONE_CONTROLLERS ];
+   vec3_t   bone_angles[ NUM_BONE_CONTROLLERS ];
+   vec4_t   bone_quat[ NUM_BONE_CONTROLLERS ];        // not sent over
+
+   byte     surfaces[MAX_MODEL_SURFACES];
+
 	int		clientNum;		// 0 to (MAX_CLIENTS - 1), for players and corpses
-	int		frame;
 
+   int		groundEntityNum;  // -1 = in air
 	int		solid;			// for client side prediction, trap_linkentity sets this properly
 
-	int		event;			// impulse events -- muzzle flashes, footsteps, etc
-	int		eventParm;
+   float    scale;
+   float    alpha;
 
-	// for players
-	int		powerups;		// bit flags
-	int		weapon;			// determines weapon and flash model, etc
-	int		legsAnim;		// mask off ANIM_TOGGLEBIT
-	int		torsoAnim;		// mask off ANIM_TOGGLEBIT
+	int		renderfx;
 
-	int		generic1;
+	int      bindparent;    // not sent over
+  	float		quat[4];       // not sent over
+	float		mat[3][3];     // not sent over
 } entityState_t;
+
+#define	RESERVED_CONFIGSTRINGS	2	// game can't modify below this, only the system can
+// commands a model definition attaches to its initialisation or to animation frames
+#define	TIKI_CMD_MAX_CMDS	128
+#define	TIKI_CMD_MAX_ARGS	10
+
+typedef struct {
+	int		num_args;
+	char	*args[TIKI_CMD_MAX_ARGS];
+} tiki_singlecmd_t;
+
+typedef struct {
+	int					num_cmds;
+	tiki_singlecmd_t	cmds[TIKI_CMD_MAX_CMDS];
+} tiki_cmd_t;
+
+typedef struct {
+	vec3_t			start;
+	vec3_t			end;
+	vec3_t			color;
+	float			alpha;
+	float			width;
+	unsigned short	factor;
+	unsigned short	pattern;
+} debugline_t;
 
 typedef enum {
 	CA_UNINITIALIZED,

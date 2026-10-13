@@ -23,8 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
-#include "../game/g_public.h"
-#include "../game/bg_public.h"
+#include "g_public.h"
 
 //=============================================================================
 
@@ -262,7 +261,7 @@ typedef struct
 
 extern	serverStatic_t	svs;				// persistant server info across maps
 extern	server_t		sv;					// cleared each map
-extern	vm_t			*gvm;				// game virtual machine
+extern	game_export_t	*ge;				// game module entry points, NULL until loaded
 
 extern	cvar_t	*sv_fps;
 extern	cvar_t	*sv_timeout;
@@ -411,26 +410,19 @@ svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt );
 sharedEntity_t *SV_GEntityForSvEntity( svEntity_t *svEnt );
 void		SV_InitGameProgs ( void );
 void		SV_ShutdownGameProgs ( void );
-void		SV_RestartGameProgs( void );
+qboolean	SV_GameLoaded( void );
+void		SV_GameRunFrame( int frameMsec );
+const char	*SV_GameClientConnect( int clientNum, qboolean firstTime );
+void		SV_GameClientBegin( int clientNum, usercmd_t *cmd );
+void		SV_GameClientUserinfoChanged( int clientNum, const char *userinfo );
+void		SV_GameClientDisconnect( int clientNum );
+void		SV_GameClientCommand( int clientNum );
+void		SV_GameClientThink( int clientNum, usercmd_t *cmd );
+void		SV_GameSendServerCommand( int clientNum, const char *text );
+void		SV_SetBrushModel( sharedEntity_t *ent, const char *name );
+qboolean	SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2 );
+void		SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open );
 qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);
-
-//
-// sv_bot.c
-//
-void		SV_BotFrame( int time );
-int			SV_BotAllocateClient(void);
-void		SV_BotFreeClient( int clientNum );
-
-void		SV_BotInitCvars(void);
-int			SV_BotLibSetup( void );
-int			SV_BotLibShutdown( void );
-int			SV_BotGetSnapshotEntity( int client, int ent );
-int			SV_BotGetConsoleMessage( int client, char *buf, int size );
-
-int BotImport_DebugPolygonCreate(int color, int numPoints, vec3_t *points);
-void BotImport_DebugPolygonDelete(int id);
-
-void SV_BotInitBotLib(void);
 
 //============================================================
 //
