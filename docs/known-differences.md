@@ -250,8 +250,12 @@ server and no game module. That differs from the game in ways that are by design
 - **Level scripts do not run.** A script can turn the sky portal off, set the sky's
   day/night blend, and set fog and a far plane. `cliff1` does all of these at its start
   (`$world skyportal 0`, `$world skyalpha 0`, a far plane fading in), so in the game its
-  sky is fog and in the viewer it is the sky model with the day blend. The viewer always
-  uses a sky alpha of 1.
+  sky starts as fog. The viewer always uses a sky alpha of 1 and leaves the portal on.
+- **`cliff1`'s sky is empty in the viewer.** Its sky camera, taken from the map entity,
+  sits 17 units above the top of the sky dome, so the dome is seen from outside and its
+  faces are culled; the planets and mountains are below the horizon of most views. The
+  same model draws correctly on `homes1` and `training`, where the camera is inside the
+  dome. Whether the game moves the camera or the model on `cliff1` is not known.
 - **Entities are where the map puts them**, in the first frame of their idle animation.
   Nothing is hidden, moved, animated or spawned. Of a model's own initialisation only
   `surface <name> +nodraw` is applied.
