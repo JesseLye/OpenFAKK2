@@ -449,6 +449,9 @@ static void R_SetFarClip( void )
 		if ( ent->e.reType != RT_MODEL ) {
 			continue;
 		}
+		if ( !( ent->e.renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
+			continue;
+		}
 		mod = R_GetModelByHandle( ent->e.hModel );
 		if ( mod->type == MOD_TAN ) {
 			float	reach = R_TanFarthestPoint( ent, mod );
@@ -1263,6 +1266,13 @@ void R_AddEntitySurfaces (void) {
 		// mirrors, because the true body position will already be drawn
 		//
 		if ( (ent->e.renderfx & RF_FIRST_PERSON) && tr.viewParms.isPortal) {
+			continue;
+		}
+
+		// FAKK2: sky entities belong to the sky portal's view and nothing
+		// else does. (Taken from the flag's description; the retail
+		// renderer's handling has not been examined.)
+		if ( !( ent->e.renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
 			continue;
 		}
 

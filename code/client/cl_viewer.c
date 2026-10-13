@@ -41,10 +41,12 @@ static vec3_t	viewerSkyOrigin;
 #define	VIEWER_MAX_MODELS	1000
 
 typedef struct {
+	char		name[MAX_QPATH];
 	qhandle_t	model;
 	vec3_t		origin;
 	vec3_t		axis[3];
 	qboolean	scaled;
+	qboolean	sky;			// seen from the sky portal's camera, so part of the sky
 } viewerModel_t;
 
 static viewerModel_t	viewerModels[VIEWER_MAX_MODELS];
@@ -68,10 +70,11 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 	const char		*surfaceNames[64], *shaderNames[64];
 	char			name[MAX_QPATH];
 	viewerModel_t	*vm;
+	static tiki_cmd_t	init;
 	tiki_t			*tiki;
 	vec3_t			tikiOrigin;
 	qhandle_t		handle;
-	int				anim, numSurfaces, i;
+	int				anim, numSurfaces, i, j;
 
 	if ( viewerNumModels == VIEWER_MAX_MODELS ) {
 		return;
@@ -86,10 +89,12 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 
 	tiki = TIKI_Register( name );
 	if ( !tiki || !TIKI_NumAnims( tiki ) ) {
+		Com_DPrintf( "viewer: %s has no usable definition\n", name );
 		viewerFailed++;
 		return;
 	}
 	if ( TIKI_IsSkeletal( tiki ) ) {
+		Com_DPrintf( "viewer: %s is skeletal\n", name );
 		viewerSkeletal++;
 		return;
 	}
@@ -106,17 +111,36 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 		surfaceNames[i] = TIKI_Surface_NumToName( tiki, i );
 		shaderNames[i] = TIKI_Surface_Shader( tiki, i, 0 );
 	}
+
+	// A model's own initialisation can hide surfaces ("surface <name> +nodraw");
+	// the sky boxes without ground are made that way. No other init command
+	// is applied here.
+	TIKI_InitCommands( tiki, qtrue, &init );
+	for ( j = 0 ; j < init.num_cmds ; j++ ) {
+		const tiki_singlecmd_t	*cmd = &init.cmds[j];
+
+		if ( cmd->num_args != 3 || Q_stricmp( cmd->args[0], "surface" ) || Q_stricmp( cmd->args[2], "+nodraw" ) ) {
+			continue;
+		}
+		for ( i = 0 ; i < numSurfaces ; i++ ) {
+			if ( !Q_stricmp( surfaceNames[i], cmd->args[1] ) || !Q_stricmp( cmd->args[1], "all" ) ) {
+				shaderNames[i] = NULL;
+			}
+		}
+	}
 	TIKI_Origin( tiki, tikiOrigin );
 
 	handle = re.RegisterTan( name, TIKI_Anim_File( tiki, anim ), 0, TIKI_Scale( tiki ), tikiOrigin,
 		TIKI_Path( tiki ), numSurfaces, surfaceNames, shaderNames );
 	if ( !handle ) {
+		Com_DPrintf( "viewer: %s could not be turned into a model\n", name );
 		viewerFailed++;
 		return;
 	}
 
 	vm = &viewerModels[viewerNumModels++];
 	vm->model = handle;
+	Q_strncpyz( vm->name, name, sizeof( vm->name ) );
 	VectorCopy( origin, vm->origin );
 	AnglesToAxis( angles, vm->axis );
 	vm->scaled = scale != 1.0f;
@@ -125,6 +149,35 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 			VectorScale( vm->axis[i], scale, vm->axis[i] );
 		}
 	}
+}
+
+/*
+===============
+CL_Viewer_InSky
+
+Whether a model placed at origin is seen from the sky portal's camera. A
+model's origin is often inside a brush, where nothing is visible from, so
+points around it are tried as well.
+===============
+*/
+static qboolean CL_Viewer_InSky( const vec3_t origin ) {
+	static const vec3_t	offsets[] = {
+		{ 0, 0, 0 }, { 0, 0, 64 }, { 0, 0, -64 }, { 64, 0, 0 }, { -64, 0, 0 }, { 0, 64, 0 }, { 0, -64, 0 },
+		{ 0, 0, 256 }
+	};
+	vec3_t	point;
+	int		i;
+
+	if ( !viewerSkyPortal ) {
+		return qfalse;
+	}
+	for ( i = 0 ; i < ARRAY_LEN( offsets ) ; i++ ) {
+		VectorAdd( origin, offsets[i], point );
+		if ( re.inPVS( viewerSkyOrigin, point ) ) {
+			return qtrue;
+		}
+	}
+	return qfalse;
 }
 
 /*
@@ -203,6 +256,7 @@ static void CL_Viewer_FindStart( void ) {
 
 static void CL_Viewer_ViewMap_f( void ) {
 	char	name[MAX_QPATH];
+	int		i, skyModels = 0;
 
 	if ( Cmd_Argc() != 2 ) {
 		Com_Printf( "usage: viewmap <mapname>\n" );
@@ -232,8 +286,18 @@ static void CL_Viewer_ViewMap_f( void ) {
 	if ( viewerSkyPortal ) {
 		Com_Printf( "Sky portal camera at %.0f %.0f %.0f\n", viewerSkyOrigin[0], viewerSkyOrigin[1], viewerSkyOrigin[2] );
 	}
-	Com_Printf( "%i models placed; not drawn: %i skeletal, %i that failed to load\n",
-		viewerNumModels, viewerSkeletal, viewerFailed );
+	// The game's server decides which entities a sky portal shows: the ones
+	// visible from its camera. The same test sorts the models here.
+	for ( i = 0 ; i < viewerNumModels ; i++ ) {
+		viewerModels[i].sky = CL_Viewer_InSky( viewerModels[i].origin );
+		if ( viewerModels[i].sky ) {
+			Com_DPrintf( "viewer: %s at %.0f %.0f %.0f is in the sky\n", viewerModels[i].name,
+				viewerModels[i].origin[0], viewerModels[i].origin[1], viewerModels[i].origin[2] );
+			skyModels++;
+		}
+	}
+	Com_Printf( "%i models placed (%i in the sky); not drawn: %i skeletal, %i that failed to load\n",
+		viewerNumModels, skyModels, viewerSkeletal, viewerFailed );
 }
 
 static void CL_Viewer_ViewPos_f( void ) {
@@ -366,6 +430,7 @@ void CL_Viewer_Draw( void ) {
 	// areamask stays clear: every area is drawn
 
 	rd.sky_portal = viewerSkyPortal;
+	rd.sky_alpha = 1;
 	VectorCopy( viewerSkyOrigin, rd.sky_origin );
 	AxisClear( rd.sky_axis );
 
@@ -382,6 +447,10 @@ void CL_Viewer_Draw( void ) {
 		VectorCopy( vm->origin, ent.lightingOrigin );
 		AxisCopy( vm->axis, ent.axis );
 		ent.nonNormalizedAxes = vm->scaled;
+		// with the sky camera turned off the sky's models are ordinary scenery
+		if ( vm->sky && viewerSkyPortal ) {
+			ent.renderfx |= RF_SKYENTITY;
+		}
 		re.AddRefEntityToScene( &ent );
 	}
 	re.RenderScene( &rd );

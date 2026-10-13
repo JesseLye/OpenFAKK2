@@ -2,7 +2,7 @@
 
 This file tracks where OpenFAKK2 is known or suspected to behave differently from
 `fakk2.exe` 1.02, and which rules were inferred rather than read from the binary. It
-covers the server side only; the client and renderer are not ported yet.
+covers the server side in detail; the renderer has a section of its own near the end.
 
 How the comparison is done is described in `tools/retail-compare/README.md`. As of this
 writing, the lines the game module prints during map spawn (`developer 1`) are identical
@@ -237,6 +237,53 @@ On `zoo`:
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
 127, and a turn rate of 140 degrees per second for `+left` / `+right`.
+
+## The renderer and the map viewer
+
+None of this has been compared with the retail game's picture, and none of the retail
+renderer has been read. It follows the SDK headers, the data, and OpenMoHAA's renderer
+where noted.
+
+The map viewer (`viewmap <name>` in the client) draws what the map file says, with no
+server and no game module. That differs from the game in ways that are by design:
+
+- **Level scripts do not run.** A script can turn the sky portal off, set the sky's
+  day/night blend, and set fog and a far plane. `cliff1` does all of these at its start
+  (`$world skyportal 0`, `$world skyalpha 0`, a far plane fading in), so in the game its
+  sky is fog and in the viewer it is the sky model with the day blend. The viewer always
+  uses a sky alpha of 1.
+- **Entities are where the map puts them**, in the first frame of their idle animation.
+  Nothing is hidden, moved, animated or spawned. Of a model's own initialisation only
+  `surface <name> +nodraw` is applied.
+- **Which models belong to the sky** is decided by testing a few points around each
+  model against what is visible from the sky camera. The game's server decides this for
+  real (see the snapshot rules above).
+
+What is implemented, and on what basis:
+
+- **`.ftx` textures**: a twelve byte header (width, height, has-alpha) and RGBA pixels.
+  From the files: all 2948 in the retail archives fit this.
+- **Shader scripts**: `if mtex|no_mtex|0|1` ... `endif`, `nextbundle`, vectors without
+  parentheses, `rgbGen constant|colorwave|fromEntity|fromClient|global`,
+  `alphaGen constant|fromEntity|fromClient|global|skyAlpha|oneMinusSkyAlpha`,
+  `depthMask`, `noDepthTest`, `portalsky`, `skyParms full|half`, `tcMod macro|offset`,
+  animated textures of up to 64 frames. From the scripts' own usage. Approximations:
+  `tcMod macro` is a plain scale, `alphaGen dot|oneMinusDot` is opaque, `colorwave`
+  ignores its colour, `spriteGen`, `surfaceColor` and similar are ignored.
+- **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
+  origin, the scene is drawn from there first, turned the way the viewer is looking.
+  Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
+  it. From the SDK's scene definition and flag descriptions, and OpenMoHAA.
+- **Static models from `.tan` files**: one frame, scaled by the definition's `scale`
+  and moved by its `origin`. Assumed: that the origin is added after scaling, and that
+  vertex normals use Quake III's two-angle encoding. Skeletal models (`.skb`) are not
+  drawn; they are between 0 and 33 of the entities on each map.
+- **Render flags** (`RF_*`) use FAKK2's values throughout, so that the client game
+  module's flags will mean the same thing to the renderer.
+
+Not implemented: fog and the far plane, the light grid (models are lit with a default
+light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
+sprites, beams, decals, level of detail, animation.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

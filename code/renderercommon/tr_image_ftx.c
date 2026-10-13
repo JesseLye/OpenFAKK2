@@ -23,7 +23,7 @@ void R_LoadFTX( const char *name, byte **pic, int *width, int *height )
 	} buffer;
 	ftxHeader_t	header;
 	int			length;
-	unsigned	numPixels;
+	unsigned	numPixels, i;
 
 	*pic = NULL;
 	if ( width ) {
@@ -60,6 +60,13 @@ void R_LoadFTX( const char *name, byte **pic, int *width, int *height )
 
 	*pic = ri.Malloc( numPixels * 4 );
 	Com_Memcpy( *pic, buffer.b + sizeof( header ), numPixels * 4 );
+
+	// the alpha bytes of an image that says it has no alpha are not meaningful
+	if ( !header.has_alpha ) {
+		for ( i = 0 ; i < numPixels ; i++ ) {
+			( *pic )[i * 4 + 3] = 255;
+		}
+	}
 
 	if ( width ) {
 		*width = header.width;

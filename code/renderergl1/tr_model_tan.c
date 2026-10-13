@@ -125,7 +125,8 @@ RE_RegisterTan
 
 name identifies the model (the .tik file's name). The surfaces of the
 animation file are matched by name against surfaceNames to find their
-shaders; vertexes are scaled and then moved by origin.
+shaders; a NULL shader name leaves the surface out. Vertexes are scaled and
+then moved by origin.
 ===============
 */
 qhandle_t RE_RegisterTan( const char *name, const char *tanFile, int frame, float scale, const vec3_t origin,
@@ -231,9 +232,13 @@ qhandle_t RE_RegisterTan( const char *name, const char *tanFile, int frame, floa
 
 		for ( j = 0 ; j < numSurfaceNames ; j++ ) {
 			if ( !Q_stricmp( surfaceNames[j], surfName ) ) {
-				sh = R_TanShader( shaderNames[j], path );
+				sh = shaderNames[j] ? R_TanShader( shaderNames[j], path ) : NULL;
 				break;
 			}
+		}
+		if ( !sh ) {
+			surf += ofsEnd;
+			continue;		// hidden by the model's definition
 		}
 
 		for ( j = 0 ; j < numVerts ; j++ ) {

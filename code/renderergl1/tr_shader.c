@@ -1026,10 +1026,17 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			{
 				stage->alphaGen = AGEN_ENTITY;
 			}
-			else if ( !Q_stricmp( token, "global" ) || !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" )
-				|| !Q_stricmp( token, "skyAlpha" ) || !Q_stricmp( token, "oneMinusSkyAlpha" ) )
+			else if ( !Q_stricmp( token, "skyAlpha" ) )
 			{
-				// view and sky dependent alpha is not implemented; drawn opaque
+				stage->alphaGen = AGEN_SKY_ALPHA;
+			}
+			else if ( !Q_stricmp( token, "oneMinusSkyAlpha" ) )
+			{
+				stage->alphaGen = AGEN_ONE_MINUS_SKY_ALPHA;
+			}
+			else if ( !Q_stricmp( token, "global" ) || !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" ) )
+			{
+				// view dependent alpha is not implemented; drawn opaque
 				stage->alphaGen = AGEN_IDENTITY;
 			}
 			else

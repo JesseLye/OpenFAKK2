@@ -159,7 +159,9 @@ typedef enum {
 	AGEN_LIGHTING_SPECULAR,
 	AGEN_WAVEFORM,
 	AGEN_PORTAL,
-	AGEN_CONST
+	AGEN_CONST,
+	AGEN_SKY_ALPHA,				// the scene's sky alpha
+	AGEN_ONE_MINUS_SKY_ALPHA
 } alphaGen_t;
 
 typedef enum {
@@ -398,6 +400,7 @@ typedef struct {
 	qboolean	areamaskModified;	// qtrue if areamask changed since last scene
 
 	qboolean	sky_portal;			// the scene has a sky portal camera
+	float		sky_alpha;
 	vec3_t		sky_origin;
 	vec3_t		sky_axis[3];
 

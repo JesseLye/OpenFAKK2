@@ -718,6 +718,21 @@ static void ComputeColors( shaderStage_t *pStage )
 			}
 		}
 		break;
+	case AGEN_SKY_ALPHA:
+	case AGEN_ONE_MINUS_SKY_ALPHA:
+		{
+			float	alpha = Com_Clamp( 0, 1, backEnd.refdef.sky_alpha );
+			byte	value;
+
+			if ( pStage->alphaGen == AGEN_ONE_MINUS_SKY_ALPHA ) {
+				alpha = 1 - alpha;
+			}
+			value = (byte)( alpha * 255 );
+			for ( i = 0; i < tess.numVertexes; i++ ) {
+				tess.svars.colors[i][3] = value;
+			}
+		}
+		break;
 	case AGEN_WAVEFORM:
 		RB_CalcWaveAlpha( &pStage->alphaWave, ( unsigned char * ) tess.svars.colors );
 		break;

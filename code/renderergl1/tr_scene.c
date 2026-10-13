@@ -322,6 +322,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.rdflags = fd->rdflags;
 
 	tr.refdef.sky_portal = fd->sky_portal;
+	tr.refdef.sky_alpha = fd->sky_alpha;
 	VectorCopy( fd->sky_origin, tr.refdef.sky_origin );
 	AxisCopy( fd->sky_axis, tr.refdef.sky_axis );
 

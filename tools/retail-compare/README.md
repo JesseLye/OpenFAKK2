@@ -53,4 +53,7 @@ A probe must end with `pendingevents`; that is how the script knows it has finis
 runs the OpenFAKK2 client in a window against the retail data, copies its console log
 to `build\compare\client.log` (`-Name` changes the name) and stops it after `-Secs`
 seconds if it has not quit. Screenshots land in `build\sandbox\home\fakk\screenshots`.
-`viewpos <x> <y> <z> [yaw] [pitch]` places the camera before a screenshot.
+`viewpos <x> <y> <z> [yaw] [pitch]` places the camera before a screenshot. `viewsky` prints the sky
+portal camera's position, `viewsky <x> <y> <z>` moves it and `viewsky off` turns it off, which
+also shows the sky's models as ordinary scenery. With `developer 1` the log names each
+model that was skipped and each one sorted into the sky.

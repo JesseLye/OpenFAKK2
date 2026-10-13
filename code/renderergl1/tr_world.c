@@ -553,11 +553,20 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 	mnode_t *leaf;
 	byte	*vis;
 
-	leaf = R_PointInLeaf( p1 );
-	vis = ri.CM_ClusterPVS( leaf->cluster ); // why not R_ClusterPVS ??
-	leaf = R_PointInLeaf( p2 );
+	int		cluster1, cluster2;
 
-	if ( !(vis[leaf->cluster>>3] & (1<<(leaf->cluster&7))) ) {
+	// the renderer's own copy of the map's visibility is used, so this works
+	// when no collision map is loaded (the map viewer)
+	leaf = R_PointInLeaf( p1 );
+	cluster1 = leaf->cluster;
+	leaf = R_PointInLeaf( p2 );
+	cluster2 = leaf->cluster;
+	if ( cluster1 < 0 || cluster2 < 0 || !tr.world || cluster2 >= tr.world->numClusters ) {
+		return qfalse;
+	}
+
+	vis = (byte *)R_ClusterPVS( cluster1 );
+	if ( !(vis[cluster2>>3] & (1<<(cluster2&7))) ) {
 		return qfalse;
 	}
 	return qtrue;
