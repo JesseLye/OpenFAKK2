@@ -1614,7 +1614,7 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 
 	s_mixahead = Cvar_Get ("s_mixahead", "0.2", CVAR_ARCHIVE);
 	s_mixPreStep = Cvar_Get ("s_mixPreStep", "0.05", CVAR_ARCHIVE);
-	s_show = Cvar_Get ("s_show", "0", CVAR_CHEAT);
+	s_show = Cvar_Get ("s_show", "0", 0);	// FAKK2: a trace, not a cheat
 	s_testsound = Cvar_Get ("s_testsound", "0", CVAR_CHEAT);
 
 	r = SNDDMA_Init();
