@@ -32,6 +32,12 @@ static cvar_t	*cl_viewerFov;
 static qboolean	viewerSkyPortal;
 static vec3_t	viewerSkyOrigin;
 
+// the far plane worldspawn asks for, with the game's defaults: none, black,
+// culling on. A level script can change these in the game; see the docs.
+static float	viewerFarplane;
+static vec3_t	viewerFarplaneColor;
+static qboolean	viewerFarplaneCull;
+
 #define	VIEWER_EYE_HEIGHT	82	// above a player start, roughly where the game's camera sits
 
 // Map entities that name a vertex-animated model are drawn where the map puts
@@ -158,11 +164,17 @@ static void CL_Viewer_FindStart( void ) {
 	char		script[MAX_TOKEN_CHARS], model[MAX_TOKEN_CHARS];
 	vec3_t		angles;
 	float		scale;
+	float		farplane;
+	vec3_t		farplaneColor;
+	qboolean	farplaneCull;
 	qboolean	haveOrigin, haveStart = qfalse;
 
 	VectorClear( viewerOrigin );
 	VectorClear( cl.viewangles );
 	viewerSkyPortal = qfalse;
+	viewerFarplane = 0;
+	VectorClear( viewerFarplaneColor );
+	viewerFarplaneCull = qtrue;
 	viewerNumModels = viewerSkeletal = viewerFailed = 0;
 
 	while ( re.GetEntityToken( token, sizeof( token ) ) ) {
@@ -174,6 +186,9 @@ static void CL_Viewer_FindStart( void ) {
 		model[0] = 0;
 		angle = 0;
 		scale = 1;
+		farplane = 0;
+		VectorClear( farplaneColor );
+		farplaneCull = qtrue;
 		VectorClear( origin );
 		VectorClear( angles );
 		haveOrigin = qfalse;
@@ -196,7 +211,21 @@ static void CL_Viewer_FindStart( void ) {
 				Q_strncpyz( model, token, sizeof( model ) );
 			} else if ( !Q_stricmp( key, "script" ) ) {
 				Q_strncpyz( script, token, sizeof( script ) );
+			} else if ( !Q_stricmp( key, "farplane" ) ) {
+				farplane = atof( token );
+			} else if ( !Q_stricmp( key, "farplane_color" ) ) {
+				if ( sscanf( token, "%f %f %f", &farplaneColor[0], &farplaneColor[1], &farplaneColor[2] ) != 3 ) {
+					VectorClear( farplaneColor );
+				}
+			} else if ( !Q_stricmp( key, "farplane_cull" ) ) {
+				farplaneCull = atoi( token ) != 0;
 			}
+		}
+		// the far plane keys belong to worldspawn, the first entity
+		if ( !Q_stricmp( classname, "worldspawn" ) ) {
+			viewerFarplane = farplane;
+			VectorCopy( farplaneColor, viewerFarplaneColor );
+			viewerFarplaneCull = farplaneCull;
 		}
 		if ( haveOrigin && !haveStart && !Q_stricmp( classname, "info_player_start" ) ) {
 			VectorCopy( origin, viewerOrigin );
@@ -249,6 +278,11 @@ static void CL_Viewer_ViewMap_f( void ) {
 	Com_Printf( "Viewing %s from %.0f %.0f %.0f\n", name, viewerOrigin[0], viewerOrigin[1], viewerOrigin[2] );
 	if ( viewerSkyPortal ) {
 		Com_Printf( "Sky portal camera at %.0f %.0f %.0f\n", viewerSkyOrigin[0], viewerSkyOrigin[1], viewerSkyOrigin[2] );
+	}
+	if ( viewerFarplane ) {
+		Com_Printf( "Far plane at %.0f, colour %.2f %.2f %.2f%s\n", viewerFarplane,
+			viewerFarplaneColor[0], viewerFarplaneColor[1], viewerFarplaneColor[2],
+			viewerFarplaneCull ? "" : ", not culling" );
 	}
 	// The game's server decides which entities a sky portal shows: the ones
 	// visible from its camera. The same test sorts the models here.
@@ -397,6 +431,10 @@ void CL_Viewer_Draw( void ) {
 	rd.sky_alpha = 1;
 	VectorCopy( viewerSkyOrigin, rd.sky_origin );
 	AxisClear( rd.sky_axis );
+
+	rd.farplane_distance = viewerFarplane;
+	VectorCopy( viewerFarplaneColor, rd.farplane_color );
+	rd.farplane_cull = viewerFarplaneCull;
 
 	re.ClearScene();
 	for ( i = 0 ; i < viewerNumModels ; i++ ) {

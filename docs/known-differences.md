@@ -342,7 +342,8 @@ server and no game module. That differs from the game in ways that are by design
 - **Level scripts do not run.** A script can turn the sky portal off, set the sky's
   day/night blend, and set fog and a far plane. `cliff1` does all of these at its start
   (`$world skyportal 0`, `$world skyalpha 0`, a far plane fading in), so in the game its
-  sky starts as fog. The viewer always uses a sky alpha of 1 and leaves the portal on.
+  sky starts as fog. The viewer always uses a sky alpha of 1, leaves the portal on, and
+  keeps the far plane worldspawn gives.
 - **`cliff1`'s sky is empty in the viewer.** Its sky camera, taken from the map entity,
   sits 17 units above the top of the sky dome, so the dome is seen from outside and its
   faces are culled; the planets and mountains are below the horizon of most views. The
@@ -429,8 +430,9 @@ What is implemented, and on what basis:
   `alphaGen`) when `r_useglfog` is on, and fogs everything else by vertex colour from
   distance over the far plane distance (`0x494910`). Not followed yet: OpenFAKK2 fogs
   every shader with OpenGL's fog except the sky and 2D drawing, and `r_useglfog 0`
-  turns fog off rather than switching to vertex colours. The map viewer sets no far
-  plane of its own.
+  turns fog off rather than switching to vertex colours. The map viewer takes the far
+  plane from worldspawn's keys directly, with the game's defaults (none, black, culling
+  on); a level script's later changes to it are not seen there.
 
 Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
