@@ -110,8 +110,10 @@ corresponding retail code has not been examined.
   not recovered: the test for whether use is tracked per actor (taken to be "the alias is
   global, or no actor was given"), and the multiplier that turns the random fraction into
   an index (taken to be the number of available lines).
-- **Skeletal tag placement.** Bone composition is a guess; bone controllers and blending
-  are not applied. Nothing has exercised it.
+- **Skeletal tag placement** in the TIKI code (`TIKI_BoneOrientation`) predates the
+  reading of `TIKI_Tag_Orientation` (`0x44fe40`, see the renderer section); the
+  renderer's composition follows that reading, the TIKI code's has not been checked
+  against it yet, and bone controllers and blending are not applied there.
 - **`Anim_AbsoluteDelta`** returns the same value as `Anim_Delta`.
 - **The delta-driven animation flag is never set.** Retail's cached definitions flag only
   four animations, all in the unused `oldjulie` model, and the keyword that sets the flag
@@ -352,10 +354,21 @@ What is implemented, and on what basis:
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by
   the definition's `scale` and moved by its `origin`. Surfaces take the shader of the
   skin the entity's surface flags select, and `MDL_SURFACE_NODRAW` hides one. Assumed:
-  that the origin is added after scaling, and that vertex normals use Quake III's
-  two-angle encoding. Cross-blending, torso animations, bone controllers and level of
-  detail are not applied. Skeletal models (`.skb`) register but draw nothing; the player
-  and the creatures are among them.
+  that vertex normals use Quake III's two-angle encoding. The origin is added before
+  scaling, as `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso
+  animations and level of detail are not applied.
+- **Skeletal models** (`.skb` with `.ska` animations): the skeleton's bones and
+  weighted vertexes are read at registration and each animation's frames on first use.
+  Bones are composed root first the way `TIKI_Tag_Orientation` (`0x44fe40`) does it: a
+  bone's rotation is its quaternion times its parent's (Hamilton product, x y z w), then
+  the entity's bone controllers; its origin is the parent's plus the bone's offset
+  turned by the parent's axes (`0x43c800`, Quake's axis convention; the matrix is
+  `0x43c980`); the root gets the definition's origin and everything is scaled at the
+  end. Frame quaternions are stored as shorts over 32768 and offsets over 63. Vertexes
+  are the weighted sum of each bone's placed offset. Not read: the retail renderer's own
+  skinning (`R_AddSkelSurfaces`), so turning normals with the vertex's bones and
+  interpolating frames by normalised quaternion lerp are assumptions, and the
+  cross-blend and torso fields of the entity are ignored.
 - **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
   size is the image's width times the shader's `spriteScale` times the entity's scale.
   That is OpenMoHAA's rule; the retail renderer's has not been read.
@@ -368,7 +381,7 @@ What is implemented, and on what basis:
 
 Not implemented: fog and the far plane, the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
-beams, decals, level of detail, skeletal animation.
+beams, decals, level of detail, cross-blending between animations.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

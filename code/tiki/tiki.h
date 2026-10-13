@@ -40,6 +40,7 @@ struct AliasList_s	**TIKI_AliasList( tiki_t *tiki );
 
 // what a renderer needs to draw the model
 qboolean	TIKI_IsSkeletal( const tiki_t *tiki );
+const char	*TIKI_SkelFile( const tiki_t *tiki );	// the .skb file, "" when not skeletal
 const char	*TIKI_Path( const tiki_t *tiki );
 float		TIKI_Scale( const tiki_t *tiki );
 void		TIKI_Origin( const tiki_t *tiki, vec3_t origin );

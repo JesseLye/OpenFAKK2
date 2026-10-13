@@ -61,6 +61,7 @@ qhandle_t CL_RegisterTikiModel( const char *name, tiki_t **tikiOut ) {
 	TIKI_Origin( tiki, desc.origin );
 	desc.path = TIKI_Path( tiki );
 	desc.skeletal = TIKI_IsSkeletal( tiki );
+	desc.skelFile = TIKI_SkelFile( tiki );
 	TIKI_CalculateBounds( tiki, 1.0f, desc.mins, desc.maxs );
 	desc.radius = TIKI_Radius( tiki );
 

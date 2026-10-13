@@ -126,6 +126,7 @@ struct tiki_s {
 
 	char				path[MAX_QPATH];
 	char				skelName[TIKI_MAX_NAME];
+	char				skelFile[TIKI_MAX_NAME];	// skelName under the model's path
 
 	int					numSurfaces;
 	tikiSurface_t		surfaces[TIKI_MAX_SURFACES];
@@ -953,14 +954,12 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 	tiki->tagNames = TIKI_Alloc( SKEL_MAX_BONES * sizeof( *tiki->tagNames ) );
 
 	if ( skeletal ) {
-		char	name[TIKI_MAX_NAME];
-
 		if ( tiki->path[0] ) {
-			Com_sprintf( name, sizeof( name ), "%s/%s", tiki->path, tiki->skelName );
+			Com_sprintf( tiki->skelFile, sizeof( tiki->skelFile ), "%s/%s", tiki->path, tiki->skelName );
 		} else {
-			Q_strncpyz( name, tiki->skelName, sizeof( name ) );
+			Q_strncpyz( tiki->skelFile, tiki->skelName, sizeof( tiki->skelFile ) );
 		}
-		TIKI_LoadSkb( tiki, name );
+		TIKI_LoadSkb( tiki, tiki->skelFile );
 	}
 
 	ClearBounds( tiki->mins, tiki->maxs );
@@ -1149,6 +1148,10 @@ struct AliasList_s **TIKI_AliasList( tiki_t *tiki ) {
 
 int TIKI_NumAnims( const tiki_t *tiki ) {
 	return tiki ? tiki->numAnims : 0;
+}
+
+const char *TIKI_SkelFile( const tiki_t *tiki ) {
+	return tiki ? tiki->skelFile : "";
 }
 
 qboolean TIKI_IsSkeletal( const tiki_t *tiki ) {

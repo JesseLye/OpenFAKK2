@@ -502,6 +502,7 @@ typedef enum {
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
 	SF_TAN,					// FAKK2 vertex animation surface
+	SF_SKEL,				// FAKK2 skeletal surface
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -1644,6 +1645,7 @@ float R_TikiFarthestPoint( const trRefEntity_t *ent, const model_t *mod );
 void R_TikiBounds( const model_t *mod, vec3_t mins, vec3_t maxs );
 float R_TikiRadius( const model_t *mod );
 void RB_SurfaceTan( void *surface );
+void RB_SurfaceSkel( void *surface );
 void VectorArrayNormalize( vec4_t *normals, unsigned int count );
 
 #ifdef idppc_altivec

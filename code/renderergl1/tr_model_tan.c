@@ -4,11 +4,25 @@ FAKK2 models from their .tik definitions.
 
 A .tik definition names the model's animations, its scale and the shader of
 each surface; the engine's TIKI code reads that and hands it to
-RE_RegisterTiki. Vertex animations (.tan files) are loaded here the first
-time an animation is drawn, and the frames the entity asks for are
-interpolated the way Quake III interpolates MD3 frames. Level of detail,
-tags, cross-blending and torso animations are not handled, and skeletal
-models (.skb) register but draw nothing.
+RE_RegisterTiki. Animation files are loaded here the first time an animation
+is drawn.
+
+Vertex animations (.tan): the entity's frame and old frame are decoded and
+interpolated the way Quake III interpolates MD3 frames.
+
+Skeletal models (.skb with .ska animations): the skeleton's surfaces hold
+vertexes weighted to bones; every frame the bones are composed from the
+animation's per-bone quaternions and offsets, root first, and the vertexes
+are skinned on the CPU. The composition follows the retail engine's
+TIKI_Tag_Orientation (fakk2.exe 0x44fe40): a bone's rotation is its
+quaternion times its parent's, in that order, then the entity's bone
+controllers; its origin is the parent's origin plus the bone's offset turned
+by the parent's axes; the root gets the definition's origin; everything is
+scaled by the definition's scale at the end. The retail renderer's own
+skinning has not been read: normals are turned with the vertex's bones and
+frames are interpolated by normalised quaternion lerp, which are assumptions.
+
+Level of detail, tags, cross-blending and torso animations are not handled.
 ===========================================================================
 */
 
@@ -23,15 +37,41 @@ models (.skb) register but draw nothing.
 #define	TAN_MAX_VERTS			1200
 #define	TAN_MAX_TRIANGLES		4096
 
+#define	SKB_IDENT				((' '<<24)+('L'<<16)+('K'<<8)+'S')	// "SKL "
+#define	SKA_IDENT				(('N'<<24)+('A'<<16)+('K'<<8)+'S')	// "SKAN"
+#define	SKEL_VERSION			3
+#define	SKB_HEADER_SIZE			92
+#define	SKB_BONE_SIZE			72
+#define	SKB_SURFACE_HEADER_SIZE	96
+#define	SKB_VERT_SIZE			24		// before its weights
+#define	SKB_WEIGHT_SIZE			20
+#define	SKA_HEADER_SIZE			108
+#define	SKA_FRAME_HEADER_SIZE	40
+#define	SKA_BONE_SIZE			16
+#define	SKEL_MAX_BONES			100
+#define	SKEL_MAX_SURFACES		32
+#define	SKEL_MAX_VERTS			4000
+#define	SKEL_MAX_TRIANGLES		8000
+#define	SKEL_MAX_WEIGHTS		8
+
+// a surface is cut into pieces the tesselator can take in one go
+#define	PIECE_VERTS				( SHADER_MAX_VERTEXES - 100 )
+#define	PIECE_INDEXES			( SHADER_MAX_INDEXES - 600 )
+
+#define	SKEL_QUAT_SCALE			( 1.0f / 32768.0f )
+#define	SKEL_OFFSET_SCALE		( 1.0f / 63.0f )
+
 typedef struct {
 	vec3_t		bounds[2];		// of the model as placed, after scaling
 	vec3_t		localOrigin;
 	float		radius;
-	vec3_t		scale;			// decoded vertex = packed * scale + offset
+	vec3_t		scale;			// tan: decoded vertex = packed * scale + offset
 	vec3_t		offset;
-} tanFrame_t;
+} tikiFrame_t;
 
+typedef struct tikiModel_s tikiModel_t;
 typedef struct tanAnim_s tanAnim_t;
+typedef struct skelAnim_s skelAnim_t;
 
 typedef struct {
 	surfaceType_t	surfaceType;	// SF_TAN
@@ -46,13 +86,52 @@ typedef struct {
 
 struct tanAnim_s {
 	int				numFrames;
-	tanFrame_t		*frames;
+	tikiFrame_t		*frames;
 	int				numSurfaces;
 	tanSurface_t	*surfaces;
 	float			radius;			// farthest any frame reaches from the origin
 };
 
 typedef struct {
+	int			bone;
+	float		weight;
+	vec3_t		offset;			// in the bone's frame
+} skelWeight_t;
+
+typedef struct {
+	vec3_t		normal;
+	float		st[2];
+	int			numWeights;
+	int			firstWeight;
+} skelVert_t;
+
+typedef struct {
+	surfaceType_t	surfaceType;	// SF_SKEL
+	tikiModel_t		*model;
+	int				surfaceNum;
+	int				numVerts;
+	int				numTris;
+	skelVert_t		*verts;
+	skelWeight_t	*weights;
+	int				*indexes;
+} skelSurface_t;
+
+typedef struct {
+	int				numBones;
+	int				*parents;		// -1 for a root; always earlier than the bone
+	int				numSurfaces;
+	skelSurface_t	*surfaces;
+} skelModel_t;
+
+struct skelAnim_s {
+	int				numFrames;
+	int				numBones;
+	tikiFrame_t		*frames;
+	short			*bones;			// [frame][bone]: quaternion x y z w, offset x y z, padding
+	float			radius;
+};
+
+struct tikiModel_s {
 	char		path[MAX_QPATH];
 	float		scale;
 	vec3_t		origin;
@@ -63,13 +142,17 @@ typedef struct {
 	int			numAnims;
 	char		**animFiles;
 	tanAnim_t	**anims;		// loaded on first use; tanFailed when the file is bad
+	skelAnim_t	**skelAnims;	// likewise, for skeletal models
+
+	skelModel_t	*skel;
 
 	int			numSurfaces;
 	char		(*surfaceNames)[MAX_QPATH];
 	shader_t	**shaders;		// numSurfaces * TIKI_MODEL_MAX_SKINS, NULL = hidden
-} tikiModel_t;
+};
 
 static tanAnim_t	tanFailed;
+static skelAnim_t	skelFailed;
 
 static int TAN_Int( const byte *p ) {
 	return (int)( p[0] | ( p[1] << 8 ) | ( p[2] << 16 ) | ( (unsigned)p[3] << 24 ) );
@@ -80,6 +163,10 @@ static float TAN_Float( const byte *p ) {
 
 	fi.i = TAN_Int( p );
 	return fi.f;
+}
+
+static short TAN_Short( const byte *p ) {
+	return (short)( p[0] | ( p[1] << 8 ) );
 }
 
 static qboolean TAN_InFile( int length, int offset, int size ) {
@@ -109,6 +196,254 @@ static shader_t *R_TikiShader( const char *name, const char *path ) {
 		sh = R_FindShader( local, LIGHTMAP_NONE, qtrue );
 	}
 	return sh;
+}
+
+static int R_TikiSurfaceNum( const tikiModel_t *tiki, const char *name ) {
+	int		i;
+
+	for ( i = 0 ; i < tiki->numSurfaces ; i++ ) {
+		if ( !Q_stricmp( tiki->surfaceNames[i], name ) ) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/*
+===============
+R_TikiFinishFrame
+
+Fills in a frame's centre and radius from its bounds, and widens the
+animation's reach.
+===============
+*/
+static void R_TikiFinishFrame( tikiFrame_t *frame, float *animRadius ) {
+	vec3_t	corner;
+
+	if ( frame->bounds[0][0] > frame->bounds[1][0] ) {
+		VectorClear( frame->bounds[0] );
+		VectorClear( frame->bounds[1] );
+	}
+	VectorAdd( frame->bounds[0], frame->bounds[1], frame->localOrigin );
+	VectorScale( frame->localOrigin, 0.5f, frame->localOrigin );
+	VectorSubtract( frame->bounds[1], frame->localOrigin, corner );
+	frame->radius = VectorLength( corner );
+	if ( VectorLength( frame->localOrigin ) + frame->radius > *animRadius ) {
+		*animRadius = VectorLength( frame->localOrigin ) + frame->radius;
+	}
+}
+
+/*
+===============
+R_SkelLoad
+
+Reads a skeleton: the bones' parents and the surfaces' weighted vertexes.
+Surfaces too big for the tesselator are cut into pieces.
+===============
+*/
+static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
+	static skelVert_t	verts[SKEL_MAX_VERTS];
+	static skelWeight_t	weights[SKEL_MAX_VERTS * SKEL_MAX_WEIGHTS];
+	static int			tris[SKEL_MAX_TRIANGLES * 3];
+	static int			remap[SKEL_MAX_VERTS];
+	static byte			seen[SKEL_MAX_VERTS];
+	skelSurface_t		pieces[SKEL_MAX_SURFACES * 8];
+	union {
+		byte	*b;
+		void	*v;
+	} buffer;
+	skelModel_t	*skel;
+	const byte	*data, *surf;
+	int			length, numSurfaces, numBones, ofsBones, ofsSurfaces;
+	int			numPieces = 0;
+	int			i, j, k;
+
+	if ( !skbFile || !skbFile[0] ) {
+		return NULL;
+	}
+	length = ri.FS_ReadFile( skbFile, &buffer.v );
+	if ( !buffer.b || length < SKB_HEADER_SIZE ) {
+		if ( buffer.b ) {
+			ri.FS_FreeFile( buffer.v );
+		}
+		ri.Printf( PRINT_WARNING, "R_SkelLoad: couldn't load %s\n", skbFile );
+		return NULL;
+	}
+	data = buffer.b;
+
+	numSurfaces = TAN_Int( data + 72 );
+	numBones = TAN_Int( data + 76 );
+	ofsBones = TAN_Int( data + 80 );
+	ofsSurfaces = TAN_Int( data + 84 );
+	if ( TAN_Int( data ) != SKB_IDENT || TAN_Int( data + 4 ) != SKEL_VERSION
+		|| numSurfaces < 0 || numSurfaces > SKEL_MAX_SURFACES || numBones < 0 || numBones > SKEL_MAX_BONES
+		|| !TAN_InFile( length, ofsBones, numBones * SKB_BONE_SIZE ) ) {
+		ri.FS_FreeFile( buffer.v );
+		ri.Printf( PRINT_WARNING, "R_SkelLoad: %s is not a version %i SKB file\n", skbFile, SKEL_VERSION );
+		return NULL;
+	}
+
+	skel = ri.Hunk_Alloc( sizeof( *skel ) + numBones * sizeof( int ), h_low );
+	skel->numBones = numBones;
+	skel->parents = (int *)( skel + 1 );
+	for ( i = 0 ; i < numBones ; i++ ) {
+		int		parent = TAN_Int( data + ofsBones + i * SKB_BONE_SIZE );
+
+		// a bone may only hang off an earlier bone, which keeps evaluation a single pass
+		skel->parents[i] = ( parent >= 0 && parent < i ) ? parent : -1;
+	}
+
+	surf = data + ofsSurfaces;
+	for ( i = 0 ; i < numSurfaces ; i++ ) {
+		const char	*surfName;
+		int			numTris, numVerts, ofsTris, ofsVerts, ofsEnd;
+		int			surfLength = length - (int)( surf - data );
+		int			numWeights = 0, surfaceNum, firstTri;
+		const byte	*p;
+		qboolean	bad = qfalse;
+
+		if ( surfLength < SKB_SURFACE_HEADER_SIZE ) {
+			break;
+		}
+		surfName = (const char *)surf + 4;
+		numTris = TAN_Int( surf + 68 );
+		numVerts = TAN_Int( surf + 72 );
+		ofsTris = TAN_Int( surf + 80 );
+		ofsVerts = TAN_Int( surf + 84 );
+		ofsEnd = TAN_Int( surf + 92 );
+
+		if ( numVerts < 0 || numVerts > SKEL_MAX_VERTS || numTris < 0 || numTris > SKEL_MAX_TRIANGLES
+			|| !memchr( surfName, 0, MAX_QPATH ) || !TAN_InFile( surfLength, ofsTris, numTris * 12 )
+			|| !TAN_InFile( surfLength, ofsVerts, numVerts * SKB_VERT_SIZE )
+			|| ofsEnd < SKB_SURFACE_HEADER_SIZE || ofsEnd > surfLength ) {
+			ri.Printf( PRINT_WARNING, "R_SkelLoad: %s has a malformed surface\n", skbFile );
+			break;
+		}
+
+		p = surf + ofsVerts;
+		for ( j = 0 ; j < numVerts && !bad ; j++ ) {
+			skelVert_t	*v = &verts[j];
+			int			n;
+
+			if ( !TAN_InFile( surfLength, (int)( p - surf ), SKB_VERT_SIZE ) ) {
+				bad = qtrue;
+				break;
+			}
+			for ( k = 0 ; k < 3 ; k++ ) {
+				v->normal[k] = TAN_Float( p + k * 4 );
+			}
+			v->st[0] = TAN_Float( p + 12 );
+			v->st[1] = TAN_Float( p + 16 );
+			n = TAN_Int( p + 20 );
+			p += SKB_VERT_SIZE;
+			if ( n < 0 || n > SKEL_MAX_WEIGHTS || !TAN_InFile( surfLength, (int)( p - surf ), n * SKB_WEIGHT_SIZE ) ) {
+				bad = qtrue;
+				break;
+			}
+			v->numWeights = n;
+			v->firstWeight = numWeights;
+			for ( k = 0 ; k < n ; k++, p += SKB_WEIGHT_SIZE ) {
+				skelWeight_t	*w = &weights[numWeights++];
+
+				w->bone = TAN_Int( p );
+				w->weight = TAN_Float( p + 4 );
+				w->offset[0] = TAN_Float( p + 8 );
+				w->offset[1] = TAN_Float( p + 12 );
+				w->offset[2] = TAN_Float( p + 16 );
+				if ( w->bone < 0 || w->bone >= numBones ) {
+					w->bone = 0;
+				}
+			}
+		}
+		for ( j = 0 ; j < numTris * 3 && !bad ; j++ ) {
+			int		index = TAN_Int( surf + ofsTris + j * 4 );
+
+			if ( index < 0 || index >= numVerts ) {
+				bad = qtrue;
+				break;
+			}
+			tris[j] = index;
+		}
+		if ( bad ) {
+			ri.Printf( PRINT_WARNING, "R_SkelLoad: %s has a malformed surface %s\n", skbFile, surfName );
+			break;
+		}
+
+		surfaceNum = R_TikiSurfaceNum( tiki, surfName );
+
+		// hand the triangles over in pieces small enough to draw
+		firstTri = 0;
+		while ( firstTri < numTris && numPieces < ARRAY_LEN( pieces ) ) {
+			skelSurface_t	*piece = &pieces[numPieces];
+			int				count = 0, used = 0, pieceWeights = 0;
+
+			Com_Memset( seen, 0, numVerts );
+			while ( firstTri + count < numTris && ( count + 1 ) * 3 <= PIECE_INDEXES ) {
+				int		fresh = 0;
+
+				for ( j = 0 ; j < 3 ; j++ ) {
+					if ( !seen[tris[( firstTri + count ) * 3 + j]] ) {
+						fresh++;
+					}
+				}
+				if ( used + fresh > PIECE_VERTS ) {
+					break;
+				}
+				for ( j = 0 ; j < 3 ; j++ ) {
+					seen[tris[( firstTri + count ) * 3 + j]] = 1;
+				}
+				used += fresh;
+				count++;
+			}
+			if ( !count ) {
+				break;
+			}
+
+			used = 0;
+			for ( j = 0 ; j < numVerts ; j++ ) {
+				remap[j] = -1;
+				if ( seen[j] ) {
+					remap[j] = used++;
+					pieceWeights += verts[j].numWeights;
+				}
+			}
+
+			Com_Memset( piece, 0, sizeof( *piece ) );
+			piece->surfaceType = SF_SKEL;
+			piece->model = tiki;
+			piece->surfaceNum = surfaceNum;
+			piece->numVerts = used;
+			piece->numTris = count;
+			piece->verts = ri.Hunk_Alloc( used * sizeof( skelVert_t ), h_low );
+			piece->weights = ri.Hunk_Alloc( pieceWeights * sizeof( skelWeight_t ), h_low );
+			piece->indexes = ri.Hunk_Alloc( count * 3 * sizeof( int ), h_low );
+			pieceWeights = 0;
+			for ( j = 0 ; j < numVerts ; j++ ) {
+				if ( remap[j] < 0 ) {
+					continue;
+				}
+				piece->verts[remap[j]] = verts[j];
+				piece->verts[remap[j]].firstWeight = pieceWeights;
+				Com_Memcpy( &piece->weights[pieceWeights], &weights[verts[j].firstWeight],
+					verts[j].numWeights * sizeof( skelWeight_t ) );
+				pieceWeights += verts[j].numWeights;
+			}
+			for ( j = 0 ; j < count * 3 ; j++ ) {
+				piece->indexes[j] = remap[tris[( firstTri ) * 3 + j]];
+			}
+			numPieces++;
+			firstTri += count;
+		}
+
+		surf += ofsEnd;
+	}
+
+	ri.FS_FreeFile( buffer.v );
+
+	skel->numSurfaces = numPieces;
+	skel->surfaces = ri.Hunk_Alloc( numPieces * sizeof( skelSurface_t ), h_low );
+	Com_Memcpy( skel->surfaces, pieces, numPieces * sizeof( skelSurface_t ) );
+	return skel;
 }
 
 /*
@@ -160,6 +495,7 @@ qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc ) {
 	if ( desc->numAnims ) {
 		tiki->animFiles = ri.Hunk_Alloc( desc->numAnims * sizeof( *tiki->animFiles ), h_low );
 		tiki->anims = ri.Hunk_Alloc( desc->numAnims * sizeof( *tiki->anims ), h_low );
+		tiki->skelAnims = ri.Hunk_Alloc( desc->numAnims * sizeof( *tiki->skelAnims ), h_low );
 		for ( i = 0 ; i < desc->numAnims ; i++ ) {
 			const char	*file = desc->animFiles[i] ? desc->animFiles[i] : "";
 
@@ -182,6 +518,10 @@ qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc ) {
 				}
 			}
 		}
+	}
+
+	if ( tiki->skeletal ) {
+		tiki->skel = R_SkelLoad( tiki, desc->skelFile );
 	}
 
 	mod->type = MOD_TIKI;
@@ -233,18 +573,20 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		return NULL;
 	}
 
-	anim = ri.Hunk_Alloc( sizeof( *anim ) + numFrames * sizeof( tanFrame_t ) + numSurfaces * sizeof( tanSurface_t ), h_low );
+	anim = ri.Hunk_Alloc( sizeof( *anim ) + numFrames * sizeof( tikiFrame_t ) + numSurfaces * sizeof( tanSurface_t ), h_low );
 	anim->numFrames = numFrames;
-	anim->frames = (tanFrame_t *)( anim + 1 );
+	anim->frames = (tikiFrame_t *)( anim + 1 );
 	anim->surfaces = (tanSurface_t *)( anim->frames + numFrames );
 
 	for ( i = 0 ; i < numFrames ; i++ ) {
 		const byte	*f = data + ofsFrames + i * TAN_FRAME_SIZE;
-		tanFrame_t	*frame = &anim->frames[i];
+		tikiFrame_t	*frame = &anim->frames[i];
 
+		// the definition's origin is added before its scale is applied, as
+		// the retail engine places tags (fakk2.exe 0x44fe40)
 		for ( k = 0 ; k < 3 ; k++ ) {
 			frame->scale[k] = TAN_Float( f + 24 + k * 4 ) * tiki->scale;
-			frame->offset[k] = TAN_Float( f + 36 + k * 4 ) * tiki->scale + tiki->origin[k];
+			frame->offset[k] = ( TAN_Float( f + 36 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
 		}
 		ClearBounds( frame->bounds[0], frame->bounds[1] );
 	}
@@ -282,13 +624,7 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 
 		out->surfaceType = SF_TAN;
 		out->anim = anim;
-		out->surfaceNum = -1;
-		for ( j = 0 ; j < tiki->numSurfaces ; j++ ) {
-			if ( !Q_stricmp( tiki->surfaceNames[j], surfName ) ) {
-				out->surfaceNum = j;
-				break;
-			}
-		}
+		out->surfaceNum = R_TikiSurfaceNum( tiki, surfName );
 		out->numVerts = numVerts;
 		out->numTris = numTris;
 		out->indexes = ri.Hunk_Alloc( numTris * 3 * sizeof( int ), h_low );
@@ -315,7 +651,7 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		for ( j = 0 ; j < numFrames * numVerts ; j++ ) {
 			const byte		*packed = surf + ofsXyz + j * 8;
 			unsigned short	*xyz = out->xyz + j * 4;
-			tanFrame_t		*frame = &anim->frames[j / numVerts];
+			tikiFrame_t		*frame = &anim->frames[j / numVerts];
 			vec3_t			point;
 
 			for ( k = 0 ; k < 4 ; k++ ) {
@@ -334,20 +670,7 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 	ri.FS_FreeFile( buffer.v );
 
 	for ( i = 0 ; i < numFrames ; i++ ) {
-		tanFrame_t	*frame = &anim->frames[i];
-		vec3_t		corner;
-
-		if ( frame->bounds[0][0] > frame->bounds[1][0] ) {
-			VectorClear( frame->bounds[0] );
-			VectorClear( frame->bounds[1] );
-		}
-		VectorAdd( frame->bounds[0], frame->bounds[1], frame->localOrigin );
-		VectorScale( frame->localOrigin, 0.5f, frame->localOrigin );
-		VectorSubtract( frame->bounds[1], frame->localOrigin, corner );
-		frame->radius = VectorLength( corner );
-		if ( VectorLength( frame->localOrigin ) + frame->radius > anim->radius ) {
-			anim->radius = VectorLength( frame->localOrigin ) + frame->radius;
-		}
+		R_TikiFinishFrame( &anim->frames[i], &anim->radius );
 	}
 
 	if ( !anim->numSurfaces ) {
@@ -358,7 +681,74 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 
 /*
 ===============
-R_TikiAnim
+R_SkaLoad
+
+Reads one skeletal animation: per frame, bounds and every bone's quaternion
+and offset, kept as the file's shorts.
+===============
+*/
+static skelAnim_t *R_SkaLoad( const tikiModel_t *tiki, const char *skaFile ) {
+	union {
+		byte	*b;
+		void	*v;
+	} buffer;
+	skelAnim_t	*anim;
+	const byte	*data;
+	int			length, numFrames, numBones, ofsFrames, frameSize;
+	int			i, j, k;
+
+	if ( !skaFile[0] || !tiki->skel ) {
+		return NULL;
+	}
+	length = ri.FS_ReadFile( skaFile, &buffer.v );
+	if ( !buffer.b || length < SKA_HEADER_SIZE ) {
+		if ( buffer.b ) {
+			ri.FS_FreeFile( buffer.v );
+		}
+		ri.Printf( PRINT_WARNING, "R_SkaLoad: couldn't load %s\n", skaFile );
+		return NULL;
+	}
+	data = buffer.b;
+
+	numFrames = TAN_Int( data + 76 );
+	numBones = TAN_Int( data + 80 );
+	ofsFrames = TAN_Int( data + 104 );
+	frameSize = SKA_FRAME_HEADER_SIZE + numBones * SKA_BONE_SIZE;
+	if ( TAN_Int( data ) != SKA_IDENT || TAN_Int( data + 4 ) != SKEL_VERSION
+		|| numFrames < 1 || numBones != tiki->skel->numBones
+		|| numFrames > length / frameSize || !TAN_InFile( length, ofsFrames, numFrames * frameSize ) ) {
+		ri.FS_FreeFile( buffer.v );
+		ri.Printf( PRINT_WARNING, "R_SkaLoad: %s is not a version %i SKA file for this skeleton\n", skaFile, SKEL_VERSION );
+		return NULL;
+	}
+
+	anim = ri.Hunk_Alloc( sizeof( *anim ) + numFrames * sizeof( tikiFrame_t ) + numFrames * numBones * 8 * sizeof( short ), h_low );
+	anim->numFrames = numFrames;
+	anim->numBones = numBones;
+	anim->frames = (tikiFrame_t *)( anim + 1 );
+	anim->bones = (short *)( anim->frames + numFrames );
+
+	for ( i = 0 ; i < numFrames ; i++ ) {
+		const byte	*f = data + ofsFrames + i * frameSize;
+		tikiFrame_t	*frame = &anim->frames[i];
+
+		for ( k = 0 ; k < 3 ; k++ ) {
+			frame->bounds[0][k] = ( TAN_Float( f + k * 4 ) + tiki->origin[k] ) * tiki->scale;
+			frame->bounds[1][k] = ( TAN_Float( f + 12 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
+		}
+		R_TikiFinishFrame( frame, &anim->radius );
+		for ( j = 0 ; j < numBones * 8 ; j++ ) {
+			anim->bones[i * numBones * 8 + j] = TAN_Short( f + SKA_FRAME_HEADER_SIZE + j * 2 );
+		}
+	}
+
+	ri.FS_FreeFile( buffer.v );
+	return anim;
+}
+
+/*
+===============
+R_TikiAnim, R_TikiSkelAnim
 
 The animation an entity shows, loading it on first use. An animation the
 definition does not have, or whose file is bad, falls back to the first.
@@ -387,6 +777,29 @@ static tanAnim_t *R_TikiAnim( tikiModel_t *tiki, int animnum ) {
 	return anim;
 }
 
+static skelAnim_t *R_TikiSkelAnim( tikiModel_t *tiki, int animnum ) {
+	skelAnim_t	*anim;
+
+	if ( !tiki->skeletal || !tiki->skel || !tiki->numAnims ) {
+		return NULL;
+	}
+	if ( animnum < 0 || animnum >= tiki->numAnims ) {
+		animnum = 0;
+	}
+	anim = tiki->skelAnims[animnum];
+	if ( !anim ) {
+		anim = R_SkaLoad( tiki, tiki->animFiles[animnum] );
+		tiki->skelAnims[animnum] = anim ? anim : &skelFailed;
+	}
+	if ( anim == &skelFailed ) {
+		anim = NULL;
+	}
+	if ( !anim && animnum != 0 ) {
+		return R_TikiSkelAnim( tiki, 0 );
+	}
+	return anim;
+}
+
 /*
 ===============
 R_TikiFarthestPoint
@@ -398,11 +811,22 @@ a sky dome, has to be counted too.
 */
 float R_TikiFarthestPoint( const trRefEntity_t *ent, const model_t *mod ) {
 	tikiModel_t	*tiki = mod->modelData;
-	tanAnim_t	*anim = R_TikiAnim( tiki, ent->e.anim );
 	vec3_t		delta;
-	float		scale = 1, radius;
+	float		scale = 1, radius = tiki->radius;
 
-	radius = anim ? anim->radius : tiki->radius;
+	if ( tiki->skeletal ) {
+		skelAnim_t	*anim = R_TikiSkelAnim( tiki, ent->e.anim );
+
+		if ( anim ) {
+			radius = anim->radius;
+		}
+	} else {
+		tanAnim_t	*anim = R_TikiAnim( tiki, ent->e.anim );
+
+		if ( anim ) {
+			radius = anim->radius;
+		}
+	}
 	if ( ent->e.nonNormalizedAxes ) {
 		scale = VectorLength( ent->e.axis[0] );
 	}
@@ -430,17 +854,15 @@ R_TikiCull
 Culls with the frames' bounds, as Quake III does for MD3 models.
 ===============
 */
-static int R_TikiCull( const tanAnim_t *anim, const trRefEntity_t *ent ) {
-	const tanFrame_t	*newFrame = &anim->frames[ent->e.frame];
-	const tanFrame_t	*oldFrame = &anim->frames[ent->e.oldframe];
-	vec3_t				bounds[2];
-	int					i;
+static int R_TikiCull( const tikiFrame_t *newFrame, const tikiFrame_t *oldFrame, const trRefEntity_t *ent ) {
+	vec3_t	bounds[2];
+	int		i;
 
 	if ( !ent->e.nonNormalizedAxes ) {
-		int		sphereCull = R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius );
+		int		sphereCull = R_CullLocalPointAndRadius( (float *)newFrame->localOrigin, newFrame->radius );
 
 		if ( newFrame != oldFrame ) {
-			int		sphereCullB = R_CullLocalPointAndRadius( oldFrame->localOrigin, oldFrame->radius );
+			int		sphereCullB = R_CullLocalPointAndRadius( (float *)oldFrame->localOrigin, oldFrame->radius );
 
 			if ( sphereCull != sphereCullB ) {
 				sphereCull = CULL_CLIP;
@@ -460,37 +882,81 @@ static int R_TikiCull( const tanAnim_t *anim, const trRefEntity_t *ent ) {
 
 /*
 ===============
+R_TikiSurfaceShader
+
+The shader a surface draws with for this entity, or NULL to leave it out.
+===============
+*/
+static shader_t *R_TikiSurfaceShader( const tikiModel_t *tiki, const trRefEntity_t *ent, int surfaceNum ) {
+	shader_t	*sh;
+	int			flags, skin;
+
+	if ( ent->e.customShader ) {
+		return R_GetShaderByHandle( ent->e.customShader );
+	}
+	if ( surfaceNum < 0 ) {
+		return tr.defaultShader;
+	}
+	flags = ent->e.surfaces[surfaceNum];
+	if ( flags & MDL_SURFACE_NODRAW ) {
+		return NULL;
+	}
+	skin = flags & ( MDL_SURFACE_SKINOFFSET_BIT0 | MDL_SURFACE_SKINOFFSET_BIT1 );
+	sh = tiki->shaders[surfaceNum * TIKI_MODEL_MAX_SKINS + skin];
+	if ( !sh && skin ) {
+		sh = tiki->shaders[surfaceNum * TIKI_MODEL_MAX_SKINS];
+	}
+	return sh;		// NULL: hidden by the definition
+}
+
+/*
+===============
 R_AddTikiSurfaces
 ===============
 */
 void R_AddTikiSurfaces( trRefEntity_t *ent ) {
-	tikiModel_t	*tiki = tr.currentModel->modelData;
-	tanAnim_t	*anim;
-	int			i;
+	tikiModel_t		*tiki = tr.currentModel->modelData;
+	const tikiFrame_t	*frames;
+	int				numFrames, numSurfaces, i;
 
 	// don't add third_person objects if not in a portal
 	if ( ( ent->e.renderfx & RF_THIRD_PERSON ) && !tr.viewParms.isPortal ) {
 		return;
 	}
 
-	anim = R_TikiAnim( tiki, ent->e.anim );
-	if ( !anim ) {
-		return;
+	if ( tiki->skeletal ) {
+		skelAnim_t	*anim = R_TikiSkelAnim( tiki, ent->e.anim );
+
+		if ( !anim ) {
+			return;
+		}
+		frames = anim->frames;
+		numFrames = anim->numFrames;
+		numSurfaces = tiki->skel->numSurfaces;
+	} else {
+		tanAnim_t	*anim = R_TikiAnim( tiki, ent->e.anim );
+
+		if ( !anim ) {
+			return;
+		}
+		frames = anim->frames;
+		numFrames = anim->numFrames;
+		numSurfaces = anim->numSurfaces;
 	}
 
 	// an old frame from another animation means nothing here
 	if ( ent->e.oldanim != ent->e.anim ) {
 		ent->e.oldframe = ent->e.frame;
 	}
-	if ( ent->e.frame < 0 || ent->e.frame >= anim->numFrames
-		|| ent->e.oldframe < 0 || ent->e.oldframe >= anim->numFrames ) {
+	if ( ent->e.frame < 0 || ent->e.frame >= numFrames
+		|| ent->e.oldframe < 0 || ent->e.oldframe >= numFrames ) {
 		ri.Printf( PRINT_DEVELOPER, "R_AddTikiSurfaces: no such frame %d to %d for '%s'\n",
 			ent->e.oldframe, ent->e.frame, tr.currentModel->name );
 		ent->e.frame = 0;
 		ent->e.oldframe = 0;
 	}
 
-	if ( R_TikiCull( anim, ent ) == CULL_OUT ) {
+	if ( R_TikiCull( &frames[ent->e.frame], &frames[ent->e.oldframe], ent ) == CULL_OUT ) {
 		return;
 	}
 
@@ -498,30 +964,25 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		R_SetupEntityLighting( &tr.refdef, ent );
 	}
 
-	for ( i = 0 ; i < anim->numSurfaces ; i++ ) {
-		tanSurface_t	*surf = &anim->surfaces[i];
-		shader_t		*sh;
+	for ( i = 0 ; i < numSurfaces ; i++ ) {
+		void		*surf;
+		int			surfaceNum;
+		shader_t	*sh;
 
-		if ( ent->e.customShader ) {
-			sh = R_GetShaderByHandle( ent->e.customShader );
-		} else if ( surf->surfaceNum < 0 ) {
-			sh = tr.defaultShader;
+		if ( tiki->skeletal ) {
+			surf = &tiki->skel->surfaces[i];
+			surfaceNum = tiki->skel->surfaces[i].surfaceNum;
 		} else {
-			int		flags = ent->e.surfaces[surf->surfaceNum];
-			int		skin = flags & ( MDL_SURFACE_SKINOFFSET_BIT0 | MDL_SURFACE_SKINOFFSET_BIT1 );
+			tanAnim_t	*anim = R_TikiAnim( tiki, ent->e.anim );
 
-			if ( flags & MDL_SURFACE_NODRAW ) {
-				continue;
-			}
-			sh = tiki->shaders[surf->surfaceNum * TIKI_MODEL_MAX_SKINS + skin];
-			if ( !sh && skin ) {
-				sh = tiki->shaders[surf->surfaceNum * TIKI_MODEL_MAX_SKINS];
-			}
-			if ( !sh ) {
-				continue;		// hidden by the definition
-			}
+			surf = &anim->surfaces[i];
+			surfaceNum = anim->surfaces[i].surfaceNum;
 		}
-		R_AddDrawSurf( (void *)surf, sh, 0, qfalse );
+		sh = R_TikiSurfaceShader( tiki, ent, surfaceNum );
+		if ( !sh ) {
+			continue;
+		}
+		R_AddDrawSurf( surf, sh, 0, qfalse );
 	}
 }
 
@@ -536,8 +997,8 @@ RB_SurfaceMesh does for MD3 surfaces.
 void RB_SurfaceTan( void *surface ) {
 	tanSurface_t			*surf = surface;
 	const refEntity_t		*e = &backEnd.currentEntity->e;
-	const tanFrame_t		*newFrame = &surf->anim->frames[e->frame];
-	const tanFrame_t		*oldFrame = &surf->anim->frames[e->oldframe];
+	const tikiFrame_t		*newFrame = &surf->anim->frames[e->frame];
+	const tikiFrame_t		*oldFrame = &surf->anim->frames[e->oldframe];
 	const unsigned short	*newXyz, *oldXyz;
 	float					*outXyz, *outNormal;
 	float					backlerp, frontlerp;
@@ -594,6 +1055,227 @@ void RB_SurfaceTan( void *surface ) {
 	for ( i = 0 ; i < numVerts ; i++ ) {
 		tess.texCoords[baseVertex + i][0][0] = surf->st[i * 2];
 		tess.texCoords[baseVertex + i][0][1] = surf->st[i * 2 + 1];
+	}
+
+	tess.numVertexes += numVerts;
+	tess.numIndexes += numIndexes;
+}
+
+/*
+===========================================================================
+
+Skeletons
+
+===========================================================================
+*/
+
+typedef struct {
+	vec3_t		origin;			// in the model's space, before the definition's scale
+	vec3_t		axis[3];		// rows of the rotation matrix, Quake's axis convention
+	vec4_t		quat;			// the rotation so far, for the children
+} skelBonePose_t;
+
+// the bones composed for the entity being drawn; its surfaces come in any
+// order among other entities', so they are kept until a different entity or
+// frame is drawn
+static skelBonePose_t	skel_pose[SKEL_MAX_BONES];
+static const tikiModel_t	*skel_poseModel;
+static const trRefEntity_t	*skel_poseEntity;
+static int				skel_poseAnim, skel_poseFrame, skel_poseOldFrame;
+static float			skel_poseBacklerp;
+static int				skel_poseBoneTag[NUM_BONE_CONTROLLERS];
+static vec4_t			skel_poseBoneQuat[NUM_BONE_CONTROLLERS];
+
+// r = p * q, Hamilton product on x y z w (fakk2.exe 0x44fe40)
+static void Skel_QuatMultiply( const vec4_t p, const vec4_t q, vec4_t r ) {
+	r[0] = p[3] * q[0] + p[0] * q[3] + p[1] * q[2] - p[2] * q[1];
+	r[1] = p[3] * q[1] - p[0] * q[2] + p[1] * q[3] + p[2] * q[0];
+	r[2] = p[3] * q[2] + p[0] * q[1] - p[1] * q[0] + p[2] * q[3];
+	r[3] = p[3] * q[3] - p[0] * q[0] - p[1] * q[1] - p[2] * q[2];
+}
+
+// the rotation matrix of a quaternion, rows out (fakk2.exe 0x43c980)
+static void Skel_QuatToAxis( const vec4_t q, vec3_t axis[3] ) {
+	float	x2 = q[0] + q[0], y2 = q[1] + q[1], z2 = q[2] + q[2];
+	float	xx = x2 * q[0], xy = y2 * q[0], xz = z2 * q[0];
+	float	yy = y2 * q[1], yz = z2 * q[1], zz = z2 * q[2];
+	float	wx = x2 * q[3], wy = y2 * q[3], wz = z2 * q[3];
+
+	axis[0][0] = 1.0f - ( yy + zz );
+	axis[0][1] = xy - wz;
+	axis[0][2] = xz + wy;
+	axis[1][0] = xy + wz;
+	axis[1][1] = 1.0f - ( xx + zz );
+	axis[1][2] = yz - wx;
+	axis[2][0] = xz - wy;
+	axis[2][1] = yz + wx;
+	axis[2][2] = 1.0f - ( xx + yy );
+}
+
+// a vector in a bone's frame, in its parent's (fakk2.exe 0x43c800)
+static void Skel_RotateByAxis( const vec3_t in, const vec3_t axis[3], vec3_t out ) {
+	out[0] = in[0] * axis[0][0] + in[1] * axis[1][0] + in[2] * axis[2][0];
+	out[1] = in[0] * axis[0][1] + in[1] * axis[1][1] + in[2] * axis[2][1];
+	out[2] = in[0] * axis[0][2] + in[1] * axis[1][2] + in[2] * axis[2][2];
+}
+
+static void Skel_FrameBone( const skelAnim_t *anim, int frame, int bone, vec4_t quat, vec3_t offset ) {
+	const short	*s = anim->bones + ( frame * anim->numBones + bone ) * 8;
+
+	quat[0] = s[0] * SKEL_QUAT_SCALE;
+	quat[1] = s[1] * SKEL_QUAT_SCALE;
+	quat[2] = s[2] * SKEL_QUAT_SCALE;
+	quat[3] = s[3] * SKEL_QUAT_SCALE;
+	offset[0] = s[4] * SKEL_OFFSET_SCALE;
+	offset[1] = s[5] * SKEL_OFFSET_SCALE;
+	offset[2] = s[6] * SKEL_OFFSET_SCALE;
+}
+
+/*
+===============
+R_SkelComputeBones
+
+Composes the entity's bones for its frame, root first.
+===============
+*/
+static void R_SkelComputeBones( const tikiModel_t *tiki, const skelAnim_t *anim, const trRefEntity_t *ent ) {
+	const refEntity_t	*e = &ent->e;
+	float				backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
+	int					b, i;
+
+	if ( skel_poseModel == tiki && skel_poseEntity == ent && skel_poseAnim == e->anim
+		&& skel_poseFrame == e->frame && skel_poseOldFrame == e->oldframe && skel_poseBacklerp == backlerp
+		&& !memcmp( skel_poseBoneTag, e->bone_tag, sizeof( skel_poseBoneTag ) )
+		&& !memcmp( skel_poseBoneQuat, e->bone_quat, sizeof( skel_poseBoneQuat ) ) ) {
+		return;
+	}
+	skel_poseModel = tiki;
+	skel_poseEntity = ent;
+	skel_poseAnim = e->anim;
+	skel_poseFrame = e->frame;
+	skel_poseOldFrame = e->oldframe;
+	skel_poseBacklerp = backlerp;
+	Com_Memcpy( skel_poseBoneTag, e->bone_tag, sizeof( skel_poseBoneTag ) );
+	Com_Memcpy( skel_poseBoneQuat, e->bone_quat, sizeof( skel_poseBoneQuat ) );
+
+	for ( b = 0 ; b < tiki->skel->numBones ; b++ ) {
+		skelBonePose_t	*pose = &skel_pose[b];
+		vec4_t			quat, acc;
+		vec3_t			offset;
+		int				parent = tiki->skel->parents[b];
+
+		Skel_FrameBone( anim, e->frame, b, quat, offset );
+		if ( backlerp ) {
+			vec4_t	oldQuat;
+			vec3_t	oldOffset;
+			float	dot;
+
+			// normalised lerp, taking the shorter way round
+			Skel_FrameBone( anim, e->oldframe, b, oldQuat, oldOffset );
+			dot = quat[0] * oldQuat[0] + quat[1] * oldQuat[1] + quat[2] * oldQuat[2] + quat[3] * oldQuat[3];
+			if ( dot < 0 ) {
+				for ( i = 0 ; i < 4 ; i++ ) {
+					oldQuat[i] = -oldQuat[i];
+				}
+			}
+			for ( i = 0 ; i < 4 ; i++ ) {
+				quat[i] = quat[i] * ( 1.0f - backlerp ) + oldQuat[i] * backlerp;
+			}
+			dot = quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3];
+			if ( dot > 0 ) {
+				dot = 1.0f / sqrt( dot );
+				for ( i = 0 ; i < 4 ; i++ ) {
+					quat[i] *= dot;
+				}
+			}
+			for ( i = 0 ; i < 3 ; i++ ) {
+				offset[i] = offset[i] * ( 1.0f - backlerp ) + oldOffset[i] * backlerp;
+			}
+		}
+
+		if ( parent < 0 ) {
+			VectorAdd( offset, tiki->origin, pose->origin );
+			Vector4Copy( quat, acc );
+		} else {
+			const skelBonePose_t	*parentPose = &skel_pose[parent];
+			vec3_t					turned;
+
+			Skel_RotateByAxis( offset, parentPose->axis, turned );
+			VectorAdd( parentPose->origin, turned, pose->origin );
+			Skel_QuatMultiply( quat, parentPose->quat, acc );
+		}
+
+		// the entity's bone controllers turn their bones further
+		for ( i = 0 ; i < NUM_BONE_CONTROLLERS ; i++ ) {
+			if ( e->bone_tag[i] == b ) {
+				vec4_t	turned;
+
+				Skel_QuatMultiply( acc, e->bone_quat[i], turned );
+				Vector4Copy( turned, acc );
+			}
+		}
+
+		Vector4Copy( acc, pose->quat );
+		Skel_QuatToAxis( acc, pose->axis );
+	}
+}
+
+/*
+===============
+RB_SurfaceSkel
+
+Skins the surface's vertexes with the entity's bones.
+===============
+*/
+void RB_SurfaceSkel( void *surface ) {
+	skelSurface_t		*surf = surface;
+	const trRefEntity_t	*ent = backEnd.currentEntity;
+	tikiModel_t			*tiki = surf->model;
+	const skelAnim_t	*anim;
+	float				*outXyz, *outNormal;
+	int					i, j, numVerts, numIndexes, baseVertex, baseIndex;
+
+	anim = R_TikiSkelAnim( tiki, ent->e.anim );
+	if ( !anim ) {
+		return;
+	}
+	R_SkelComputeBones( tiki, anim, ent );
+
+	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
+
+	numVerts = surf->numVerts;
+	numIndexes = surf->numTris * 3;
+	baseVertex = tess.numVertexes;
+	baseIndex = tess.numIndexes;
+	outXyz = tess.xyz[baseVertex];
+	outNormal = tess.normal[baseVertex];
+
+	for ( i = 0 ; i < numVerts ; i++, outXyz += 4, outNormal += 4 ) {
+		const skelVert_t	*v = &surf->verts[i];
+		vec3_t				xyz, normal, turned;
+
+		VectorClear( xyz );
+		VectorClear( normal );
+		for ( j = 0 ; j < v->numWeights ; j++ ) {
+			const skelWeight_t		*w = &surf->weights[v->firstWeight + j];
+			const skelBonePose_t	*pose = &skel_pose[w->bone];
+
+			Skel_RotateByAxis( w->offset, pose->axis, turned );
+			VectorAdd( turned, pose->origin, turned );
+			VectorMA( xyz, w->weight, turned, xyz );
+			Skel_RotateByAxis( v->normal, pose->axis, turned );
+			VectorMA( normal, w->weight, turned, normal );
+		}
+		VectorScale( xyz, tiki->scale, outXyz );
+		VectorNormalizeFast( normal );
+		VectorCopy( normal, outNormal );
+
+		tess.texCoords[baseVertex + i][0][0] = v->st[0];
+		tess.texCoords[baseVertex + i][0][1] = v->st[1];
+	}
+
+	for ( i = 0 ; i < numIndexes ; i++ ) {
+		tess.indexes[baseIndex + i] = baseVertex + surf->indexes[i];
 	}
 
 	tess.numVertexes += numVerts;

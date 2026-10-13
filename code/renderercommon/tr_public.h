@@ -37,6 +37,7 @@ typedef struct {
 	vec3_t		origin;			// added after scaling
 	const char	*path;			// directory the model's images are in
 	qboolean	skeletal;		// animations are .ska over a .skb skeleton, not .tan files
+	const char	*skelFile;		// the .skb file of a skeletal model
 	vec3_t		mins, maxs;		// the definition's bounds, as the game sees them
 	float		radius;
 

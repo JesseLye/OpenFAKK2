@@ -92,9 +92,7 @@ static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const ve
 		return;
 	}
 	if ( TIKI_IsSkeletal( tiki ) ) {
-		Com_DPrintf( "viewer: %s is skeletal\n", name );
 		viewerSkeletal++;
-		return;
 	}
 
 	anim = TIKI_Anim_NumForName( tiki, "idle" );
@@ -262,7 +260,7 @@ static void CL_Viewer_ViewMap_f( void ) {
 			skyModels++;
 		}
 	}
-	Com_Printf( "%i models placed (%i in the sky); not drawn: %i skeletal, %i that failed to load\n",
+	Com_Printf( "%i models placed (%i in the sky, %i skeletal); %i failed to load\n",
 		viewerNumModels, skyModels, viewerSkeletal, viewerFailed );
 }
 

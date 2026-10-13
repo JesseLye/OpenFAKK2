@@ -1101,5 +1101,6 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_IQMSurfaceAnim,		// SF_IQM,
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
 	(void(*)(void*))RB_SurfaceEntity,		// SF_ENTITY
-	(void(*)(void*))RB_SurfaceTan			// SF_TAN
+	(void(*)(void*))RB_SurfaceTan,			// SF_TAN
+	(void(*)(void*))RB_SurfaceSkel			// SF_SKEL
 };
