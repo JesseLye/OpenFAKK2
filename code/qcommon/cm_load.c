@@ -109,6 +109,7 @@ void CMod_LoadShaders( lump_t *l ) {
 	for ( i=0 ; i<count ; i++, in++, out++ ) {
 		out->contentFlags = LittleLong( out->contentFlags );
 		out->surfaceFlags = LittleLong( out->surfaceFlags );
+		out->subdivisions = LittleLong( out->subdivisions );
 	}
 }
 
@@ -491,6 +492,7 @@ void CMod_LoadPatches( lump_t *surfs, lump_t *verts ) {
 	vec3_t		points[MAX_PATCH_VERTS];
 	int			width, height;
 	int			shaderNum;
+	int			subdivisions;
 
 	in = (void *)(cmod_base + surfs->fileofs);
 	if (surfs->filelen % sizeof(*in))
@@ -532,7 +534,12 @@ void CMod_LoadPatches( lump_t *surfs, lump_t *verts ) {
 		patch->surfaceFlags = cm.shaders[shaderNum].surfaceFlags;
 
 		// create the internal facet structure
-		patch->pc = CM_GeneratePatchCollide( width, height, points );
+		// each shader sets how closely collision facets follow its curves
+		subdivisions = cm.shaders[shaderNum].subdivisions;
+		if ( subdivisions < MIN_MAP_SUBDIVISIONS ) {
+			subdivisions = MIN_MAP_SUBDIVISIONS;
+		}
+		patch->pc = CM_GeneratePatchCollide( width, height, points, subdivisions );
 	}
 }
 
@@ -621,9 +628,17 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	last_checksum = LittleLong (Com_BlockChecksum (buf.i, length));
 	*checksum = last_checksum;
 
+	if ( length < (int)sizeof(dheader_t) ) {
+		Com_Error (ERR_DROP, "CM_LoadMap: %s is too short to be a map (%i bytes)", name, length );
+	}
+
 	header = *(dheader_t *)buf.i;
 	for (i=0 ; i<sizeof(dheader_t)/4 ; i++) {
 		((int *)&header)[i] = LittleLong ( ((int *)&header)[i]);
+	}
+
+	if ( header.ident != BSP_IDENT ) {
+		Com_Error (ERR_DROP, "CM_LoadMap: %s is not a FAKK2 map (ident 0x%08x)", name, header.ident );
 	}
 
 	if ( header.version != BSP_VERSION ) {

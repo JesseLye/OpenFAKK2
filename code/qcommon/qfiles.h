@@ -303,10 +303,16 @@ typedef struct {
 */
 
 
-#define BSP_IDENT	(('P'<<24)+('S'<<16)+('B'<<8)+'I')
-		// little-endian "IBSP"
+// Heavy Metal: F.A.K.K. 2 map format. It derives from Quake III's IBSP 46:
+// the header gains a checksum, the lumps are reordered and extended, and
+// shaders and surfaces each carry a subdivision value.
+#define BSP_IDENT	(('K'<<24)+('K'<<16)+('A'<<8)+'F')
+		// little-endian "FAKK"
 
-#define BSP_VERSION			46
+#define BSP_VERSION			12
+
+// lower bound on a shader's curve subdivision distance, in world units
+#define MIN_MAP_SUBDIVISIONS	16
 
 
 // there shouldn't be any problem with increasing these values at the
@@ -357,28 +363,32 @@ typedef struct {
 	int		fileofs, filelen;
 } lump_t;
 
-#define	LUMP_ENTITIES		0
-#define	LUMP_SHADERS		1
-#define	LUMP_PLANES			2
-#define	LUMP_NODES			3
-#define	LUMP_LEAFS			4
-#define	LUMP_LEAFSURFACES	5
+#define	LUMP_SHADERS		0
+#define	LUMP_PLANES			1
+#define	LUMP_LIGHTMAPS		2
+#define	LUMP_SURFACES		3
+#define	LUMP_DRAWVERTS		4
+#define	LUMP_DRAWINDEXES	5
 #define	LUMP_LEAFBRUSHES	6
-#define	LUMP_MODELS			7
-#define	LUMP_BRUSHES		8
-#define	LUMP_BRUSHSIDES		9
-#define	LUMP_DRAWVERTS		10
-#define	LUMP_DRAWINDEXES	11
+#define	LUMP_LEAFSURFACES	7
+#define	LUMP_LEAFS			8
+#define	LUMP_NODES			9
+#define	LUMP_BRUSHSIDES		10
+#define	LUMP_BRUSHES		11
 #define	LUMP_FOGS			12
-#define	LUMP_SURFACES		13
-#define	LUMP_LIGHTMAPS		14
-#define	LUMP_LIGHTGRID		15
-#define	LUMP_VISIBILITY		16
-#define	HEADER_LUMPS		17
+#define	LUMP_MODELS			13
+#define	LUMP_ENTITIES		14
+#define	LUMP_VISIBILITY		15
+#define	LUMP_LIGHTGRID		16
+#define	LUMP_ENTLIGHTS		17
+#define	LUMP_ENTLIGHTSVIS	18
+#define	LUMP_LIGHTDEFS		19
+#define	HEADER_LUMPS		20
 
 typedef struct {
 	int			ident;
 	int			version;
+	int			checksum;
 
 	lump_t		lumps[HEADER_LUMPS];
 } dheader_t;
@@ -393,6 +403,7 @@ typedef struct {
 	char		shader[MAX_QPATH];
 	int			surfaceFlags;
 	int			contentFlags;
+	int			subdivisions;
 } dshader_t;
 
 // planes x^1 is allways the opposite of plane x
@@ -478,6 +489,8 @@ typedef struct {
 
 	int			patchWidth;
 	int			patchHeight;
+
+	float		subdivisions;
 } dsurface_t;
 
 
