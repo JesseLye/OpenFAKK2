@@ -48,9 +48,9 @@ A probe must end with `pendingevents`; that is how the script knows it has finis
 
 ## The client and the map viewer
 
-    toolsetail-compareun-client.ps1 -Run "+viewmap zoo +wait 30 +screenshotJPEG +wait 5 +quit"
+    tools\retail-compare\run-client.ps1 -Run "+viewmap zoo +wait 30 +screenshotJPEG +wait 5 +quit"
 
 runs the OpenFAKK2 client in a window against the retail data, copies its console log
 to `build\compare\client.log` (`-Name` changes the name) and stops it after `-Secs`
-seconds if it has not quit. Screenshots land in `build\sandbox\homeakk\screenshots`.
+seconds if it has not quit. Screenshots land in `build\sandbox\home\fakk\screenshots`.
 `viewpos <x> <y> <z> [yaw] [pitch]` places the camera before a screenshot.
