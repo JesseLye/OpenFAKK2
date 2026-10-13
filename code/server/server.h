@@ -411,6 +411,7 @@ sharedEntity_t *SV_GEntityForSvEntity( svEntity_t *svEnt );
 void		SV_InitGameProgs ( void );
 void		SV_ShutdownGameProgs ( void );
 qboolean	SV_GameLoaded( void );
+void		SV_GameSpawnEntities( const char *mapname );
 void		SV_GameRunFrame( int frameMsec );
 const char	*SV_GameClientConnect( int clientNum, qboolean firstTime );
 void		SV_GameClientBegin( int clientNum, usercmd_t *cmd );

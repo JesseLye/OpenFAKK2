@@ -38,7 +38,7 @@ clipHandle_t SV_ClipHandleForEntity( const sharedEntity_t *ent ) {
 		return SV_InlineModelHandle( ent->s.modelindex );
 	}
 	// create a temp tree from bounding box sizes
-	return CM_TempBoxModel( ent->mins, ent->maxs, qfalse );
+	return CM_TempBoxModel( ent->mins, ent->maxs, qfalse, ent->contents );
 }
 
 

@@ -423,8 +423,12 @@ static void SV_GameAddCommand( const char *cmd ) {
 }
 
 static int SV_GameReadFile( const char *name, void **buf, qboolean quiet ) {
-	(void)quiet;
-	return (int)FS_ReadFile( name, buf );
+	int		length = (int)FS_ReadFile( name, buf );
+
+	if ( length < 0 && !quiet ) {
+		Com_Printf( "Can't find %s\n", name );
+	}
+	return length;
 }
 
 static void SV_GameWriteFile( const char *qpath, const void *buffer, int size ) {
@@ -1004,6 +1008,22 @@ static void *SV_LoadGameLibrary( char *loadedFrom, int loadedFromSize ) {
 		}
 	}
 	return NULL;
+}
+
+/*
+===============
+SV_GameSpawnEntities
+
+Model index 1 always names the map itself; the game relies on that for the
+world entity and for beams, which only need a non-zero index that is not a
+model definition.
+===============
+*/
+void SV_GameSpawnEntities( const char *mapname ) {
+	Com_Memset( sv_tikis, 0, sizeof( sv_tikis ) );
+	SV_SetConfigstring( CS_MODELS + 1, va( "maps/%s.bsp", mapname ) );
+
+	ge->SpawnEntities( mapname, CM_EntityString(), sv.time );
 }
 
 qboolean SV_GameLoaded( void ) {

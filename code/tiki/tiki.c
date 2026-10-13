@@ -905,7 +905,11 @@ static void TIKI_ApplySurfaceCommands( tiki_t *tiki, const tikiCommandList_t *cm
 			}
 			if ( !Q_stricmp( cmd->args[1], "shader" ) ) {
 				surface->numSkins = 0;
+				// further skins repeat the keyword: shader <first> shader <second>
 				for ( k = 2 ; k < cmd->numArgs && surface->numSkins < TIKI_MAX_SKINS ; k++ ) {
+					if ( !Q_stricmp( cmd->args[k], "shader" ) ) {
+						continue;
+					}
 					Q_strncpyz( surface->shader[surface->numSkins++], cmd->args[k], MAX_QPATH );
 				}
 			} else if ( !Q_stricmp( cmd->args[1], "flags" ) ) {
@@ -956,7 +960,7 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 
 		length = (int)FS_ReadFile( anim->fullname, &buffer );
 		if ( !buffer ) {
-			Com_Printf( "WARNING: %s: couldn't load animation %s\n", tiki->name, anim->fullname );
+			Com_DPrintf( "%s: dropping animation %s, couldn't load %s\n", tiki->name, anim->alias, anim->fullname );
 			continue;
 		}
 
@@ -985,9 +989,19 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 			anim->flags |= TIKI_ANIM_DELTA_DRIVEN;
 		}
 
+		// mins and maxs are accumulated separately: a frame without geometry
+		// stores mins above its maxs and must not widen the box
 		for ( j = 0 ; j < anim->numFrames ; j++ ) {
-			AddPointToBounds( anim->frames[j].mins, tiki->mins, tiki->maxs );
-			AddPointToBounds( anim->frames[j].maxs, tiki->mins, tiki->maxs );
+			int		k;
+
+			for ( k = 0 ; k < 3 ; k++ ) {
+				if ( anim->frames[j].mins[k] < tiki->mins[k] ) {
+					tiki->mins[k] = anim->frames[j].mins[k];
+				}
+				if ( anim->frames[j].maxs[k] > tiki->maxs[k] ) {
+					tiki->maxs[k] = anim->frames[j].maxs[k];
+				}
+			}
 			haveBounds = qtrue;
 		}
 
@@ -1002,6 +1016,24 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 			}
 		}
 	}
+
+	// An animation that failed to load is removed, so later animations move
+	// down a number. The retail engine does the same: its cached definitions
+	// count only the animations whose files exist.
+	for ( i = 0, j = 0 ; i < tiki->numAnims ; i++ ) {
+		tikiAnim_t	*anim = &tiki->anims[i];
+
+		if ( !anim->frames ) {
+			TIKI_FreeCommands( &anim->serverCmds );
+			TIKI_FreeCommands( &anim->clientCmds );
+			continue;
+		}
+		if ( j != i ) {
+			tiki->anims[j] = *anim;
+		}
+		j++;
+	}
+	tiki->numAnims = j;
 
 	// models without geometry report frames whose mins exceed their maxs
 	if ( !haveBounds || tiki->mins[0] > tiki->maxs[0] || tiki->mins[1] > tiki->maxs[1] || tiki->mins[2] > tiki->maxs[2] ) {

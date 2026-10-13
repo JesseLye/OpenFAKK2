@@ -506,7 +506,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	sv.state = SS_LOADING;
 
 	// spawn the level's entities
-	ge->SpawnEntities( server, CM_EntityString(), sv.time );
+	SV_GameSpawnEntities( server );
 
 	// don't allow a map_restart if game is modified
 	sv_gametype->modified = qfalse;

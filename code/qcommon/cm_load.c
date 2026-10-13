@@ -482,6 +482,9 @@ CMod_LoadPatches
 =================
 */
 #define	MAX_PATCH_VERTS		1024
+// solid, or one of the four clip content bits (0x10000 - 0x80000)
+#define	PATCH_COLLIDE_CONTENTS	( 0x1 | 0xf0000 )
+
 void CMod_LoadPatches( lump_t *surfs, lump_t *verts ) {
 	drawVert_t	*dv, *dv_p;
 	dsurface_t	*in;
@@ -510,7 +513,17 @@ void CMod_LoadPatches( lump_t *surfs, lump_t *verts ) {
 		if ( LittleLong( in->surfaceType ) != MST_PATCH ) {
 			continue;		// ignore other surfaces
 		}
-		// FIXME: check for non-colliding patches
+
+		shaderNum = LittleLong( in->shaderNum );
+		if ( shaderNum < 0 || shaderNum >= cm.numShaders ) {
+			Com_Error( ERR_DROP, "CMod_LoadPatches: bad shaderNum: %i", shaderNum );
+		}
+
+		// only curves that can block something get collision data; the
+		// retail engine leaves the rest (water, foliage and the like) out
+		if ( !( cm.shaders[shaderNum].contentFlags & PATCH_COLLIDE_CONTENTS ) ) {
+			continue;
+		}
 
 		cm.surfaces[ i ] = patch = Hunk_Alloc( sizeof( *patch ), h_high );
 
@@ -529,7 +542,6 @@ void CMod_LoadPatches( lump_t *surfs, lump_t *verts ) {
 			points[j][2] = LittleFloat( dv_p->xyz[2] );
 		}
 
-		shaderNum = LittleLong( in->shaderNum );
 		patch->contents = cm.shaders[shaderNum].contentFlags;
 		patch->surfaceFlags = cm.shaders[shaderNum].surfaceFlags;
 
@@ -813,7 +825,11 @@ BSP trees instead of being compared directly.
 Capsules are handled differently though.
 ===================
 */
-clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs, int capsule ) {
+clipHandle_t CM_TempBoxModel( const vec3_t mins, const vec3_t maxs, int capsule, int contents ) {
+
+	// FAKK2 has solid box entities, so the box takes its owner's contents
+	// rather than always being a body
+	box_brush->contents = contents;
 
 	VectorCopy( mins, box_model.mins );
 	VectorCopy( maxs, box_model.maxs );
