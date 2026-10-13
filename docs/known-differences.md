@@ -30,15 +30,25 @@ What is established:
 - Solving for the generator position that reproduces retail's six observable picks gives
   two candidates: retail has made 23 fewer draws than OpenFAKK2 before those actors, or
   19 more.
-- OpenFAKK2's first 23 draws on `zoo` are single-candidate `idle` picks for 21 weapon
-  models (two of them twice), made while the game precaches after spawning entities.
+- OpenFAKK2's first 23 draws on `zoo` are the `anim idle` command in the server init
+  section of the 21 weapon models placed in the map (two of them have it twice). Those
+  weapons are entities 1 to 21, the first in the map, and the game runs each entity's
+  init commands in entity order once all entities have spawned. The same command in item
+  and creature models produces the draws that follow, which retail does appear to make.
+  So the "23 fewer" reading amounts to: under retail, `anim idle` on a weapon does not
+  draw.
+- The engine side of that call was read again and matches: the game's `Anim_Random`
+  goes through a per-model-index table (`0x444780`) that `modelindex` (`0x444fd0`) and
+  `setmodel` fill for any name ending in `tik`, then the pick function, which draws
+  whenever at least one animation matches. The weapon models spell the animation `idle`
+  in lower case and list it like the item models do.
 
-What is not known: why retail would not make those 23 draws. `sv_precache` is 1 on both. The picks are repeatable under retail
-(two retail runs agree on every reading on `zoo`).
-Untested ideas: retail's lookup failing for weapon models because of how their animation
-lists are built, the precache scripts running at a different point relative to the first
-frames, or the game taking a different path because of a cvar (`cheats` differs, see
-below).
+What is not known: why the weapon models would not draw under retail when the item models
+do. `sv_precache` is 1 on both. The picks are repeatable under retail (two retail runs
+agree on every reading on `zoo`). Not yet tried: checking the same prediction on a second
+map (count the weapon draws that come first and see whether retail's picks are that many
+behind), and comparing what `Anim_Random` returns for a weapon under retail, which would
+need a probe that makes the result visible.
 
 Impact: cosmetic. Which idle variant an actor starts on.
 
