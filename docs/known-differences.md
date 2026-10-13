@@ -110,10 +110,18 @@ corresponding retail code has not been examined.
   not recovered: the test for whether use is tracked per actor (taken to be "the alias is
   global, or no actor was given"), and the multiplier that turns the random fraction into
   an index (taken to be the number of available lines).
-- **Skeletal tag placement** in the TIKI code (`TIKI_BoneOrientation`) predates the
-  reading of `TIKI_Tag_Orientation` (`0x44fe40`, see the renderer section); the
-  renderer's composition follows that reading, the TIKI code's has not been checked
-  against it yet, and bone controllers and blending are not applied there.
+- **Tag placement** follows `fakk2.exe` (`TIKI_Tag_Orientation` `0x44fe40`,
+  `TIKI_Tag_OrientationEx` `0x44fc30` with its skeletal part `0x44ee40`, and the
+  client's lerped variant `0x451c90` with `0x4505e0` skeletal and `0x451a30` vertex;
+  the game imports `0x444d00`/`0x444da0` pass everything through): bones from the tag
+  to the root are composed root first as the renderer composes them (see there), with
+  the entity's bone controllers, the legs/torso split and cross-blending; the lerped
+  variant blends towards the old frame by `backlerp` first. Quaternions blend by slerp
+  (`0x43ca60`). Two choices of OpenFAKK2's own: bones no animation of the state moves
+  take the main animation's frame (retail leaves them zero), and an invalid request
+  gives a zero origin with identity axes (retail returns all zeros from the plain
+  function and identity from the lerped one). Bone quaternions scale by 1/32768 as in
+  retail (the TIKI code used 1/32767).
 - **`Anim_AbsoluteDelta`** returns the same value as `Anim_Delta`.
 - **The delta-driven animation flag is never set.** Retail's cached definitions flag only
   four animations, all in the unused `oldjulie` model, and the keyword that sets the flag
@@ -186,8 +194,12 @@ Not read, done another way:
   and the music calls do nothing.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
 - **Animation cross-blend times** are reported as 0, so animations change without
-  blending; `Tag_LerpedOrientation` returns the tag of the current frame without
-  interpolation, and `Tag_OrientationEx` ignores its blending arguments.
+  blending. (The tag functions honour the blending arguments the module passes; see
+  "Tag placement" above. Retail's table points `Tag_Orientation` straight at
+  `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks
+  for a cross-blend of 0 towards animation 0 — the SDK module never calls it, and
+  OpenFAKK2 uses the frame asked for — and `Tag_LerpedOrientation` at `0x451c90`;
+  `Tag_OrientationEx` is NULL in retail's table and follows the server's import here.)
 - **Lip-sync data** comes from the server's `.lip` reader, which is in the same
   executable.
 - **The pure-server check** is off (`sv_pure 0`, as retail has it).
@@ -376,10 +388,10 @@ What is implemented, and on what basis:
   pelvis, spine and legs) takes the entity's legs animation and every other bone the
   torso animation, when `usetorso` is set; either animation alone moves every bone;
   the bone controllers apply only when `useAngles` is set (the controller quaternion
-  multiplies the composed rotation, as for tags). Still assumed: turning normals with
-  the vertex's bones and interpolating frames by normalised quaternion lerp (retail
-  lerps the quaternion shorts in `0x43ca60`, not yet read). Cross-blending and level
-  of detail are not applied.
+  multiplies the composed rotation, as for tags). Frames are interpolated by slerp
+  from the old frame towards the current one (`0x43ca60`, the shorter way round, linear
+  within 1e-6 of parallel). Still assumed: turning normals with the vertex's bones.
+  Cross-blending and level of detail are not applied in the renderer.
 - **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
   size is the image's width times the shader's `spriteScale` times the entity's scale.
   That is OpenMoHAA's rule; the retail renderer's has not been read.

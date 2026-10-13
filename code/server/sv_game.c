@@ -702,19 +702,28 @@ static int SV_GameSurface_NumSkins( int modelindex, int num ) { return TIKI_Surf
 static int SV_GameTag_NumForName( int modelindex, const char *name ) { return TIKI_Tag_NumForName( SV_Tiki( modelindex ), name ); }
 static const char *SV_GameTag_NameForNum( int modelindex, int num ) { return TIKI_Tag_NameForNum( SV_Tiki( modelindex ), num ); }
 
-// bone controllers and animation blending are not applied yet
+// retail's imports (0x444d00, 0x444da0) pass everything on to the TIKI code
 static orientation_t SV_GameTag_Orientation( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat ) {
-	(void)bone_tag; (void)bone_quat;
-	return TIKI_Tag_Orientation( SV_Tiki( modelindex ), anim, frame, num, scale );
+	return TIKI_Tag_Orientation( SV_Tiki( modelindex ), anim, frame, num, scale, bone_tag, bone_quat );
 }
 
 static orientation_t SV_GameTag_OrientationEx( int modelindex, int anim, int frame, int num, float scale, int *bone_tag, vec4_t *bone_quat,
 	int crossblend_anim, int crossblend_frame, float crossblend_lerp, qboolean uselegs, qboolean usetorso, int torso_anim, int torso_frame,
 	int torso_crossblend_anim, int torso_crossblend_frame, float torso_crossblend_lerp ) {
-	(void)bone_tag; (void)bone_quat;
-	(void)crossblend_anim; (void)crossblend_frame; (void)crossblend_lerp; (void)uselegs; (void)usetorso; (void)torso_anim; (void)torso_frame;
-	(void)torso_crossblend_anim; (void)torso_crossblend_frame; (void)torso_crossblend_lerp;
-	return TIKI_Tag_Orientation( SV_Tiki( modelindex ), anim, frame, num, scale );
+	tikiAnimState_t	st;
+
+	TIKI_AnimStateFrame( &st, anim, frame, scale, bone_tag, bone_quat );
+	st.crossblend_anim = crossblend_anim;
+	st.crossblend_frame = crossblend_frame;
+	st.crossblend_lerp = crossblend_lerp;
+	st.uselegs = uselegs;
+	st.usetorso = usetorso;
+	st.torso_anim = st.torso_oldanim = torso_anim;
+	st.torso_frame = st.torso_oldframe = torso_frame;
+	st.torso_crossblend_anim = torso_crossblend_anim;
+	st.torso_crossblend_frame = torso_crossblend_frame;
+	st.torso_crossblend_lerp = torso_crossblend_lerp;
+	return TIKI_Tag_OrientationEx( SV_Tiki( modelindex ), &st, num );
 }
 
 static const char *SV_GameNameForNum( int modelindex ) {

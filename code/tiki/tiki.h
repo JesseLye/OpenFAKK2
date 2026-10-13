@@ -76,6 +76,27 @@ int			TIKI_Surface_NumSkins( const tiki_t *tiki, int num );
 
 int			TIKI_Tag_NumForName( const tiki_t *tiki, const char *name );
 const char	*TIKI_Tag_NameForNum( const tiki_t *tiki, int num );
-orientation_t	TIKI_Tag_Orientation( const tiki_t *tiki, int animnum, int framenum, int tagnum, float scale );
+
+// what an entity is playing, for placing its tags: the game modules' refEntity_t
+// animation fields, with the frames that are not interpolated towards set to the
+// current ones and cross-blend lerps below zero meaning no cross-blend
+typedef struct {
+	int				anim, frame, oldanim, oldframe;
+	float			backlerp;				// 0 = current frame, 1 = old frame
+	int				crossblend_anim, crossblend_frame;
+	float			crossblend_lerp;		// share of the current animation
+	qboolean		uselegs, usetorso;
+	int				torso_anim, torso_frame, torso_oldanim, torso_oldframe;
+	float			torso_backlerp;
+	int				torso_crossblend_anim, torso_crossblend_frame;
+	float			torso_crossblend_lerp;
+	float			scale;
+	const int		*bone_tag;				// NUM_BONE_CONTROLLERS each, or NULL
+	const vec4_t	*bone_quat;
+} tikiAnimState_t;
+
+void			TIKI_AnimStateFrame( tikiAnimState_t *st, int anim, int frame, float scale, const int *bone_tag, const vec4_t *bone_quat );
+orientation_t	TIKI_Tag_Orientation( const tiki_t *tiki, int animnum, int framenum, int tagnum, float scale, const int *bone_tag, const vec4_t *bone_quat );
+orientation_t	TIKI_Tag_OrientationEx( const tiki_t *tiki, const tikiAnimState_t *st, int tagnum );
 
 #endif // __TIKI_H__

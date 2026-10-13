@@ -1132,6 +1132,40 @@ static void Skel_QuatMultiply( const vec4_t p, const vec4_t q, vec4_t r ) {
 	r[3] = p[3] * q[3] - p[0] * q[0] - p[1] * q[1] - p[2] * q[2];
 }
 
+// from towards to by t, the shorter way round (fakk2.exe 0x43ca60)
+static void Skel_QuatSlerp( const vec4_t from, const vec4_t to, float t, vec4_t out ) {
+	vec4_t	to1;
+	float	cosom = from[0] * to[0] + from[1] * to[1] + from[2] * to[2] + from[3] * to[3];
+	float	scale0, scale1;
+	int		i;
+
+	if ( cosom < 0 ) {
+		cosom = -cosom;
+		for ( i = 0 ; i < 4 ; i++ ) {
+			to1[i] = -to[i];
+		}
+	} else {
+		if ( from[0] == to[0] && from[1] == to[1] && from[2] == to[2] && from[3] == to[3] ) {
+			Vector4Copy( to, out );
+			return;
+		}
+		Vector4Copy( to, to1 );
+	}
+	if ( 1.0f - cosom > 1e-6f ) {
+		double	omega = acos( cosom );
+		double	sinom = sin( omega );
+
+		scale0 = sin( ( 1.0 - t ) * omega ) / sinom;
+		scale1 = sin( t * omega ) / sinom;
+	} else {
+		scale0 = 1.0f - t;
+		scale1 = t;
+	}
+	for ( i = 0 ; i < 4 ; i++ ) {
+		out[i] = scale0 * from[i] + scale1 * to1[i];
+	}
+}
+
 // the rotation matrix of a quaternion, rows out (fakk2.exe 0x43c980)
 static void Skel_QuatToAxis( const vec4_t q, vec3_t axis[3] ) {
 	float	x2 = q[0] + q[0], y2 = q[1] + q[1], z2 = q[2] + q[2];
@@ -1228,28 +1262,13 @@ static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 
 		Skel_FrameBone( anim, sel->frame, b, quat, offset );
 		if ( backlerp ) {
-			vec4_t	oldQuat;
+			vec4_t	oldQuat, lerped;
 			vec3_t	oldOffset;
-			float	dot;
 
-			// normalised lerp, taking the shorter way round
+			// from the old frame towards this one (0x4872d0 calls 0x43ca60 this way)
 			Skel_FrameBone( anim, sel->oldframe, b, oldQuat, oldOffset );
-			dot = quat[0] * oldQuat[0] + quat[1] * oldQuat[1] + quat[2] * oldQuat[2] + quat[3] * oldQuat[3];
-			if ( dot < 0 ) {
-				for ( i = 0 ; i < 4 ; i++ ) {
-					oldQuat[i] = -oldQuat[i];
-				}
-			}
-			for ( i = 0 ; i < 4 ; i++ ) {
-				quat[i] = quat[i] * ( 1.0f - backlerp ) + oldQuat[i] * backlerp;
-			}
-			dot = quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3];
-			if ( dot > 0 ) {
-				dot = 1.0f / sqrt( dot );
-				for ( i = 0 ; i < 4 ; i++ ) {
-					quat[i] *= dot;
-				}
-			}
+			Skel_QuatSlerp( oldQuat, quat, 1.0f - backlerp, lerped );
+			Vector4Copy( lerped, quat );
 			for ( i = 0 ; i < 3 ; i++ ) {
 				offset[i] = offset[i] * ( 1.0f - backlerp ) + oldOffset[i] * backlerp;
 			}

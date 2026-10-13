@@ -47,7 +47,7 @@ comparing against the definitions the retail engine cached in the game's
 #define	SKA_FRAME_HEADER_SIZE	40
 #define	SKA_BONE_SIZE			16
 
-#define	SKEL_QUAT_SCALE			( 1.0f / 32767.0f )
+#define	SKEL_QUAT_SCALE			( 1.0f / 32768.0f )	// 3.051851e-05 in fakk2.exe
 #define	SKEL_OFFSET_SCALE		( 1.0f / 63.0f )
 
 // a "last" frame selector, resolved to a frame number once the animation is loaded
@@ -135,6 +135,7 @@ struct tiki_s {
 	int					numTags;
 	char				( *tagNames )[MAX_QPATH];
 	int					*boneParents;		// NULL unless skeletal
+	qboolean			*legBones;			// bones the legs animation moves when a torso animation plays too
 
 	int					numAnims;
 	int					animCapacity;
@@ -252,6 +253,7 @@ static void TIKI_Free( tiki_t *tiki ) {
 	free( tiki->anims );
 	free( tiki->tagNames );
 	free( tiki->boneParents );
+	free( tiki->legBones );
 	TIKI_FreeCommands( &tiki->serverInit );
 	TIKI_FreeCommands( &tiki->clientInit );
 	Alias_ListDelete( tiki->aliases );
@@ -471,12 +473,15 @@ static qboolean TIKI_LoadSkb( tiki_t *tiki, const char *name ) {
 		}
 
 		tiki->boneParents = TIKI_Alloc( ( numBones ? numBones : 1 ) * sizeof( int ) );
+		tiki->legBones = TIKI_Alloc( ( numBones ? numBones : 1 ) * sizeof( qboolean ) );
 		for ( i = 0 ; i < numBones ; i++ ) {
 			const byte	*b = data + ofsBones + i * SKB_BONE_SIZE;
 			int			parent = TIKI_ReadInt( b );
 
 			// a bone may only hang off an earlier bone, which keeps evaluation a single pass
 			tiki->boneParents[i] = ( parent >= 0 && parent < i ) ? parent : -1;
+			// a bone whose flags are exactly 1 belongs to the legs (fakk2.exe 0x44ee40, 0x4872d0)
+			tiki->legBones[i] = TIKI_ReadInt( b + 4 ) == 1;
 			Q_strncpyz( tiki->tagNames[i], (const char *)b + 8, MAX_QPATH );
 		}
 		tiki->numTags = numBones;
@@ -1496,82 +1501,392 @@ static void TIKI_QuatToAxis( const float q[4], vec3_t axis[3] ) {
 	axis[2][2] = 1.0f - ( xx + yy );
 }
 
-/*
-===============
-TIKI_BoneOrientation
+// r = p * q, Hamilton product on x y z w (as fakk2.exe 0x44fe40 composes bones)
+static void TIKI_QuatMultiply( const float p[4], const float q[4], float r[4] ) {
+	r[0] = p[3] * q[0] + p[0] * q[3] + p[1] * q[2] - p[2] * q[1];
+	r[1] = p[3] * q[1] - p[0] * q[2] + p[1] * q[3] + p[2] * q[0];
+	r[2] = p[3] * q[2] + p[0] * q[1] - p[1] * q[0] + p[2] * q[3];
+	r[3] = p[3] * q[3] - p[0] * q[0] - p[1] * q[1] - p[2] * q[2];
+}
 
-Walks from the bone up through its parents. How the retail engine composes
-bone transforms has not been confirmed, and bone controllers and animation
-blending are not applied, so skeletal tag placement is provisional.
-===============
-*/
-static void TIKI_BoneOrientation( const tiki_t *tiki, const tikiAnim_t *anim, int framenum, int bone, orientation_t *out ) {
-	int		chain[SKEL_MAX_BONES];
-	int		depth = 0;
+// a vector in a bone's frame, in its parent's (fakk2.exe 0x43c800)
+static void TIKI_RotateByAxis( const vec3_t in, const vec3_t axis[3], vec3_t out ) {
+	out[0] = in[0] * axis[0][0] + in[1] * axis[1][0] + in[2] * axis[2][0];
+	out[1] = in[0] * axis[0][1] + in[1] * axis[1][1] + in[2] * axis[2][1];
+	out[2] = in[0] * axis[0][2] + in[1] * axis[1][2] + in[2] * axis[2][2];
+}
+
+// from towards to by t, the shorter way round (fakk2.exe 0x43ca60)
+static void TIKI_QuatSlerp( const float from[4], const float to[4], float t, float out[4] ) {
+	float	to1[4];
+	float	cosom = from[0] * to[0] + from[1] * to[1] + from[2] * to[2] + from[3] * to[3];
+	float	scale0, scale1;
 	int		i;
 
-	VectorClear( out->origin );
-	AxisClear( out->axis );
-
-	while ( bone >= 0 && bone < anim->numBones && depth < SKEL_MAX_BONES ) {
-		chain[depth++] = bone;
-		bone = tiki->boneParents ? tiki->boneParents[bone] : -1;
+	if ( cosom < 0 ) {
+		cosom = -cosom;
+		for ( i = 0 ; i < 4 ; i++ ) {
+			to1[i] = -to[i];
+		}
+	} else {
+		if ( from[0] == to[0] && from[1] == to[1] && from[2] == to[2] && from[3] == to[3] ) {
+			for ( i = 0 ; i < 4 ; i++ ) {
+				out[i] = to[i];
+			}
+			return;
+		}
+		for ( i = 0 ; i < 4 ; i++ ) {
+			to1[i] = to[i];
+		}
 	}
+	if ( 1.0f - cosom > 1e-6f ) {
+		double	omega = acos( cosom );
+		double	sinom = sin( omega );
 
-	for ( i = depth - 1 ; i >= 0 ; i-- ) {
-		const short	*data = &anim->boneData[( framenum * anim->numBones + chain[i] ) * 8];
-		float		quat[4];
-		vec3_t		offset, local[3], combined[3];
-		int			j;
-
-		for ( j = 0 ; j < 4 ; j++ ) {
-			quat[j] = data[j] * SKEL_QUAT_SCALE;
-		}
-		for ( j = 0 ; j < 3 ; j++ ) {
-			offset[j] = data[4 + j] * SKEL_OFFSET_SCALE;
-		}
-
-		for ( j = 0 ; j < 3 ; j++ ) {
-			VectorMA( out->origin, offset[j], out->axis[j], out->origin );
-		}
-		TIKI_QuatToAxis( quat, local );
-		MatrixMultiply( local, out->axis, combined );
-		AxisCopy( combined, out->axis );
+		scale0 = sin( ( 1.0 - t ) * omega ) / sinom;
+		scale1 = sin( t * omega ) / sinom;
+	} else {
+		scale0 = 1.0f - t;
+		scale1 = t;
+	}
+	for ( i = 0 ; i < 4 ; i++ ) {
+		out[i] = scale0 * from[i] + scale1 * to1[i];
 	}
 }
 
-orientation_t TIKI_Tag_Orientation( const tiki_t *tiki, int animnum, int framenum, int tagnum, float scale ) {
+/*
+===============================================================================
+
+Tag placement, as fakk2.exe does it.
+
+TIKI_Tag_Orientation (0x44fe40), TIKI_Tag_OrientationEx (0x44fc30, skeletal
+part 0x44ee40) and the client's Tag_LerpedOrientation (0x451c90, skeletal
+part 0x4505e0, vertex part 0x451a30) share one scheme. For a skeletal model
+the tag is a bone: the bones from it up to the root each get a quaternion and
+an offset from the animations that move them, and are composed root first. A
+bone's rotation is its quaternion times its parent's (Hamilton product, x y z
+w), then times the entity's bone controller for it if there is one; its origin
+is the parent's plus its offset turned by the parent's axes. The root adds the
+definition's origin, and the result is scaled by the definition's scale and
+the entity's. When a torso animation plays with the legs animation, bones
+flagged for the legs take the legs animation and the rest the torso's; either
+alone moves every bone. A frame is blended towards the old frame by backlerp
+and then towards the cross-blend frame by the cross-blend lerp, quaternions
+by slerp and offsets linearly. For a vertex-animated model the tag's placement
+is read from the frame, blended towards the old frame's the same way.
+
+===============================================================================
+*/
+
+typedef struct {
+	float	quat[4];
+	vec3_t	offset;
+} tikiBonePose_t;
+
+// a frame of a skeletal animation
+typedef struct {
+	const tikiAnim_t	*anim;
+	int					frame;
+} tikiFrameRef_t;
+
+#define	TIKI_BONES_ALL		0
+#define	TIKI_BONES_LEGS		1
+#define	TIKI_BONES_TORSO	2
+
+static qboolean TIKI_SkelFrame( const tiki_t *tiki, int animnum, int framenum, tikiFrameRef_t *ref ) {
 	const tikiAnim_t	*anim = TIKI_GetAnim( tiki, animnum );
+
+	ref->anim = NULL;
+	ref->frame = 0;
+	if ( !anim || !anim->boneData || framenum < 0 || framenum >= anim->numFrames ) {
+		return qfalse;
+	}
+	ref->anim = anim;
+	ref->frame = framenum;
+	return qtrue;
+}
+
+static qboolean TIKI_SameFrame( const tikiFrameRef_t *a, const tikiFrameRef_t *b ) {
+	return a->anim == b->anim && a->frame == b->frame;
+}
+
+static void TIKI_SkelBone( const tikiFrameRef_t *ref, int bone, float quat[4], vec3_t offset ) {
+	const short	*s;
+	int			i;
+
+	if ( !ref->anim || bone >= ref->anim->numBones ) {
+		quat[0] = quat[1] = quat[2] = 0;
+		quat[3] = 1;
+		VectorClear( offset );
+		return;
+	}
+	s = &ref->anim->boneData[( ref->frame * ref->anim->numBones + bone ) * 8];
+	for ( i = 0 ; i < 4 ; i++ ) {
+		quat[i] = s[i] * SKEL_QUAT_SCALE;
+	}
+	for ( i = 0 ; i < 3 ; i++ ) {
+		offset[i] = s[4 + i] * SKEL_OFFSET_SCALE;
+	}
+}
+
+/*
+===============
+TIKI_SkelBlendBones
+
+Gives the bones of the chain that belong to the part their quaternion and
+offset: the current frame's, blended towards the old frame's by backlerp
+(0x4505e0), then towards the cross-blend frame's by lerp (0x44ee40).
+===============
+*/
+static void TIKI_SkelBlendBones( const tiki_t *tiki, const int *chain, int depth, int part,
+	const tikiFrameRef_t *cur, const tikiFrameRef_t *old, float backlerp,
+	const tikiFrameRef_t *cross, float lerp, tikiBonePose_t *pose, qboolean *set ) {
+	int		i;
+
+	for ( i = 0 ; i < depth ; i++ ) {
+		int				bone = chain[i];
+		tikiBonePose_t	*p = &pose[bone];
+		float			quat[4];
+		vec3_t			offset;
+
+		if ( part == TIKI_BONES_LEGS && !tiki->legBones[bone] ) {
+			continue;
+		}
+		if ( part == TIKI_BONES_TORSO && tiki->legBones[bone] ) {
+			continue;
+		}
+
+		TIKI_SkelBone( cur, bone, p->quat, p->offset );
+		if ( old ) {
+			TIKI_SkelBone( old, bone, quat, offset );
+			TIKI_QuatSlerp( quat, p->quat, 1.0f - backlerp, p->quat );
+			VectorScale( p->offset, 1.0f - backlerp, p->offset );
+			VectorMA( p->offset, backlerp, offset, p->offset );
+		}
+		if ( cross ) {
+			TIKI_SkelBone( cross, bone, quat, offset );
+			TIKI_QuatSlerp( quat, p->quat, lerp, p->quat );
+			VectorScale( p->offset, lerp, p->offset );
+			VectorMA( p->offset, 1.0f - lerp, offset, p->offset );
+		}
+		set[bone] = qtrue;
+	}
+}
+
+/*
+===============
+TIKI_SkelCompose
+
+Composes the chain root first into the tag's placement (0x44fe40).
+===============
+*/
+static void TIKI_SkelCompose( const tiki_t *tiki, const int *chain, int depth, const tikiBonePose_t *pose,
+	const int *bone_tag, const vec4_t *bone_quat, float scale, orientation_t *out ) {
+	float	acc[4] = { 0, 0, 0, 1 };
+	vec3_t	axis[3];
+	vec3_t	origin;
+	int		i, c;
+
+	VectorClear( origin );
+	AxisClear( axis );
+
+	for ( i = depth - 1 ; i >= 0 ; i-- ) {
+		int						bone = chain[i];
+		const tikiBonePose_t	*p = &pose[bone];
+		float					turned[4];
+
+		if ( i == depth - 1 ) {
+			Vector4Copy( p->quat, acc );
+			VectorAdd( p->offset, tiki->loadOrigin, origin );
+		} else {
+			TIKI_QuatMultiply( p->quat, acc, turned );
+			Vector4Copy( turned, acc );
+			TIKI_RotateByAxis( p->offset, axis, turned );
+			VectorAdd( origin, turned, origin );
+		}
+
+		if ( bone_tag && bone_quat ) {
+			for ( c = 0 ; c < NUM_BONE_CONTROLLERS ; c++ ) {
+				if ( bone_tag[c] == bone ) {
+					TIKI_QuatMultiply( acc, bone_quat[c], turned );
+					Vector4Copy( turned, acc );
+				}
+			}
+		}
+		TIKI_QuatToAxis( acc, axis );
+	}
+
+	VectorScale( origin, scale * tiki->loadScale, out->origin );
+	AxisCopy( axis, out->axis );
+}
+
+/*
+===============
+TIKI_SkelTagOrientation
+
+The tag of a skeletal model for the entity's animation state. Bones that no
+animation of the state moves (retail leaves them zero) take the main
+animation's frame.
+===============
+*/
+static qboolean TIKI_SkelTagOrientation( const tiki_t *tiki, const tikiAnimState_t *st, int tagnum, orientation_t *out ) {
+	tikiBonePose_t	pose[SKEL_MAX_BONES];
+	qboolean		set[SKEL_MAX_BONES];
+	int				chain[SKEL_MAX_BONES];
+	int				depth = 0;
+	tikiFrameRef_t	cur, old, cross;
+	int				bone, i;
+	qboolean		uselegs = st->uselegs, usetorso = st->usetorso;
+
+	if ( !tiki->boneParents || tagnum < 0 || tagnum >= tiki->numTags ) {
+		return qfalse;
+	}
+	bone = tagnum;
+	while ( bone >= 0 && depth < SKEL_MAX_BONES ) {
+		chain[depth++] = bone;
+		bone = tiki->boneParents[bone];
+	}
+	Com_Memset( set, 0, sizeof( set ) );
+
+	if ( !uselegs && !usetorso ) {
+		uselegs = qtrue;
+	}
+	if ( uselegs ) {
+		if ( !TIKI_SkelFrame( tiki, st->anim, st->frame, &cur ) ) {
+			uselegs = qfalse;
+		} else {
+			float		backlerp = st->backlerp;
+			qboolean	haveOld = TIKI_SkelFrame( tiki, st->oldanim, st->oldframe, &old ) && !TIKI_SameFrame( &old, &cur ) && backlerp != 0;
+			qboolean	haveCross = st->crossblend_lerp >= 0 && TIKI_SkelFrame( tiki, st->crossblend_anim, st->crossblend_frame, &cross ) && !TIKI_SameFrame( &cross, &cur );
+
+			TIKI_SkelBlendBones( tiki, chain, depth, usetorso ? TIKI_BONES_LEGS : TIKI_BONES_ALL,
+				&cur, haveOld ? &old : NULL, backlerp, haveCross ? &cross : NULL, st->crossblend_lerp, pose, set );
+		}
+	}
+	if ( usetorso ) {
+		if ( !TIKI_SkelFrame( tiki, st->torso_anim, st->torso_frame, &cur ) ) {
+			usetorso = qfalse;
+		} else {
+			float		backlerp = st->torso_backlerp;
+			qboolean	haveOld = TIKI_SkelFrame( tiki, st->torso_oldanim, st->torso_oldframe, &old ) && !TIKI_SameFrame( &old, &cur ) && backlerp != 0;
+			qboolean	haveCross = st->torso_crossblend_lerp >= 0 && TIKI_SkelFrame( tiki, st->torso_crossblend_anim, st->torso_crossblend_frame, &cross ) && !TIKI_SameFrame( &cross, &cur );
+
+			TIKI_SkelBlendBones( tiki, chain, depth, uselegs ? TIKI_BONES_TORSO : TIKI_BONES_ALL,
+				&cur, haveOld ? &old : NULL, backlerp, haveCross ? &cross : NULL, st->torso_crossblend_lerp, pose, set );
+		}
+	}
+
+	// whatever is left over
+	for ( i = 0 ; i < depth ; i++ ) {
+		if ( !set[chain[i]] ) {
+			if ( !TIKI_SkelFrame( tiki, st->anim, st->frame, &cur ) && !TIKI_SkelFrame( tiki, st->torso_anim, st->torso_frame, &cur ) ) {
+				return qfalse;
+			}
+			TIKI_SkelBlendBones( tiki, chain, depth, TIKI_BONES_ALL, &cur, NULL, 0, NULL, 0, pose, set );
+			break;
+		}
+	}
+
+	TIKI_SkelCompose( tiki, chain, depth, pose, st->bone_tag, st->bone_quat, st->scale, out );
+	return qtrue;
+}
+
+/*
+===============
+TIKI_TanTagOrientation
+
+The tag of a vertex-animated model, blended towards the old frame's by
+backlerp (0x451a30).
+===============
+*/
+static qboolean TIKI_TanTagOrientation( const tiki_t *tiki, const tikiAnimState_t *st, int tagnum, orientation_t *out ) {
+	const tikiAnim_t	*anim = TIKI_GetAnim( tiki, st->anim );
+	const tikiAnim_t	*oldAnim = TIKI_GetAnim( tiki, st->oldanim );
+	const float			*data, *oldData;
+	float				backlerp = st->backlerp, frontlerp;
+	int					i;
+
+	if ( !anim || !anim->tagData || st->frame < 0 || st->frame >= anim->numFrames || tagnum < 0 || tagnum >= anim->numTags ) {
+		return qfalse;
+	}
+	data = &anim->tagData[( tagnum * anim->numFrames + st->frame ) * 12];
+	if ( !oldAnim || !oldAnim->tagData || st->oldframe < 0 || st->oldframe >= oldAnim->numFrames || tagnum >= oldAnim->numTags
+		|| ( oldAnim == anim && st->oldframe == st->frame ) ) {
+		oldData = data;
+		backlerp = 0;
+	} else {
+		oldData = &oldAnim->tagData[( tagnum * oldAnim->numFrames + st->oldframe ) * 12];
+	}
+	frontlerp = 1.0f - backlerp;
+
+	for ( i = 0 ; i < 3 ; i++ ) {
+		out->origin[i] = tiki->loadOrigin[i] + data[i] * frontlerp + oldData[i] * backlerp;
+		out->axis[0][i] = data[3 + i] * frontlerp + oldData[3 + i] * backlerp;
+		out->axis[1][i] = data[6 + i] * frontlerp + oldData[6 + i] * backlerp;
+		out->axis[2][i] = data[9 + i] * frontlerp + oldData[9 + i] * backlerp;
+	}
+	VectorScale( out->origin, tiki->loadScale * st->scale, out->origin );
+	if ( backlerp ) {
+		VectorNormalize( out->axis[0] );
+		VectorNormalize( out->axis[1] );
+		VectorNormalize( out->axis[2] );
+	}
+	return qtrue;
+}
+
+/*
+===============
+TIKI_Tag_OrientationEx
+
+The tag's placement for an animation state. An invalid state gives a zero
+origin and the identity axes.
+===============
+*/
+orientation_t TIKI_Tag_OrientationEx( const tiki_t *tiki, const tikiAnimState_t *st, int tagnum ) {
+	const tikiAnim_t	*anim = TIKI_GetAnim( tiki, st->anim );
 	orientation_t		orient;
+	qboolean			ok = qfalse;
 
 	VectorClear( orient.origin );
 	AxisClear( orient.axis );
 
-	if ( !anim || framenum < 0 || framenum >= anim->numFrames || tagnum < 0 ) {
-		return orient;
-	}
-
-	if ( anim->boneData ) {
-		if ( tagnum >= anim->numBones ) {
-			return orient;
+	if ( anim ) {
+		if ( anim->boneData ) {
+			ok = TIKI_SkelTagOrientation( tiki, st, tagnum, &orient );
+		} else if ( anim->tagData ) {
+			ok = TIKI_TanTagOrientation( tiki, st, tagnum, &orient );
 		}
-		TIKI_BoneOrientation( tiki, anim, framenum, tagnum, &orient );
-	} else if ( anim->tagData ) {
-		const float	*data;
-
-		if ( tagnum >= anim->numTags ) {
-			return orient;
-		}
-		data = &anim->tagData[( tagnum * anim->numFrames + framenum ) * 12];
-		VectorCopy( data, orient.origin );
-		VectorCopy( data + 3, orient.axis[0] );
-		VectorCopy( data + 6, orient.axis[1] );
-		VectorCopy( data + 9, orient.axis[2] );
-	} else {
-		return orient;
 	}
-
-	VectorAdd( orient.origin, tiki->loadOrigin, orient.origin );
-	VectorScale( orient.origin, tiki->loadScale * scale, orient.origin );
+	if ( !ok ) {
+		VectorClear( orient.origin );
+		AxisClear( orient.axis );
+	}
 	return orient;
+}
+
+/*
+===============
+TIKI_AnimStateFrame
+
+An animation state showing one frame of one animation, as Tag_Orientation
+and Tag_OrientationEx see it (nothing to blend towards).
+===============
+*/
+void TIKI_AnimStateFrame( tikiAnimState_t *st, int anim, int frame, float scale, const int *bone_tag, const vec4_t *bone_quat ) {
+	Com_Memset( st, 0, sizeof( *st ) );
+	st->anim = st->oldanim = anim;
+	st->frame = st->oldframe = frame;
+	st->crossblend_lerp = -1;
+	st->torso_crossblend_lerp = -1;
+	st->uselegs = qtrue;
+	st->scale = scale;
+	st->bone_tag = bone_tag;
+	st->bone_quat = bone_quat;
+}
+
+orientation_t TIKI_Tag_Orientation( const tiki_t *tiki, int animnum, int framenum, int tagnum, float scale, const int *bone_tag, const vec4_t *bone_quat ) {
+	tikiAnimState_t	st;
+
+	TIKI_AnimStateFrame( &st, animnum, framenum, scale, bone_tag, bone_quat );
+	return TIKI_Tag_OrientationEx( tiki, &st, tagnum );
 }

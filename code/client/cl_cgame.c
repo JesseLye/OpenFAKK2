@@ -722,26 +722,68 @@ static int CL_CG_Surface_NumSkins( int tikihandle, int num ) { return TIKI_Surfa
 static int CL_CG_Tag_NumForName( int tikihandle, const char *name ) { return TIKI_Tag_NumForName( CL_Tiki( tikihandle ), name ); }
 static const char *CL_CG_Tag_NameForNum( int tikihandle, int num ) { return TIKI_Tag_NameForNum( CL_Tiki( tikihandle ), num ); }
 
-// bone controllers and cross-blending are not applied to tags yet
+// retail's table points Tag_Orientation straight at the TIKI code (0x44fe40)
 static orientation_t CL_CG_Tag_Orientation( int tikihandle, int anim, int frame, int tagnum, float scale, int *bone_tag, vec4_t *bone_quat ) {
-	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), anim, frame, tagnum, scale );
+	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), anim, frame, tagnum, scale, bone_tag, bone_quat );
 }
 
+// retail leaves this slot NULL; the server's import of the same shape is followed
 static orientation_t CL_CG_Tag_OrientationEx( int tikihandle, int anim, int frame, int tagnum, float scale, int *bone_tag, vec4_t *bone_quat,
 	int crossblend_anim, int crossblend_frame, float crossblend_lerp, qboolean uselegs, qboolean usetorso, int torso_anim, int torso_frame,
 	int torso_crossblend_anim, int torso_crossblend_frame, float torso_crossblend_lerp ) {
-	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), anim, frame, tagnum, scale );
+	tikiAnimState_t	st;
+
+	TIKI_AnimStateFrame( &st, anim, frame, scale, bone_tag, bone_quat );
+	st.crossblend_anim = crossblend_anim;
+	st.crossblend_frame = crossblend_frame;
+	st.crossblend_lerp = crossblend_lerp;
+	st.uselegs = uselegs;
+	st.usetorso = usetorso;
+	st.torso_anim = st.torso_oldanim = torso_anim;
+	st.torso_frame = st.torso_oldframe = torso_frame;
+	st.torso_crossblend_anim = torso_crossblend_anim;
+	st.torso_crossblend_frame = torso_crossblend_frame;
+	st.torso_crossblend_lerp = torso_crossblend_lerp;
+	return TIKI_Tag_OrientationEx( CL_Tiki( tikihandle ), &st, tagnum );
 }
 
+// retail (0x450560) looks the name up and asks for the frame with a cross-blend
+// lerp of 0 towards animation 0, which would place the tag from that animation
+// instead; the SDK client game never calls this, so the frame asked for is used
 static orientation_t CL_CG_Tag_NamedOrientation( int tikihandle, int anim, int frame, float scale, const char *tagName, int *bone_tag, vec4_t *bone_quat ) {
 	tiki_t	*tiki = CL_Tiki( tikihandle );
 
-	return TIKI_Tag_Orientation( tiki, anim, frame, TIKI_Tag_NumForName( tiki, tagName ), scale );
+	return TIKI_Tag_Orientation( tiki, anim, frame, TIKI_Tag_NumForName( tiki, tagName ), scale, bone_tag, bone_quat );
 }
 
-// the tag of the frame the model shows; not interpolated towards its old frame yet
+// the tag of the frame the model shows, interpolated towards its old frame and
+// cross-blended as the model is drawn (0x451c90)
 static orientation_t CL_CG_Tag_LerpedOrientation( int tikihandle, refEntity_t *model, int tagnum ) {
-	return TIKI_Tag_Orientation( CL_Tiki( tikihandle ), model->anim, model->frame, tagnum, model->scale ? model->scale : 1.0f );
+	tikiAnimState_t	st;
+
+	Com_Memset( &st, 0, sizeof( st ) );
+	st.anim = model->anim;
+	st.frame = model->frame;
+	st.oldanim = model->oldanim;
+	st.oldframe = model->oldframe;
+	st.backlerp = model->backlerp;
+	st.crossblend_anim = model->crossblend_anim;
+	st.crossblend_frame = model->crossblend_frame;
+	st.crossblend_lerp = model->crossblend_lerp;
+	st.uselegs = model->uselegs;
+	st.usetorso = model->usetorso;
+	st.torso_anim = model->torso_anim;
+	st.torso_frame = model->torso_frame;
+	st.torso_oldanim = model->torso_oldanim;
+	st.torso_oldframe = model->torso_oldframe;
+	st.torso_backlerp = model->torso_backlerp;
+	st.torso_crossblend_anim = model->torso_crossblend_anim;
+	st.torso_crossblend_frame = model->torso_crossblend_frame;
+	st.torso_crossblend_lerp = model->torso_crossblend_lerp;
+	st.scale = model->scale;
+	st.bone_tag = model->bone_tag;
+	st.bone_quat = model->bone_quat;
+	return TIKI_Tag_OrientationEx( CL_Tiki( tikihandle ), &st, tagnum );
 }
 
 static AliasList_t *CL_TikiAliases( int tikihandle, qboolean create ) {
