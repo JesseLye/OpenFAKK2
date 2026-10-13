@@ -181,7 +181,10 @@ void		NET_LeaveMulticast6(void);
 void		NET_Sleep(int msec);
 
 
-#define	MAX_MSGLEN				16384		// max length of a message, which may
+// FAKK2's game state (1200 config strings and its larger entity baselines)
+// does not fit Quake III's 16K on the bigger maps; the wire format is
+// OpenFAKK2's own, so the limit is simply raised
+#define	MAX_MSGLEN				131072		// max length of a message, which may
 											// be fragmented into multiple packets
 
 #define MAX_DOWNLOAD_WINDOW		48	// ACK window of 48 download chunks. Cannot set this higher, or clients

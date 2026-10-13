@@ -199,6 +199,26 @@ static void SV_WriteSnapshotToClient( client_t *client, msg_t *msg ) {
 	// delta encode the entities
 	SV_EmitPacketEntities (oldframe, frame, msg);
 
+	// FAKK2: the sounds the game started since the last snapshot. The wire
+	// format is OpenFAKK2's own.
+	MSG_WriteBits( msg, frame->number_of_sounds, MAX_SERVER_SOUNDS_BITS );
+	for ( i = 0 ; i < frame->number_of_sounds ; i++ ) {
+		const server_sound_t	*sound = &frame->sounds[i];
+
+		MSG_WriteBits( msg, sound->stop_flag ? 1 : 0, 1 );
+		MSG_WriteBits( msg, sound->entity_number & ( MAX_GENTITIES - 1 ), GENTITYNUM_BITS );
+		MSG_WriteByte( msg, sound->channel );
+		if ( sound->stop_flag ) {
+			continue;
+		}
+		MSG_WriteBits( msg, sound->sound_index & ( MAX_SOUNDS - 1 ), MAX_SOUNDS_BITS );
+		MSG_WriteFloat( msg, sound->origin[0] );
+		MSG_WriteFloat( msg, sound->origin[1] );
+		MSG_WriteFloat( msg, sound->origin[2] );
+		MSG_WriteFloat( msg, sound->volume );
+		MSG_WriteFloat( msg, sound->min_dist );
+	}
+
 	// padding for rate debugging
 	if ( sv_padPackets->integer ) {
 		for ( i = 0 ; i < sv_padPackets->integer ; i++ ) {
@@ -528,11 +548,18 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 
   // https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=62
 	frame->num_entities = 0;
-	
+	frame->number_of_sounds = 0;
+
 	clent = client->gentity;
 	if ( !clent || client->state == CS_ZOMBIE ) {
 		return;
 	}
+
+	// FAKK2: the sounds the game started since the last snapshot go with
+	// this one, once
+	frame->number_of_sounds = client->numPendingSounds;
+	Com_Memcpy( frame->sounds, client->pendingSounds, client->numPendingSounds * sizeof( frame->sounds[0] ) );
+	client->numPendingSounds = 0;
 
 	// grab the current playerState_t
 	ps = SV_GameClientNum( client - svs.clients );

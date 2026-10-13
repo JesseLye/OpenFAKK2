@@ -769,6 +769,11 @@ static void SV_SendClientGameState( client_t *client ) {
 	// write the checksum feed
 	MSG_WriteLong( &msg, sv.checksumFeed);
 
+	if ( msg.overflowed ) {
+		Com_Error( ERR_DROP, "SV_SendClientGameState: game state exceeds MAX_MSGLEN (%i)", MAX_MSGLEN );
+	}
+	Com_DPrintf( "Game state for %s: %i bytes\n", client->name, msg.cursize );
+
 	// deliver this to the client
 	SV_SendMessageToClient( &msg, client );
 }

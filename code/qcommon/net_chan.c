@@ -134,7 +134,8 @@ void Netchan_TransmitNextFragment( netchan_t *chan ) {
 		fragmentLength = chan->unsentLength - chan->unsentFragmentStart;
 	}
 
-	MSG_WriteShort( &send, chan->unsentFragmentStart );
+	// the offset is 32 bits: a message may be longer than 32K
+	MSG_WriteLong( &send, chan->unsentFragmentStart );
 	MSG_WriteShort( &send, fragmentLength );
 	MSG_WriteData( &send, chan->unsentBuffer + chan->unsentFragmentStart, fragmentLength );
 
@@ -279,7 +280,7 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 
 	// read the fragment information
 	if ( fragmented ) {
-		fragmentStart = MSG_ReadShort( msg );
+		fragmentStart = MSG_ReadLong( msg );
 		fragmentLength = MSG_ReadShort( msg );
 	} else {
 		fragmentStart = 0;		// stop warning message

@@ -114,25 +114,13 @@ sets mins and maxs for inline bmodels
 */
 /*
 =================
-SV_InlineModelHandle
+SV_SetBrushModel
 
-Entities refer to models by config string index. Inline brush models are the
-ones named "*<number>".
+A brush entity's model index is the inline model's number, as in Quake III
+(fakk2.exe 0x444510); no config string names it. The client game module
+indexes the inline models with it directly.
 =================
 */
-clipHandle_t SV_InlineModelHandle( int modelindex ) {
-	const char	*name;
-
-	if ( modelindex <= 0 || modelindex >= MAX_MODELS ) {
-		Com_Error( ERR_DROP, "SV_InlineModelHandle: bad model index %i", modelindex );
-	}
-	name = sv.configstrings[CS_MODELS + modelindex];
-	if ( !name || name[0] != '*' ) {
-		Com_Error( ERR_DROP, "SV_InlineModelHandle: model %i (%s) isn't a brush model", modelindex, name ? name : "" );
-	}
-	return CM_InlineModel( atoi( name + 1 ) );
-}
-
 void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 	clipHandle_t	h;
 	vec3_t			mins, maxs;
@@ -145,9 +133,8 @@ void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 		Com_Error( ERR_DROP, "SV_SetBrushModel: %s isn't a brush model", name );
 	}
 
-	// s.modelindex stays the model's config string index; the inline model
-	// number lives only in the name
-	h = CM_InlineModel( atoi( name + 1 ) );
+	ent->s.modelindex = atoi( name + 1 );
+	h = CM_InlineModel( ent->s.modelindex );
 	CM_ModelBounds( h, mins, maxs );
 	VectorCopy (mins, ent->mins);
 	VectorCopy (maxs, ent->maxs);
@@ -588,20 +575,23 @@ static int SV_GameModelIndex( const char *name ) {
 		return 0;
 	}
 
-	// a model definition that fails to load gets no index; the game treats -1
-	// as "this entity cannot be spawned"
-	if ( SV_IsTikiName( name ) ) {
-		tiki = TIKI_Register( name );
-		if ( !tiki ) {
-			return -1;
-		}
+	// The config string comes first, so a model definition that fails to
+	// load still takes an index (fakk2.exe 0x444fd0); the game gets -1 for
+	// it and treats the entity as one that cannot be spawned. Which index
+	// a name gets matters: a brush entity's model index is its inline model
+	// number, and the game takes it for a definition if one has that index.
+	index = SV_FindIndex( name, CS_MODELS, MAX_MODELS, qtrue );
+	if ( index <= 0 ) {
+		return index;
 	}
 
-	index = SV_FindIndex( name, CS_MODELS, MAX_MODELS, qtrue );
-
+	if ( SV_IsTikiName( name ) ) {
+		tiki = TIKI_Register( name );
+	}
 	// bound on every call: config strings are reused from level to level
-	if ( index > 0 ) {
-		sv_tikis[index] = tiki;
+	sv_tikis[index] = tiki;
+	if ( SV_IsTikiName( name ) && !tiki ) {
+		return -1;
 	}
 	return index;
 }
@@ -624,14 +614,21 @@ static const char *SV_GameDir( void ) {
 	return FS_GetCurrentGameDir();
 }
 
+// A brush model name sets only the brush model; any other name gets a config
+// string index and, for a model definition, its definition (fakk2.exe
+// 0x445050). The game then asks IsModel of the index either way, so a brush
+// entity whose number is also a definition's config string index is taken
+// for that definition; retail does the same.
 static void SV_GameSetModel( gentity_t *ent, const char *name ) {
 	if ( !name ) {
 		Com_Error( ERR_DROP, "SV_GameSetModel: NULL name" );
 	}
-	ent->s.modelindex = SV_GameModelIndex( name );
 	if ( name[0] == '*' ) {
 		SV_SetBrushModel( ent, name );
+		return;
 	}
+	ent->s.modelindex = SV_GameModelIndex( name );
+	ent->bmodel = qfalse;
 }
 
 static void SV_GameSetBrushModel( gentity_t *ent, const char *name ) {
@@ -791,8 +788,73 @@ Sound playback and client prints that are not implemented yet.
 
 static void QDECL SV_Stub_CenterPrintf( gentity_t *ent, const char *fmt, ... ) { (void)ent; (void)fmt; }
 static void QDECL SV_Stub_LocationPrintf( gentity_t *ent, int x, int y, const char *fmt, ... ) { (void)ent; (void)x; (void)y; (void)fmt; }
-static void SV_Stub_Sound( vec3_t *org, int entnum, int channel, const char *sound_name, float volume, float attenuation ) { (void)org; (void)entnum; (void)channel; (void)sound_name; (void)volume; (void)attenuation; }
-static void SV_Stub_StopSound( int entnum, int channel ) { (void)entnum; (void)channel; }
+/*
+===========================================================================
+
+Sounds
+
+The game starts a sound by name; it reaches the clients in their next
+snapshot as a sound index into the CS_SOUNDS configstrings, and the client
+game module plays it from there. Every connected client gets every sound;
+whether the retail engine filters them by visibility has not been read
+(its import is fakk2.exe 0x448520), and spatialisation is the client's job
+anyway.
+
+===========================================================================
+*/
+
+static void SV_QueueSound( const server_sound_t *sound ) {
+	int			i;
+
+	for ( i = 0 ; i < sv_maxclients->integer ; i++ ) {
+		client_t	*client = &svs.clients[i];
+
+		if ( client->state < CS_PRIMED ) {
+			continue;
+		}
+		if ( client->numPendingSounds >= MAX_SERVER_SOUNDS ) {
+			Com_DPrintf( "SV_QueueSound: %s has too many sounds queued\n", client->name );
+			continue;
+		}
+		client->pendingSounds[client->numPendingSounds++] = *sound;
+	}
+}
+
+static void SV_GameSound( vec3_t *org, int entnum, int channel, const char *sound_name, float volume, float attenuation ) {
+	server_sound_t	sound;
+	int				index;
+
+	if ( !sound_name || !sound_name[0] ) {
+		return;
+	}
+	index = SV_FindIndex( sound_name, CS_SOUNDS, MAX_SOUNDS, qtrue );
+	if ( !index ) {
+		return;
+	}
+
+	Com_Memset( &sound, 0, sizeof( sound ) );
+	if ( org ) {
+		VectorCopy( *org, sound.origin );
+	} else if ( entnum >= 0 && entnum < MAX_GENTITIES ) {
+		VectorCopy( SV_GentityNum( entnum )->s.origin, sound.origin );
+	}
+	sound.entity_number = entnum;
+	sound.channel = channel;
+	sound.sound_index = index;
+	sound.volume = volume;
+	sound.min_dist = attenuation;
+	SV_QueueSound( &sound );
+}
+
+static void SV_GameStopSound( int entnum, int channel ) {
+	server_sound_t	sound;
+
+	Com_Memset( &sound, 0, sizeof( sound ) );
+	sound.entity_number = entnum;
+	sound.channel = channel;
+	sound.stop_flag = qtrue;
+	SV_QueueSound( &sound );
+}
 
 /*
 ===========================================================================
@@ -887,13 +949,13 @@ static lipSync_t *SV_LoadLipSync( const char *soundName ) {
 }
 
 // negative when the sound has no lip-sync data
-static float SV_GameSoundLength( const char *path ) {
+float SV_SoundLength( const char *path ) {
 	lipSync_t	*lip = SV_LoadLipSync( path );
 
 	return ( lip && lip->found ) ? lip->length : -1;
 }
 
-static byte *SV_GameSoundAmplitudes( const char *name, int *number_of_amplitudes ) {
+byte *SV_SoundAmplitudes( const char *name, int *number_of_amplitudes ) {
 	lipSync_t	*lip = SV_LoadLipSync( name );
 
 	if ( !lip || !lip->found ) {
@@ -1008,10 +1070,10 @@ static void SV_FillGameImport( game_import_t *import ) {
 
 	import->centerprintf = SV_Stub_CenterPrintf;
 	import->locationprintf = SV_Stub_LocationPrintf;
-	import->Sound = SV_Stub_Sound;
-	import->StopSound = SV_Stub_StopSound;
-	import->SoundLength = SV_GameSoundLength;
-	import->SoundAmplitudes = SV_GameSoundAmplitudes;
+	import->Sound = SV_GameSound;
+	import->StopSound = SV_GameStopSound;
+	import->SoundLength = SV_SoundLength;
+	import->SoundAmplitudes = SV_SoundAmplitudes;
 
 	import->CalcCRC = SV_GameCalcCRC;
 	import->DebugLines = &sv_debugLines;
@@ -1063,14 +1125,21 @@ static void *SV_LoadGameLibrary( char *loadedFrom, int loadedFromSize ) {
 ===============
 SV_GameSpawnEntities
 
-Model index 1 always names the map itself; the game relies on that for the
-world entity and for beams, which only need a non-zero index that is not a
-model definition.
+The inline models take the first model config strings, "*1" at index 1 and
+so on, as the retail engine's SV_ClearWorld registers them (fakk2.exe
+0x448810). A brush entity's model index is its inline model number, so this
+is what keeps the game from taking a brush entity for a definition with that
+index; it is also the index 1 the game assumes for the world and uses for
+beams.
 ===============
 */
 void SV_GameSpawnEntities( const char *mapname ) {
+	int		i;
+
 	Com_Memset( sv_tikis, 0, sizeof( sv_tikis ) );
-	SV_SetConfigstring( CS_MODELS + 1, va( "maps/%s.bsp", mapname ) );
+	for ( i = 1 ; i < CM_NumInlineModels() ; i++ ) {
+		SV_FindIndex( va( "*%i", i ), CS_MODELS, MAX_MODELS, qtrue );
+	}
 
 	ge->SpawnEntities( mapname, CM_EntityString(), sv.time );
 }

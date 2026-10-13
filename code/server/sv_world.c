@@ -33,12 +33,21 @@ be returned, otherwise a custom box tree will be constructed.
 ================
 */
 clipHandle_t SV_ClipHandleForEntity( const sharedEntity_t *ent ) {
-	if ( ent->bmodel ) {
+	// A brush entity the game has made box-solid collides as its box, not
+	// its brushes (fakk2.exe 0x448660). The game does that to brush
+	// entities whose model index is also a definition's config string index,
+	// by running the definition's init commands on them.
+	if ( ent->bmodel && ent->solid != SOLID_BBOX ) {
 		// explicit hulls in the BSP model
-		return SV_InlineModelHandle( ent->s.modelindex );
+		return CM_InlineModel( ent->s.modelindex );
 	}
 	// create a temp tree from bounding box sizes
 	return CM_TempBoxModel( ent->mins, ent->maxs, qfalse, ent->contents );
+}
+
+// whether an entity clips as a rotated brush model or as an axial box
+static qboolean SV_EntityIsBox( const sharedEntity_t *ent ) {
+	return !ent->bmodel || ent->solid == SOLID_BBOX;
 }
 
 
@@ -531,7 +540,7 @@ void SV_ClipToEntity( trace_t *trace, const vec3_t start, const vec3_t mins, con
 	origin = touch->currentOrigin;
 	angles = touch->currentAngles;
 
-	if ( !touch->bmodel ) {
+	if ( SV_EntityIsBox( touch ) ) {
 		angles = vec3_origin;	// boxes don't rotate
 	}
 
@@ -610,7 +619,7 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		angles = touch->currentAngles;
 
 
-		if ( !touch->bmodel ) {
+		if ( SV_EntityIsBox( touch ) ) {
 			angles = vec3_origin;	// boxes don't rotate
 		}
 
@@ -730,7 +739,7 @@ int SV_PointContents( const vec3_t p, int passEntityNum ) {
 		// might intersect, so do an exact clip
 		clipHandle = SV_ClipHandleForEntity( hit );
 		angles = hit->currentAngles;
-		if ( !hit->bmodel ) {
+		if ( SV_EntityIsBox( hit ) ) {
 			angles = vec3_origin;	// boxes don't rotate
 		}
 

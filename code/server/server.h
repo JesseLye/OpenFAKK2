@@ -109,6 +109,10 @@ typedef struct {
 	int				messageSent;		// time the message was transmitted
 	int				messageAcked;		// time the message was acked
 	int				messageSize;		// used to rate drop packets
+
+	// FAKK2: sounds the game started since the last snapshot
+	int				number_of_sounds;
+	server_sound_t	sounds[MAX_SERVER_SOUNDS];
 } clientSnapshot_t;
 
 typedef enum {
@@ -194,7 +198,11 @@ typedef struct client_s {
 
 	int				oldServerTime;
 	qboolean		csUpdated[MAX_CONFIGSTRINGS];
-	
+
+	// FAKK2: sounds the game has started since this client's last snapshot
+	int				numPendingSounds;
+	server_sound_t	pendingSounds[MAX_SERVER_SOUNDS];
+
 #ifdef LEGACY_PROTOCOL
 	qboolean		compat;
 #endif
@@ -422,6 +430,9 @@ svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt );
 sharedEntity_t *SV_GEntityForSvEntity( svEntity_t *svEnt );
 void		SV_InitGameProgs ( void );
 void		SV_ShutdownGameProgs ( void );
+// lip-sync data beside a dialog sound; the client game module asks for it too
+float		SV_SoundLength( const char *path );
+byte		*SV_SoundAmplitudes( const char *name, int *number_of_amplitudes );
 qboolean	SV_GameLoaded( void );
 void		SV_GameSpawnEntities( const char *mapname );
 void		SV_GameRunFrame( int frameMsec );
@@ -433,7 +444,6 @@ void		SV_GameClientCommand( int clientNum );
 void		SV_GameClientThink( int clientNum, usercmd_t *cmd );
 void		SV_GameSendServerCommand( int clientNum, const char *text );
 void		SV_SetBrushModel( sharedEntity_t *ent, const char *name );
-clipHandle_t	SV_InlineModelHandle( int modelindex );
 qboolean	SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2 );
 void		SV_AdjustAreaPortalState( sharedEntity_t *ent, qboolean open );
 qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);
