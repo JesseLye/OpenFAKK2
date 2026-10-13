@@ -569,10 +569,8 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 		}
 	}	
 
-	// run another frame to allow things to look at all the players
-	SV_GameRunFrame( 100 );
-	sv.time += 100;
-	svs.time += 100;
+	// Quake III runs one more frame here; the retail FAKK2 engine does not:
+	// its level clock reads 0.30 once the map has spawned
 
 	if ( sv_pure->integer ) {
 		// the server sends these to the clients so they will only

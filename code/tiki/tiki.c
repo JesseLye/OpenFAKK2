@@ -75,6 +75,7 @@ typedef struct {
 	char				fullname[TIKI_MAX_NAME];
 	int					flags;
 	int					crossblend;
+	float				weight;		// share of random picks among variants
 
 	int					numFrames;
 	float				totalTime;
@@ -799,6 +800,7 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 				}
 				anim = TIKI_NewAnim( tiki );
 				animIndex = tiki->numAnims - 1;
+				anim->weight = 1.0f;
 				Q_strncpyz( anim->alias, tokens[0], sizeof( anim->alias ) );
 				if ( tiki->path[0] ) {
 					Com_sprintf( anim->fullname, sizeof( anim->fullname ), "%s/%s", tiki->path, tokens[1] );
@@ -1035,6 +1037,18 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 	}
 	tiki->numAnims = j;
 
+	// Animations are numbered in name order. The retail engine relies on this
+	// when it looks one up, and the numbers are shared with the game modules.
+	// Insertion sort keeps definitions with the same name in file order.
+	for ( i = 1 ; i < tiki->numAnims ; i++ ) {
+		tikiAnim_t	moved = tiki->anims[i];
+
+		for ( j = i ; j > 0 && Q_stricmp( tiki->anims[j - 1].alias, moved.alias ) > 0 ; j-- ) {
+			tiki->anims[j] = tiki->anims[j - 1];
+		}
+		tiki->anims[j] = moved;
+	}
+
 	// models without geometry report frames whose mins exceed their maxs
 	if ( !haveBounds || tiki->mins[0] > tiki->maxs[0] || tiki->mins[1] > tiki->maxs[1] || tiki->mins[2] > tiki->maxs[2] ) {
 		VectorSet( tiki->mins, -4, -4, -4 );
@@ -1211,14 +1225,39 @@ int TIKI_Anim_NumForName( const tiki_t *tiki, const char *name ) {
 
 /*
 ===============
-TIKI_Anim_Random
+TIKI_Rand
 
-Variants of an animation are written as the name followed by a number
-(idle1, idle2, ...). Picks among the exact name and its numbered variants.
+The retail engine draws from the C runtime's rand() and never seeds it, so a
+given sequence of game events always picks the same animation variants. This
+is the same generator, kept private so that nothing else disturbs it.
 ===============
 */
+#define	TIKI_RAND_MAX	0x7fff
+
+static unsigned int	tiki_randSeed = 1;
+
+static int TIKI_Rand( void ) {
+	tiki_randSeed = tiki_randSeed * 214013u + 2531011u;
+	return (int)( ( tiki_randSeed >> 16 ) & TIKI_RAND_MAX );
+}
+
+/*
+===============
+TIKI_Anim_Random
+
+Picks among the animations whose name starts with the given one, weighted by
+their weights. Variants are written as the name plus a suffix (idle1, idle2);
+a name continuing with an underscore is a different animation, not a variant.
+At most TIKI_MAX_RANDOM_ANIMS variants are considered. Matches fakk2.exe.
+===============
+*/
+#define	TIKI_MAX_RANDOM_ANIMS	16
+
 int TIKI_Anim_Random( const tiki_t *tiki, const char *name ) {
-	int		matches[64];
+	int		matches[TIKI_MAX_RANDOM_ANIMS];
+	float	weights[TIKI_MAX_RANDOM_ANIMS];
+	float	total = 0;
+	float	pick;
 	int		numMatches = 0;
 	int		len, i;
 
@@ -1226,23 +1265,36 @@ int TIKI_Anim_Random( const tiki_t *tiki, const char *name ) {
 		return -1;
 	}
 	len = strlen( name );
-	for ( i = 0 ; i < tiki->numAnims && numMatches < (int)ARRAY_LEN( matches ) ; i++ ) {
-		const char	*alias = tiki->anims[i].alias;
-		const char	*rest;
+	for ( i = 0 ; i < tiki->numAnims ; i++ ) {
+		const tikiAnim_t	*anim = &tiki->anims[i];
+		int					cmp = Q_stricmpn( anim->alias, name, len );
 
-		if ( Q_stricmpn( alias, name, len ) ) {
+		if ( cmp > 0 ) {
+			break;		// sorted by name: nothing later can match
+		}
+		if ( cmp < 0 || anim->alias[len] == '_' ) {
 			continue;
 		}
-		for ( rest = alias + len ; *rest && isdigit( (unsigned char)*rest ) ; rest++ ) {
+		if ( numMatches == TIKI_MAX_RANDOM_ANIMS ) {
+			break;
 		}
-		if ( !*rest ) {
-			matches[numMatches++] = i;
-		}
+		matches[numMatches] = i;
+		weights[numMatches] = anim->weight;
+		total += anim->weight;
+		numMatches++;
 	}
 	if ( !numMatches ) {
 		return -1;
 	}
-	return matches[rand() % numMatches];
+
+	pick = (float)TIKI_Rand() * total * ( 1.0f / TIKI_RAND_MAX );
+	for ( i = 0 ; i < numMatches - 1 ; i++ ) {
+		pick -= weights[i];
+		if ( pick <= 0 ) {
+			break;
+		}
+	}
+	return matches[i];
 }
 
 int TIKI_Anim_NumFrames( const tiki_t *tiki, int animnum ) {
