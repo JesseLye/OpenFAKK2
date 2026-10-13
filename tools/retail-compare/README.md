@@ -22,12 +22,12 @@ test the rebuilt module.
 
 ## With a player
 
-Most level scripts wait for a player. OpenFAKK2 can supply a headless one; the retail
-reference is the real game, which shows a small window while it runs:
+Most level scripts wait for a player. OpenFAKK2 supplies a headless one (`sv_testplayer 1`);
+the retail reference is the real game with nobody at the controls, which shows a small
+window while it runs.
 
-    # copy probe.scr into both sandboxes first (build\sandbox\retail\fakk\maps and
-    # build\sandbox\home\fakk\maps), then:
-    tools\retail-compare\run-retail-client.ps1 -Map training -Tag '-probe' -After '+script thread probe.scr::probe'
-    tools\retail-compare\run-openfakk2.ps1 -Map training -Extra '+set sv_testplayer 1' -MinSecs 25 -After '+script thread probe.scr::probe'
+    tools\retail-compare\compare-player.ps1 -Map training
 
-`probe.scr` waits for the player, waits ten seconds of game time, then dumps `levelvars` and `pendingevents`, so both engines are sampled at the same point.
+Both sides run `probe.scr`, which waits for the player, waits ten seconds of game time
+and dumps `levelvars` and `pendingevents`, so they are sampled at the same point. The
+retail result is cached per map; pass `-Refresh` to run the retail game again.

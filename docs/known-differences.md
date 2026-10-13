@@ -115,22 +115,37 @@ the retail game run normally with its real client and nobody touching the contro
 (`tools/retail-compare/run-retail-client.ps1`). Both run a probe script that waits for
 the player, waits ten seconds of game time and dumps `levelvars` and `pendingevents`.
 
-On `training`, the only map compared this way so far:
+`tools/retail-compare/compare-player.ps1 -Map <map>` runs both and compares. Results over
+the 30 retail maps:
 
-- All 51 level variables match.
-- The intro cinematic runs on both: the stand-in actor walks to its mark, the cameras
-  cut, and the trainer's first line plays with lip-sync.
-- Pending events are 146 (OpenFAKK2) against 150 (retail). The difference is four
-  `setcontrollerangles` lip-sync events, i.e. 0.2 seconds of dialog.
+- `under` could not be compared: the probe never fires on either engine there.
+- On the other 29, every level variable matches (12 to 75 variables per map).
+- Pending events match by kind and count on 21 maps. Both engines take the dump at level
+  time 10.80, so the comparison is phase-aligned.
+- Eight maps differ by small counts:
 
-### Player entry happens at a different game time
+| Map | Difference (retail / OpenFAKK2) |
+| --- | --- |
+| `creeperpens` | `Actor setcontrollerangles` 87 / 86 |
+| `end` | `Actor animdone` 7 / 8 |
+| `homes1` | `Actor animate_newanim` 1 / 0, `Actor animdone` 26 / 27 |
+| `homes2good` | `Actor setmovedelta` 46 / 24 |
+| `intro` | `ScriptModel movedone` 7 / 8 |
+| `landersroost` | `Actor setmovedelta` 17 / 3 |
+| `otto` | `Actor animdone` 1 / 2 |
+| `towncenter_good` | `Actor animate_newanim` 1 / 0, `Actor animdone` 28 / 29, `Actor setmovedelta` 0 / 3, `SlidingDoor close` 1 / 0 |
 
-The dumps are taken at level time 10.60 (OpenFAKK2) and 10.80 (retail), so the player
-enters 0.2 seconds earlier in OpenFAKK2, yet OpenFAKK2 is 0.2 seconds *further* through
-the trainer's dialog. The test player enters as soon as the map has spawned; the retail
-client enters when it has finished loading, and the game runs some frames in between.
-Whether that fully accounts for the offset has not been checked.
+None of these has been investigated. The walking-actor differences (`setmovedelta`) and
+the animation-transition ones are the kind the unexplained variant picks above would
+produce, since a different idle or walk variant has a different length; that is a guess.
 
+### Player entry time
+
+The retail client enters the world some frames after the map starts, once it has loaded.
+The test player imitates that with `sv_testplayerdelay` (450 ms of game time, chosen so
+that the dumps line up with retail's on the retail maps). Scripts that use
+`waitforplayer` are released at that moment, so entering at map start instead leaves any
+later-started script waiting forever.
 ## Not yet comparable
 
 - Anything that needs input: movement, weapons, using objects, triggers the player must
@@ -138,4 +153,3 @@ Whether that fully accounts for the offset has not been checked.
 - What is sent to clients (snapshots, sounds, on-screen text). The test player discards
   it; `sv_testplayer 2` only prints the reliable commands.
 - Save and load.
-- Every map other than `training` with a player present.

@@ -12,6 +12,12 @@ retail engine's before a real client exists.
   sv_testplayer 1   connect and idle
   sv_testplayer 2   also print the server commands the player is sent
 
+Like a real client, the player connects when the map starts but enters the
+world a little later: a client first has to load the level. The delay is
+sv_testplayerdelay milliseconds of game time. It matters because scripts
+that wait for the player are released when the player enters, and commands
+given on the command line after the map run before that.
+
 The player occupies its slot like a bot would in Quake III (address type
 NA_BOT), which is what keeps packets from being sent anywhere.
 ===========================================================================
@@ -23,10 +29,15 @@ NA_BOT), which is what keeps packets from being sent anywhere.
 #define	TESTPLAYER_NAME		"TestPlayer"
 
 static cvar_t	*sv_testplayer;
+static cvar_t	*sv_testplayerdelay;
+static int		testPlayerEnterTime;
 
 static qboolean SV_TestPlayer_Enabled( void ) {
 	if ( !sv_testplayer ) {
 		sv_testplayer = Cvar_Get( "sv_testplayer", "0", 0 );
+		// 450 ms puts the player's entry at the same level time as the retail
+		// client's on the retail maps (dumps taken ten seconds later line up)
+		sv_testplayerdelay = Cvar_Get( "sv_testplayerdelay", "450", 0 );
 	}
 	return sv_testplayer->integer != 0;
 }
@@ -99,7 +110,7 @@ void SV_TestPlayer_Spawn( void ) {
 	}
 
 	Com_Printf( "Test player connected\n" );
-	SV_ClientEnterWorld( cl, NULL );
+	testPlayerEnterTime = sv.time + ( sv_testplayerdelay->integer > 0 ? sv_testplayerdelay->integer : 0 );
 }
 
 /*
@@ -114,7 +125,14 @@ void SV_TestPlayer_Frame( int frameMsec ) {
 	client_t	*cl = &svs.clients[TESTPLAYER_SLOT];
 	usercmd_t	cmd;
 
-	if ( !svs.clients || !SV_IsTestPlayer( cl ) || cl->state != CS_ACTIVE ) {
+	if ( !svs.clients || !SV_IsTestPlayer( cl ) ) {
+		return;
+	}
+
+	if ( cl->state == CS_CONNECTED && sv.time >= testPlayerEnterTime ) {
+		SV_ClientEnterWorld( cl, NULL );
+	}
+	if ( cl->state != CS_ACTIVE ) {
 		return;
 	}
 
