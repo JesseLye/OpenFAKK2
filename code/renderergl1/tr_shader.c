@@ -414,7 +414,7 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 	//
 	// scale
 	//
-	else if ( !Q_stricmp( token, "scale" ) )
+	else if ( !Q_stricmp( token, "scale" ) || !Q_stricmp( token, "macro" ) )
 	{
 		token = COM_ParseExt( text, qfalse );
 		if ( token[0] == 0 )
@@ -576,6 +576,25 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 	else if ( !Q_stricmp( token, "entityTranslate" ) )
 	{
 		tmi->type = TMOD_ENTITY_TRANSLATE;
+	}
+	//
+	// offset <s> <t>, each a number or "fromEntity"
+	//
+	else if ( !Q_stricmp( token, "offset" ) )
+	{
+		int		i;
+
+		tmi->matrix[0][0] = 1;
+		tmi->matrix[0][1] = 0;
+		tmi->matrix[1][0] = 0;
+		tmi->matrix[1][1] = 1;
+		for ( i = 0 ; i < 2 ; i++ )
+		{
+			token = COM_ParseExt( text, qfalse );
+			// an offset the game supplies per entity is not available here
+			tmi->translate[i] = Q_stricmp( token, "fromEntity" ) ? atof( token ) : 0;
+		}
+		tmi->type = TMOD_TRANSFORM;
 	}
 	else
 	{
@@ -1083,6 +1102,11 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			depthMaskBits = GLS_DEPTHMASK_TRUE;
 			depthMaskExplicit = qtrue;
 
+			continue;
+		}
+		else if ( !Q_stricmp( token, "noDepthTest" ) )
+		{
+			depthFuncBits |= GLS_DEPTHTEST_DISABLE;
 			continue;
 		}
 		else if ( !Q_stricmp( token, "depthmask" ) )
@@ -1602,7 +1626,8 @@ static qboolean ParseShader( char **text )
 		// FAKK2 parameters for its map compiler and sprite models
 		else if ( !Q_stricmp( token, "surfaceColor" ) || !Q_stricmp( token, "surfaceDensity" )
 			|| !Q_stricmp( token, "subdivisions" ) || !Q_stricmp( token, "spriteGen" )
-			|| !Q_stricmp( token, "spriteScale" ) || !Q_stricmp( token, "deform" ) ) {
+			|| !Q_stricmp( token, "spriteScale" ) || !Q_stricmp( token, "deform" )
+			|| !Q_stricmp( token, "fogOnly" ) || !Q_stricmp( token, "force32bit" ) ) {
 			SkipRestOfLine( text );
 			continue;
 		}
