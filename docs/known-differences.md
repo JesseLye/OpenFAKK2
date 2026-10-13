@@ -408,8 +408,31 @@ What is implemented, and on what basis:
 - **Dynamic lights** are Quake III's; of FAKK2's light types only `additive` is
   honoured, the lens flare bits are ignored. Debug lines and sword swipes are accepted
   and not drawn.
+- **The far plane and its fog** come from the scene (`refdef_t.farplane_*`, which the
+  client game module fills from `CS_FOGINFO`; the game sets it from worldspawn's
+  `farplane`, `farplane_color` and `farplane_cull`). Read from the retail renderer: its
+  `R_SetupFrustum` (`0x462c30`) gives a view through a portal no far plane; otherwise
+  `r_farplane` (with `r_farplane_color`, default ".5 .5 .5", and `r_farplane_nocull`)
+  overrides the scene's, and a non-zero distance adds a fifth frustum plane facing back
+  at that distance along the view axis, which `R_CullLocalBox` (`0x462250`),
+  `R_CullPointAndRadius` and the world walk (`0x486440`, plane bit 16) test while the
+  cull flag is set, and sets `GL_FOG_END` to the distance and `GL_FOG_COLOR` to the
+  colour times `identityLight` unless `r_farplane_nofog`; `GL_SetDefaultState`
+  (`0x4605d0`) makes the fog linear and nothing moves its start from 0. The projection's
+  own far distance is not changed. `RB_BeginDrawingView` (`0x471110`) clears the colour
+  buffer to the colour times `identityLight` for a view with a far plane that is not a
+  portal view, which is what shows wherever nothing is drawn (`swamp1` has no sky
+  surfaces at all) and which covers the sky portal's view, drawn before — so under a far
+  plane a map's sky is fog. Retail enables `GL_FOG` per shader through a state
+  bit in `GL_State` (`0x470ad0`) that `RB_BeginSurface` (`0x47c510`) sets only for
+  shaders flagged in `FinishShader` (`0x478a60`: a single stage of one `rgbGen` and no
+  `alphaGen`) when `r_useglfog` is on, and fogs everything else by vertex colour from
+  distance over the far plane distance (`0x494910`). Not followed yet: OpenFAKK2 fogs
+  every shader with OpenGL's fog except the sky and 2D drawing, and `r_useglfog 0`
+  turns fog off rather than switching to vertex colours. The map viewer sets no far
+  plane of its own.
 
-Not implemented: fog and the far plane, the light grid (models are lit with a default
+Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
 beams, decals, level of detail, cross-blending between animations.
 

@@ -104,6 +104,9 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 #define QGL_DESKTOP_1_1_PROCS \
 	GLE(void, ClearDepth, GLclampd depth) \
 	GLE(void, DepthRange, GLclampd near_val, GLclampd far_val) \
+	GLE(void, Fogf, GLenum pname, GLfloat param) \
+	GLE(void, Fogfv, GLenum pname, const GLfloat *params) \
+	GLE(void, Fogi, GLenum pname, GLint param) \
 	GLE(void, DrawBuffer, GLenum mode) \
 	GLE(void, PolygonMode, GLenum face, GLenum mode) \
 

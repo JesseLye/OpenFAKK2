@@ -405,6 +405,12 @@ typedef struct {
 	vec3_t		sky_origin;
 	vec3_t		sky_axis[3];
 
+	// FAKK2's far clip plane: fog towards its colour up to the distance, and
+	// nothing drawn beyond it when it culls
+	float		farplane_distance;
+	vec3_t		farplane_color;
+	qboolean	farplane_cull;
+
 	double		floatTime;			// tr.refdef.time / 1000.0
 
 	// text messages for deform text shaders
@@ -473,10 +479,16 @@ typedef struct {
 	int			viewportX, viewportY, viewportWidth, viewportHeight;
 	float		fovX, fovY;
 	float		projectionMatrix[16];
-	cplane_t	frustum[4];
+	cplane_t	frustum[5];			// the fifth is the far plane, used while farplaneCull is set
 	vec3_t		visBounds[2];
 	float		zFar;
 	stereoFrame_t	stereoFrame;
+
+	// FAKK2's far plane for this view (fakk2.exe 0x462c30): zero distance means none
+	float		farplaneDistance;
+	vec3_t		farplaneColor;
+	qboolean	farplaneCull;		// cull against frustum[4]
+	qboolean	farplaneFog;		// fog towards farplaneColor up to the distance
 } viewParms_t;
 
 
@@ -861,6 +873,7 @@ typedef struct {
 	int			texEnv[2];
 	int			faceCulling;
 	unsigned long	glStateBits;
+	qboolean	fogEnabled;			// FAKK2: GL_FOG is on
 } glstate_t;
 
 typedef struct {
@@ -1035,6 +1048,11 @@ extern cvar_t	*r_dlightBacks;			// dlight non-facing surfaces for continuity
 extern	cvar_t	*r_norefresh;			// bypasses the ref rendering
 extern	cvar_t	*r_drawentities;		// disable/enable entity rendering
 extern	cvar_t	*r_lerpmodels;			// FAKK2: interpolate skeletal frames (the client game module reads the same cvar)
+extern	cvar_t	*r_farplane;			// FAKK2: a far plane of this distance instead of the scene's
+extern	cvar_t	*r_farplane_color;		// FAKK2: its colour, "r g b"
+extern	cvar_t	*r_farplane_nocull;		// FAKK2: don't cull at the far plane
+extern	cvar_t	*r_farplane_nofog;		// FAKK2: don't fog towards the far plane
+extern	cvar_t	*r_useglfog;			// FAKK2: fog with OpenGL's fog rather than vertex colours
 extern	cvar_t	*r_drawworld;			// disable/enable world rendering
 extern	cvar_t	*r_speeds;				// various levels of information display
 extern  cvar_t	*r_detailTextures;		// enables/disables detail texturing stages
@@ -1130,6 +1148,8 @@ int R_CullPointAndRadius( vec3_t origin, float radius );
 int R_CullLocalPointAndRadius( vec3_t origin, float radius );
 
 void R_SetupProjection(viewParms_t *dest, float zProj, qboolean computeFrustum);
+void R_SetupFarPlane( viewParms_t *dest );
+void RB_SetFog( qboolean on );
 void R_RotateForEntity( const trRefEntity_t *ent, const viewParms_t *viewParms, orientationr_t *or );
 
 /*

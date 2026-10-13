@@ -80,6 +80,11 @@ cvar_t	*r_lodscale;
 cvar_t	*r_norefresh;
 cvar_t	*r_drawentities;
 cvar_t	*r_lerpmodels;
+cvar_t	*r_farplane;
+cvar_t	*r_farplane_color;
+cvar_t	*r_farplane_nocull;
+cvar_t	*r_farplane_nofog;
+cvar_t	*r_useglfog;
 cvar_t	*r_drawworld;
 cvar_t	*r_speeds;
 cvar_t	*r_fullbright;
@@ -1126,6 +1131,12 @@ void R_Register( void )
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
 	r_lerpmodels = ri.Cvar_Get ("r_lerpmodels", "1", 0 );
+	// retail's defaults (fakk2.exe 0x460bd0)
+	r_farplane = ri.Cvar_Get ("r_farplane", "0", 0 );
+	r_farplane_color = ri.Cvar_Get ("r_farplane_color", ".5 .5 .5", 0 );
+	r_farplane_nocull = ri.Cvar_Get ("r_farplane_nocull", "0", 0 );
+	r_farplane_nofog = ri.Cvar_Get ("r_farplane_nofog", "0", 0 );
+	r_useglfog = ri.Cvar_Get ("r_useglfog", "1", CVAR_ARCHIVE );
 	r_ignore = ri.Cvar_Get( "r_ignore", "1", CVAR_CHEAT );
 	r_nocull = ri.Cvar_Get ("r_nocull", "0", CVAR_CHEAT);
 	r_novis = ri.Cvar_Get ("r_novis", "0", CVAR_CHEAT);

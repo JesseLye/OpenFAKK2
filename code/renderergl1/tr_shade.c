@@ -320,6 +320,12 @@ void RB_BeginSurface( shader_t *shader, int fogNum ) {
 
 	shader_t *state = (shader->remappedShader) ? shader->remappedShader : shader;
 
+	// FAKK2: fog towards the far plane, the sky included (it is as far as
+	// anything and comes out in the fog's colour), but not 2D drawing.
+	// (Retail GL-fogs only single-stage shaders of one rgbGen and fogs the
+	// rest by vertex colour, 0x478a60 / 0x494910; not followed yet.)
+	RB_SetFog( backEnd.viewParms.farplaneFog && r_useglfog->integer && !backEnd.projection2D );
+
 	tess.numIndexes = 0;
 	tess.numVertexes = 0;
 	tess.shader = state;

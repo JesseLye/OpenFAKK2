@@ -371,6 +371,27 @@ void GL_State( unsigned long stateBits )
 	glState.glStateBits = stateBits;
 }
 
+/*
+================
+RB_SetFog
+
+FAKK2 fogs towards the far plane with OpenGL's fog; retail switches it per
+shader through a state bit in GL_State (fakk2.exe 0x470ad0).
+================
+*/
+void RB_SetFog( qboolean on ) {
+	on = on ? qtrue : qfalse;
+	if ( on == glState.fogEnabled ) {
+		return;
+	}
+	glState.fogEnabled = on;
+	if ( on ) {
+		qglEnable( GL_FOG );
+	} else {
+		qglDisable( GL_FOG );
+	}
+}
+
 
 
 /*
@@ -445,7 +466,18 @@ void RB_BeginDrawingView (void) {
 	{
 		clearBits |= GL_STENCIL_BUFFER_BIT;
 	}
-	if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
+	if ( !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) && backEnd.viewParms.farplaneDistance
+		&& !backEnd.viewParms.isPortal && !backEnd.viewParms.isPortalSky )
+	{
+		// FAKK2 clears to the far plane's colour (fakk2.exe 0x471110): it is
+		// what shows wherever nothing is drawn, and it covers the sky portal's
+		// view drawn before this one, so under a far plane the sky is fog
+		clearBits |= GL_COLOR_BUFFER_BIT;
+		qglClearColor( backEnd.viewParms.farplaneColor[0] * tr.identityLight,
+			backEnd.viewParms.farplaneColor[1] * tr.identityLight,
+			backEnd.viewParms.farplaneColor[2] * tr.identityLight, 0 );
+	}
+	else if ( r_fastsky->integer && !( backEnd.refdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
 		clearBits |= GL_COLOR_BUFFER_BIT;	// FIXME: only if sky shaders have been used
 #ifdef _DEBUG
@@ -467,6 +499,20 @@ void RB_BeginDrawingView (void) {
 	}
 
 	glState.faceCulling = -1;		// force face culling to set next time
+
+	// FAKK2's far plane fog: linear from the viewer to the far plane, in the
+	// plane's colour (0x462c30 sets the end and colour, 0x4605d0 the mode)
+	RB_SetFog( qfalse );
+	if ( backEnd.viewParms.farplaneFog ) {
+		vec4_t	color;
+
+		qglFogi( GL_FOG_MODE, GL_LINEAR );
+		qglFogf( GL_FOG_START, 0 );
+		qglFogf( GL_FOG_END, backEnd.viewParms.farplaneDistance );
+		VectorScale( backEnd.viewParms.farplaneColor, tr.identityLight, color );
+		color[3] = 1;
+		qglFogfv( GL_FOG_COLOR, color );
+	}
 
 	// we will only draw a sun if there was sky rendered in this view
 	backEnd.skyRenderedThisView = qfalse;
@@ -697,6 +743,7 @@ RB_SetGL2D
 */
 void	RB_SetGL2D (void) {
 	backEnd.projection2D = qtrue;
+	RB_SetFog( qfalse );
 
 	// set 2D virtual screen size
 	qglViewport( 0, 0, glConfig.vidWidth, glConfig.vidHeight );

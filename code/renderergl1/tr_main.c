@@ -75,9 +75,9 @@ int R_CullLocalBox (vec3_t bounds[2]) {
 		VectorMA( transformed[i], v[2], tr.or.axis[2], transformed[i] );
 	}
 
-	// check against frustum planes
+	// check against frustum planes, and the far plane when it culls (0x462250)
 	anyBack = 0;
-	for (i = 0 ; i < 4 ; i++) {
+	for (i = 0 ; i < 4 + tr.viewParms.farplaneCull ; i++) {
 		frust = &tr.viewParms.frustum[i];
 
 		front = back = 0;
@@ -132,8 +132,8 @@ int R_CullPointAndRadius( vec3_t pt, float radius )
 		return CULL_CLIP;
 	}
 
-	// check against frustum planes
-	for (i = 0 ; i < 4 ; i++) 
+	// check against frustum planes, and the far plane when it culls
+	for (i = 0 ; i < 4 + tr.viewParms.farplaneCull ; i++)
 	{
 		frust = &tr.viewParms.frustum[i];
 
@@ -524,6 +524,55 @@ void R_SetupFrustum (viewParms_t *dest, float xmin, float xmax, float ymax, floa
 		dest->frustum[i].dist = DotProduct (ofsorigin, dest->frustum[i].normal);
 		SetPlaneSignbits( &dest->frustum[i] );
 	}
+
+	R_SetupFarPlane( dest );
+}
+
+/*
+=================
+R_SetupFarPlane
+
+FAKK2's far clip plane, as the retail renderer sets it up at the end of its
+R_SetupFrustum (fakk2.exe 0x462c30): a view through a portal has none;
+otherwise r_farplane overrides what the scene asks for, and a non-zero
+distance makes a fifth frustum plane facing back at that distance along the
+view axis, culled against unless r_farplane_nocull, and fog towards the
+colour unless r_farplane_nofog.
+=================
+*/
+void R_SetupFarPlane( viewParms_t *dest ) {
+	cplane_t	*plane = &dest->frustum[4];
+	vec3_t		point;
+
+	dest->farplaneDistance = 0;
+	dest->farplaneCull = qfalse;
+	dest->farplaneFog = qfalse;
+	if ( dest->isPortal ) {
+		return;
+	}
+
+	dest->farplaneDistance = tr.refdef.farplane_distance;
+	VectorCopy( tr.refdef.farplane_color, dest->farplaneColor );
+	dest->farplaneCull = tr.refdef.farplane_cull;
+	if ( r_farplane->integer ) {
+		dest->farplaneDistance = r_farplane->value;
+		if ( sscanf( r_farplane_color->string, "%f %f %f", &dest->farplaneColor[0], &dest->farplaneColor[1], &dest->farplaneColor[2] ) != 3 ) {
+			VectorSet( dest->farplaneColor, 0.5f, 0.5f, 0.5f );
+		}
+		dest->farplaneCull = !r_farplane_nocull->integer;
+	}
+	if ( dest->farplaneDistance == 0 ) {
+		dest->farplaneCull = qfalse;
+		return;
+	}
+
+	VectorNegate( dest->or.axis[0], plane->normal );
+	VectorMA( dest->or.origin, dest->farplaneDistance, dest->or.axis[0], point );
+	plane->dist = DotProduct( plane->normal, point );
+	plane->type = PLANE_NON_AXIAL;
+	SetPlaneSignbits( plane );
+
+	dest->farplaneFog = !r_farplane_nofog->integer;
 }
 
 /*

@@ -416,6 +416,17 @@ static void R_RecursiveWorldNode( mnode_t *node, unsigned int planeBits, unsigne
 				}
 			}
 
+			// FAKK2's far plane (fakk2.exe 0x486440 tests it the same way)
+			if ( ( planeBits & 16 ) && tr.viewParms.farplaneCull ) {
+				r = BoxOnPlaneSide(node->mins, node->maxs, &tr.viewParms.frustum[4]);
+				if (r == 2) {
+					return;						// culled
+				}
+				if ( r == 1 ) {
+					planeBits &= ~16;			// all descendants will also be in front
+				}
+			}
+
 		}
 
 		if ( node->contents != -1 ) {
@@ -680,5 +691,5 @@ void R_AddWorldSurfaces (void) {
 	if ( tr.refdef.num_dlights > MAX_DLIGHTS ) {
 		tr.refdef.num_dlights = MAX_DLIGHTS ;
 	}
-	R_RecursiveWorldNode( tr.world->nodes, 15, ( 1ULL << tr.refdef.num_dlights ) - 1 );
+	R_RecursiveWorldNode( tr.world->nodes, tr.viewParms.farplaneCull ? 31 : 15, ( 1ULL << tr.refdef.num_dlights ) - 1 );
 }

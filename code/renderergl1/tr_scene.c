@@ -369,6 +369,10 @@ void RE_RenderScene( const refdef_t *fd ) {
 	VectorCopy( fd->sky_origin, tr.refdef.sky_origin );
 	AxisCopy( fd->sky_axis, tr.refdef.sky_axis );
 
+	tr.refdef.farplane_distance = fd->farplane_distance;
+	VectorCopy( fd->farplane_color, tr.refdef.farplane_color );
+	tr.refdef.farplane_cull = fd->farplane_cull;
+
 	// copy the areamask data over and note if it has changed, which
 	// will force a reset of the visible leafs even if the view hasn't moved
 	tr.refdef.areamaskModified = qfalse;
