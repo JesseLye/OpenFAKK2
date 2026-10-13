@@ -209,8 +209,10 @@ Not read, done another way:
   `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity stays), loop blocks,
   the `s_show` print is retail's format only; `S_StopSound` stops the entity's channel
   (the retail rule has not been read); the OpenAL backend mutes a sound beyond 64 minimum
-  distances rather than holding 1/64; `.mp3` files (1340 of the dialog files) are not
-  decoded; reverb and ambient-volume calls are ignored; looping sounds are keyed by their
+  distances rather than holding 1/64; the `.mp3` dialog files (1015 of them) are decoded
+  whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
+  through Miles (`0x45bf00` sends them down a separate path); reverb and ambient-volume
+  calls are ignored; looping sounds are keyed by their
   order in the frame; the music calls do nothing. `s_soundinfo [name]` prints the table's
   size or a name's entry. The OpenAL backend's version of this compiles but has not been
   run (no OpenAL runtime on the test machine); the software mixer's has.

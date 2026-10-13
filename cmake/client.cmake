@@ -35,6 +35,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/snd_codec_wav.c
     ${SOURCE_DIR}/client/snd_codec_ogg.c
     ${SOURCE_DIR}/client/snd_codec_opus.c
+    ${SOURCE_DIR}/client/snd_codec_mp3.c
     ${SOURCE_DIR}/client/qal.c
     ${SOURCE_DIR}/client/snd_openal.c
     ${SOURCE_DIR}/sdl/sdl_input.c
