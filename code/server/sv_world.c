@@ -541,6 +541,13 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 			}
 		}
 
+		// Entities the game marked non-solid or as triggers never block a
+		// move, whatever their contents say: a brush entity keeps the
+		// all-bits contents it was given when its model was set.
+		if ( touch->solid == SOLID_NOT || touch->solid == SOLID_TRIGGER ) {
+			continue;
+		}
+
 		// if it doesn't have any brushes of a type we
 		// are looking for, ignore it
 		if ( ! ( clip->contentmask & touch->contents ) ) {
@@ -668,6 +675,9 @@ int SV_PointContents( const vec3_t p, int passEntityNum ) {
 			continue;
 		}
 		hit = SV_GentityNum( touch[i] );
+		if ( hit->solid == SOLID_NOT || hit->solid == SOLID_TRIGGER ) {
+			continue;	// see SV_ClipMoveToEntities
+		}
 		// might intersect, so do an exact clip
 		clipHandle = SV_ClipHandleForEntity( hit );
 		angles = hit->currentAngles;
