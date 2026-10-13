@@ -293,6 +293,13 @@ static void R_AddWorldSurface( msurface_t *surf, int dlightBits ) {
 		return;
 	}
 
+	if ( surf->shader->isPortalSky ) {
+		if ( tr.viewParms.isPortalSky ) {
+			return;		// no sky within the sky
+		}
+		tr.portalSkyVisible = qtrue;
+	}
+
 	// check for dlighting
 	if ( dlightBits ) {
 		dlightBits = R_DlightSurface( surf, dlightBits );

@@ -139,6 +139,21 @@ typedef struct {
 
 	// text messages for deform text shaders
 	char		text[MAX_RENDER_STRINGS][MAX_RENDER_STRING_LENGTH];
+
+	// FAKK2 additions, laid out as its client game module expects
+
+	// fog stuff (not applied yet)
+	float		farplane_distance;
+	vec3_t		farplane_color;
+	qboolean	farplane_cull;
+
+	// sky portal stuff: the scene as seen from sky_origin is drawn wherever
+	// a "portalsky" surface is visible. sky_axis turns the view's axes into
+	// the sky's.
+	qboolean	sky_portal;
+	float		sky_alpha;
+	vec3_t		sky_origin;
+	vec3_t		sky_axis[3];
 } refdef_t;
 
 

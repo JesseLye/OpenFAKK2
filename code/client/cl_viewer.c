@@ -10,6 +10,8 @@ runs, and to take screenshots that can be compared with the retail game.
   viewmap <name>                      load a map and start at its player start
   viewpos                             print the camera position
   viewpos <x> <y> <z> [yaw] [pitch]   move the camera
+  viewsky                             print the sky portal camera's position
+  viewsky <x> <y> <z> | off           move the sky portal camera, or turn it off
   viewstop                            leave the viewer
 
 The camera uses the normal movement keys (+forward, +back, +moveleft,
@@ -24,6 +26,10 @@ static qboolean	viewerActive;
 static vec3_t	viewerOrigin;
 static cvar_t	*cl_viewerSpeed;
 static cvar_t	*cl_viewerFov;
+
+// the map's sky portal camera, if it has one
+static qboolean	viewerSkyPortal;
+static vec3_t	viewerSkyOrigin;
 
 #define	VIEWER_EYE_HEIGHT	82	// above a player start, roughly where the game's camera sits
 
@@ -47,16 +53,19 @@ static void CL_Viewer_FindStart( void ) {
 	char		classname[MAX_TOKEN_CHARS];
 	vec3_t		origin;
 	float		angle;
-	qboolean	haveOrigin;
+	char		script[MAX_TOKEN_CHARS];
+	qboolean	haveOrigin, haveStart = qfalse;
 
 	VectorClear( viewerOrigin );
 	VectorClear( cl.viewangles );
+	viewerSkyPortal = qfalse;
 
 	while ( re.GetEntityToken( token, sizeof( token ) ) ) {
 		if ( token[0] != '{' ) {
 			continue;
 		}
 		classname[0] = 0;
+		script[0] = 0;
 		angle = 0;
 		haveOrigin = qfalse;
 		while ( re.GetEntityToken( key, sizeof( key ) ) && key[0] != '}' ) {
@@ -69,13 +78,22 @@ static void CL_Viewer_FindStart( void ) {
 				haveOrigin = sscanf( token, "%f %f %f", &origin[0], &origin[1], &origin[2] ) == 3;
 			} else if ( !Q_stricmp( key, "angle" ) ) {
 				angle = atof( token );
+			} else if ( !Q_stricmp( key, "script" ) ) {
+				Q_strncpyz( script, token, sizeof( script ) );
 			}
 		}
-		if ( haveOrigin && !Q_stricmp( classname, "info_player_start" ) ) {
+		if ( haveOrigin && !haveStart && !Q_stricmp( classname, "info_player_start" ) ) {
 			VectorCopy( origin, viewerOrigin );
 			viewerOrigin[2] += VIEWER_EYE_HEIGHT;
 			cl.viewangles[YAW] = angle;
-			return;
+			haveStart = qtrue;
+		}
+		// The game makes an entity the sky portal's camera with the render
+		// effect "skyorigin", which maps give in the entity's script key.
+		// Only its position is used here; the game can also turn it.
+		if ( haveOrigin && !viewerSkyPortal && Q_stristr( script, "skyorigin" ) ) {
+			VectorCopy( origin, viewerSkyOrigin );
+			viewerSkyPortal = qtrue;
 		}
 	}
 }
@@ -108,6 +126,9 @@ static void CL_Viewer_ViewMap_f( void ) {
 	Con_Close();
 
 	Com_Printf( "Viewing %s from %.0f %.0f %.0f\n", name, viewerOrigin[0], viewerOrigin[1], viewerOrigin[2] );
+	if ( viewerSkyPortal ) {
+		Com_Printf( "Sky portal camera at %.0f %.0f %.0f\n", viewerSkyOrigin[0], viewerSkyOrigin[1], viewerSkyOrigin[2] );
+	}
 }
 
 static void CL_Viewer_ViewPos_f( void ) {
@@ -134,6 +155,31 @@ static void CL_Viewer_ViewPos_f( void ) {
 	cl.viewangles[ROLL] = 0;
 }
 
+static void CL_Viewer_ViewSky_f( void ) {
+	int		i;
+
+	if ( !viewerActive ) {
+		Com_Printf( "No map is being viewed\n" );
+		return;
+	}
+	if ( Cmd_Argc() == 2 && !Q_stricmp( Cmd_Argv( 1 ), "off" ) ) {
+		viewerSkyPortal = qfalse;
+		return;
+	}
+	if ( Cmd_Argc() == 4 ) {
+		for ( i = 0 ; i < 3 ; i++ ) {
+			viewerSkyOrigin[i] = atof( Cmd_Argv( 1 + i ) );
+		}
+		viewerSkyPortal = qtrue;
+		return;
+	}
+	if ( viewerSkyPortal ) {
+		Com_Printf( "viewsky %.1f %.1f %.1f\n", viewerSkyOrigin[0], viewerSkyOrigin[1], viewerSkyOrigin[2] );
+	} else {
+		Com_Printf( "No sky portal camera (viewsky <x> <y> <z> sets one)\n" );
+	}
+}
+
 static void CL_Viewer_ViewStop_f( void ) {
 	if ( viewerActive ) {
 		CL_Viewer_Stop();
@@ -147,6 +193,7 @@ void CL_Viewer_Init( void ) {
 
 	Cmd_AddCommand( "viewmap", CL_Viewer_ViewMap_f );
 	Cmd_AddCommand( "viewpos", CL_Viewer_ViewPos_f );
+	Cmd_AddCommand( "viewsky", CL_Viewer_ViewSky_f );
 	Cmd_AddCommand( "viewstop", CL_Viewer_ViewStop_f );
 }
 
@@ -211,6 +258,10 @@ void CL_Viewer_Draw( void ) {
 	AnglesToAxis( cl.viewangles, rd.viewaxis );
 
 	// areamask stays clear: every area is drawn
+
+	rd.sky_portal = viewerSkyPortal;
+	VectorCopy( viewerSkyOrigin, rd.sky_origin );
+	AxisClear( rd.sky_axis );
 
 	re.ClearScene();
 	re.RenderScene( &rd );

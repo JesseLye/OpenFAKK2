@@ -343,6 +343,7 @@ typedef struct shader_s {
 	qboolean	entityMergable;			// merge across entites optimizable (smoke, blood)
 
 	qboolean	isSky;
+	qboolean	isPortalSky;			// shows the sky portal's view rather than its own stages
 	skyParms_t	sky;
 	fogParms_t	fogParms;
 
@@ -395,6 +396,10 @@ typedef struct {
 	// 1 bits will prevent the associated area from rendering at all
 	byte		areamask[MAX_MAP_AREA_BYTES];
 	qboolean	areamaskModified;	// qtrue if areamask changed since last scene
+
+	qboolean	sky_portal;			// the scene has a sky portal camera
+	vec3_t		sky_origin;
+	vec3_t		sky_axis[3];
 
 	double		floatTime;			// tr.refdef.time / 1000.0
 
@@ -456,6 +461,7 @@ typedef struct {
 	orientationr_t	world;
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
 	qboolean	isPortal;			// true if this view is through a portal
+	qboolean	isPortalSky;		// true if this view is from the sky portal's camera
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
 	int			frameSceneNum;		// copied from tr.frameSceneNum
 	int			frameCount;			// copied from tr.frameCount
@@ -970,6 +976,8 @@ typedef struct {
 	float					sawToothTable[FUNCTABLE_SIZE];
 	float					inverseSawToothTable[FUNCTABLE_SIZE];
 	float					fogTable[FOG_TABLE_SIZE];
+
+	qboolean				portalSkyVisible;	// the view being built has seen a portal sky surface
 } trGlobals_t;
 
 extern backEndState_t	backEnd;

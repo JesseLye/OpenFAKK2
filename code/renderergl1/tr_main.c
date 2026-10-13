@@ -1127,6 +1127,45 @@ void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader,
 
 /*
 =================
+R_RenderSkyPortal
+
+FAKK2's sky portals. When the view has seen a "portalsky" surface and the
+scene names a sky camera, the scene is first drawn from that camera, turned
+the way the viewer is looking. The view is then drawn over it, and its sky
+surfaces leave the picture alone.
+
+(The retail renderer's version of this has not been examined; this follows
+the description in the SDK headers and OpenMoHAA's renderer.)
+=================
+*/
+static void R_RenderSkyPortal( void ) {
+	viewParms_t		newParms, oldParms;
+	vec3_t			axis[3];
+
+	if ( !tr.portalSkyVisible || !tr.refdef.sky_portal ) {
+		return;
+	}
+	if ( tr.viewParms.isPortalSky || tr.viewParms.isPortal ) {
+		return;
+	}
+	tr.portalSkyVisible = qfalse;
+
+	oldParms = tr.viewParms;
+	newParms = tr.viewParms;
+
+	VectorCopy( tr.refdef.sky_origin, newParms.or.origin );
+	MatrixMultiply( oldParms.or.axis, tr.refdef.sky_axis, axis );
+	AxisCopy( axis, newParms.or.axis );
+	VectorCopy( newParms.or.origin, newParms.pvsOrigin );
+	newParms.isPortalSky = qtrue;
+
+	R_RenderView( &newParms );
+
+	tr.viewParms = oldParms;
+}
+
+/*
+=================
 R_SortDrawSurfs
 =================
 */
@@ -1146,6 +1185,9 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 	// sort the drawsurfs by sort type, then orientation, then shader
 	R_RadixSort( drawSurfs, numDrawSurfs );
+
+	// the sky portal's view goes underneath this one
+	R_RenderSkyPortal();
 
 	// check for any pass through drawing, which
 	// may cause another view to be rendered first
@@ -1368,6 +1410,10 @@ void R_RenderView (viewParms_t *parms) {
 	tr.viewParms.frameCount = tr.frameCount;
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
+
+	if ( !parms->isPortalSky ) {
+		tr.portalSkyVisible = qfalse;
+	}
 
 	tr.viewCount++;
 

@@ -1617,10 +1617,10 @@ static qboolean ParseShader( char **text )
 			continue;
 		}
 		// FAKK2: the sky seen through these surfaces is another part of the
-		// map, drawn from a camera entity. Until that is drawn they are an
-		// empty sky.
+		// map, drawn from a camera entity before the view itself. The
+		// surfaces' own stages draw nothing over it.
 		else if ( !Q_stricmp( token, "portalsky" ) ) {
-			shader.isSky = qtrue;
+			shader.isPortalSky = qtrue;
 			continue;
 		}
 		// FAKK2 parameters for its map compiler and sprite models
