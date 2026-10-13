@@ -118,16 +118,17 @@ ParseVector
 static qboolean ParseVector( char **text, int count, float *v ) {
 	char	*token;
 	int		i;
+	qboolean	parens;
 
 	// FIXME: spaces are currently required after parens, should change parseext...
+	// FAKK2's scripts mostly leave the parentheses out
 	token = COM_ParseExt( text, qfalse );
-	if ( strcmp( token, "(" ) ) {
-		ri.Printf( PRINT_WARNING, "WARNING: missing parenthesis in shader '%s'\n", shader.name );
-		return qfalse;
-	}
+	parens = !strcmp( token, "(" );
 
 	for ( i = 0 ; i < count ; i++ ) {
-		token = COM_ParseExt( text, qfalse );
+		if ( parens || i > 0 ) {
+			token = COM_ParseExt( text, qfalse );
+		}
 		if ( !token[0] ) {
 			ri.Printf( PRINT_WARNING, "WARNING: missing vector element in shader '%s'\n", shader.name );
 			return qfalse;
@@ -135,10 +136,12 @@ static qboolean ParseVector( char **text, int count, float *v ) {
 		v[i] = atof( token );
 	}
 
-	token = COM_ParseExt( text, qfalse );
-	if ( strcmp( token, ")" ) ) {
-		ri.Printf( PRINT_WARNING, "WARNING: missing parenthesis in shader '%s'\n", shader.name );
-		return qfalse;
+	if ( parens ) {
+		token = COM_ParseExt( text, qfalse );
+		if ( strcmp( token, ")" ) ) {
+			ri.Printf( PRINT_WARNING, "WARNING: missing parenthesis in shader '%s'\n", shader.name );
+			return qfalse;
+		}
 	}
 
 	return qtrue;
@@ -586,13 +589,23 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 ParseStage
 ===================
 */
-static qboolean ParseStage( shaderStage_t *stage, char **text )
+static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBundle, qboolean *nextBundle )
 {
 	char *token;
 	int depthMaskBits = GLS_DEPTHMASK_TRUE, blendSrcBits = 0, blendDstBits = 0, atestBits = 0, depthFuncBits = 0;
 	qboolean depthMaskExplicit = qfalse;
 
 	stage->active = qtrue;
+	*nextBundle = qfalse;
+
+	// FAKK2 writes a multitextured stage as "map a / nextbundle / map b" inside
+	// one pair of braces. The second texture modulates the first, which is the
+	// two stage form the multitexture collapse already recognises.
+	if ( secondBundle ) {
+		blendSrcBits = GLS_SRCBLEND_DST_COLOR;
+		blendDstBits = GLS_DSTBLEND_ZERO;
+		depthMaskBits = 0;
+	}
 
 	while ( 1 )
 	{
@@ -605,6 +618,11 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 
 		if ( token[0] == '}' )
 		{
+			break;
+		}
+		else if ( !Q_stricmp( token, "nextbundle" ) )
+		{
+			*nextBundle = qtrue;
 			break;
 		}
 		//
@@ -853,7 +871,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 				ParseWaveForm( text, &stage->rgbWave );
 				stage->rgbGen = CGEN_WAVEFORM;
 			}
-			else if ( !Q_stricmp( token, "const" ) )
+			else if ( !Q_stricmp( token, "const" ) || !Q_stricmp( token, "constant" ) )
 			{
 				vec3_t	color;
 
@@ -901,6 +919,23 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 			{
 				stage->rgbGen = CGEN_ONE_MINUS_VERTEX;
 			}
+			else if ( !Q_stricmp( token, "colorwave" ) )
+			{
+				// a waveform scaling a colour; the colour is not applied yet
+				vec3_t	color;
+
+				ParseVector( text, 3, color );
+				ParseWaveForm( text, &stage->rgbWave );
+				stage->rgbGen = CGEN_WAVEFORM;
+			}
+			else if ( !Q_stricmp( token, "fromEntity" ) || !Q_stricmp( token, "fromClient" ) )
+			{
+				stage->rgbGen = CGEN_ENTITY;
+			}
+			else if ( !Q_stricmp( token, "global" ) )
+			{
+				stage->rgbGen = CGEN_IDENTITY;
+			}
 			else
 			{
 				ri.Printf( PRINT_WARNING, "WARNING: unknown rgbGen parameter '%s' in shader '%s'\n", token, shader.name );
@@ -924,7 +959,7 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 				ParseWaveForm( text, &stage->alphaWave );
 				stage->alphaGen = AGEN_WAVEFORM;
 			}
-			else if ( !Q_stricmp( token, "const" ) )
+			else if ( !Q_stricmp( token, "const" ) || !Q_stricmp( token, "constant" ) )
 			{
 				token = COM_ParseExt( text, qfalse );
 				stage->constantColor[3] = 255 * atof( token );
@@ -967,6 +1002,16 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 				{
 					shader.portalRange = atof( token );
 				}
+			}
+			else if ( !Q_stricmp( token, "fromEntity" ) || !Q_stricmp( token, "fromClient" ) )
+			{
+				stage->alphaGen = AGEN_ENTITY;
+			}
+			else if ( !Q_stricmp( token, "global" ) || !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" )
+				|| !Q_stricmp( token, "skyAlpha" ) || !Q_stricmp( token, "oneMinusSkyAlpha" ) )
+			{
+				// view and sky dependent alpha is not implemented; drawn opaque
+				stage->alphaGen = AGEN_IDENTITY;
 			}
 			else
 			{
@@ -1040,10 +1085,25 @@ static qboolean ParseStage( shaderStage_t *stage, char **text )
 
 			continue;
 		}
+		else if ( !Q_stricmp( token, "depthmask" ) )
+		{
+			depthMaskBits = GLS_DEPTHMASK_TRUE;
+			depthMaskExplicit = qtrue;
+			SkipRestOfLine( text );
+			continue;
+		}
+		else if ( !Q_stricmp( token, "nomipmaps" ) || !Q_stricmp( token, "nopicmip" ) )
+		{
+			// FAKK2 allows these inside a stage; images are loaded with the
+			// shader's settings here
+			continue;
+		}
 		else
 		{
+			// keep the rest of the stage: one unknown keyword should not cost the surface its shader
 			ri.Printf( PRINT_WARNING, "WARNING: unknown parameter '%s' in shader '%s'\n", token, shader.name );
-			return qfalse;
+			SkipRestOfLine( text );
+			continue;
 		}
 	}
 
@@ -1265,7 +1325,9 @@ static void ParseSkyParms( char **text ) {
 		ri.Printf( PRINT_WARNING, "WARNING: 'skyParms' missing parameter in shader '%s'\n", shader.name );
 		return;
 	}
-	if ( strcmp( token, "-" ) ) {
+	// FAKK2 names the kind of sky dome ("full" or "half") where Quake III
+	// names a box of images
+	if ( strcmp( token, "-" ) && Q_stricmp( token, "full" ) && Q_stricmp( token, "half" ) ) {
 		for (i=0 ; i<6 ; i++) {
 			Com_sprintf( pathname, sizeof(pathname), "%s_%s.tga"
 				, token, suf[i] );
@@ -1434,6 +1496,23 @@ static void ParseSurfaceParm( char **text ) {
 }
 
 /*
+===============
+ShaderCondition
+
+FAKK2 scripts wrap alternative sets of stages in "if <condition>" ... "endif".
+===============
+*/
+static qboolean ShaderCondition( const char *condition ) {
+	if ( !Q_stricmp( condition, "mtex" ) ) {
+		return qglActiveTextureARB != NULL;
+	}
+	if ( !Q_stricmp( condition, "no_mtex" ) ) {
+		return qglActiveTextureARB == NULL;
+	}
+	return atoi( condition ) != 0;
+}
+
+/*
 =================
 ParseShader
 
@@ -1478,13 +1557,53 @@ static qboolean ParseShader( char **text )
 				return qfalse;
 			}
 
-			if ( !ParseStage( &stages[s], text ) )
-			{
-				return qfalse;
-			}
-			stages[s].active = qtrue;
-			s++;
+			qboolean	secondBundle = qfalse, nextBundle;
 
+			do {
+				if ( s >= MAX_SHADER_STAGES ) {
+					ri.Printf( PRINT_WARNING, "WARNING: too many stages in shader %s (max is %i)\n", shader.name, MAX_SHADER_STAGES );
+					return qfalse;
+				}
+				if ( !ParseStage( &stages[s], text, secondBundle, &nextBundle ) )
+				{
+					return qfalse;
+				}
+				stages[s].active = qtrue;
+				s++;
+				secondBundle = qtrue;
+			} while ( nextBundle );
+
+			continue;
+		}
+		// FAKK2: stages for one kind of hardware
+		else if ( !Q_stricmp( token, "if" ) ) {
+			token = COM_ParseExt( text, qfalse );
+			if ( !ShaderCondition( token ) ) {
+				do {
+					token = COM_ParseExt( text, qtrue );
+					if ( !token[0] ) {
+						ri.Printf( PRINT_WARNING, "WARNING: no 'endif' in shader %s\n", shader.name );
+						return qfalse;
+					}
+				} while ( Q_stricmp( token, "endif" ) );
+			}
+			continue;
+		}
+		else if ( !Q_stricmp( token, "endif" ) ) {
+			continue;
+		}
+		// FAKK2: the sky seen through these surfaces is another part of the
+		// map, drawn from a camera entity. Until that is drawn they are an
+		// empty sky.
+		else if ( !Q_stricmp( token, "portalsky" ) ) {
+			shader.isSky = qtrue;
+			continue;
+		}
+		// FAKK2 parameters for its map compiler and sprite models
+		else if ( !Q_stricmp( token, "surfaceColor" ) || !Q_stricmp( token, "surfaceDensity" )
+			|| !Q_stricmp( token, "subdivisions" ) || !Q_stricmp( token, "spriteGen" )
+			|| !Q_stricmp( token, "spriteScale" ) || !Q_stricmp( token, "deform" ) ) {
+			SkipRestOfLine( text );
 			continue;
 		}
 		// skip stuff that only the QuakeEdRadient needs
@@ -1663,7 +1782,8 @@ static qboolean ParseShader( char **text )
 		else
 		{
 			ri.Printf( PRINT_WARNING, "WARNING: unknown general shader parameter '%s' in '%s'\n", token, shader.name );
-			return qfalse;
+			SkipRestOfLine( text );
+			continue;
 		}
 	}
 
