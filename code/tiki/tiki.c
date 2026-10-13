@@ -1151,6 +1151,40 @@ int TIKI_NumAnims( const tiki_t *tiki ) {
 	return tiki ? tiki->numAnims : 0;
 }
 
+qboolean TIKI_IsSkeletal( const tiki_t *tiki ) {
+	return tiki && tiki->skelName[0];
+}
+
+const char *TIKI_Path( const tiki_t *tiki ) {
+	return tiki ? tiki->path : "";
+}
+
+float TIKI_Scale( const tiki_t *tiki ) {
+	return tiki ? tiki->loadScale : 1.0f;
+}
+
+void TIKI_Origin( const tiki_t *tiki, vec3_t origin ) {
+	if ( tiki ) {
+		VectorCopy( tiki->loadOrigin, origin );
+	} else {
+		VectorClear( origin );
+	}
+}
+
+const char *TIKI_Anim_File( const tiki_t *tiki, int animnum ) {
+	if ( !tiki || animnum < 0 || animnum >= tiki->numAnims ) {
+		return "";
+	}
+	return tiki->anims[animnum].fullname;
+}
+
+const char *TIKI_Surface_Shader( const tiki_t *tiki, int num, int skin ) {
+	if ( !tiki || num < 0 || num >= tiki->numSurfaces || skin < 0 || skin >= tiki->surfaces[num].numSkins ) {
+		return "";
+	}
+	return tiki->surfaces[num].shader[skin];
+}
+
 int TIKI_NumSurfaces( const tiki_t *tiki ) {
 	return tiki ? tiki->numSurfaces : 0;
 }

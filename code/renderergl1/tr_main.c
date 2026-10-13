@@ -440,6 +440,24 @@ static void R_SetFarClip( void )
 		}
 	}
 	tr.viewParms.zFar = sqrt( farthestCornerDistance );
+
+	// FAKK2 builds skies and scenery from models placed outside the world's bounds
+	for ( i = 0 ; i < tr.refdef.num_entities ; i++ ) {
+		const trRefEntity_t	*ent = &tr.refdef.entities[i];
+		const model_t		*mod;
+
+		if ( ent->e.reType != RT_MODEL ) {
+			continue;
+		}
+		mod = R_GetModelByHandle( ent->e.hModel );
+		if ( mod->type == MOD_TAN ) {
+			float	reach = R_TanFarthestPoint( ent, mod );
+
+			if ( reach > tr.viewParms.zFar ) {
+				tr.viewParms.zFar = reach;
+			}
+		}
+	}
 }
 
 /*
@@ -1278,6 +1296,9 @@ void R_AddEntitySurfaces (void) {
 				switch ( tr.currentModel->type ) {
 				case MOD_MESH:
 					R_AddMD3Surfaces( ent );
+					break;
+				case MOD_TAN:
+					R_AddTanSurfaces( ent );
 					break;
 				case MOD_MDR:
 					R_MDRAddAnimSurfaces( ent );

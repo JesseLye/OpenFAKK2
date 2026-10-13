@@ -21,6 +21,7 @@ times as fast while +speed is held.
 */
 
 #include "client.h"
+#include "../tiki/tiki.h"
 
 static qboolean	viewerActive;
 static vec3_t	viewerOrigin;
@@ -33,12 +34,97 @@ static vec3_t	viewerSkyOrigin;
 
 #define	VIEWER_EYE_HEIGHT	82	// above a player start, roughly where the game's camera sits
 
+// Map entities that name a vertex-animated model are drawn where the map puts
+// them, standing in the first frame of their idle animation. That is what
+// the map says, not what the game would do with them: nothing is hidden,
+// moved, animated or spawned by script.
+#define	VIEWER_MAX_MODELS	1000
+
+typedef struct {
+	qhandle_t	model;
+	vec3_t		origin;
+	vec3_t		axis[3];
+	qboolean	scaled;
+} viewerModel_t;
+
+static viewerModel_t	viewerModels[VIEWER_MAX_MODELS];
+static int				viewerNumModels;
+static int				viewerSkeletal, viewerFailed;
+
 qboolean CL_Viewer_Active( void ) {
 	return viewerActive;
 }
 
 void CL_Viewer_Stop( void ) {
 	viewerActive = qfalse;
+}
+
+/*
+===============
+CL_Viewer_AddModel
+===============
+*/
+static void CL_Viewer_AddModel( const char *model, const vec3_t origin, const vec3_t angles, float scale ) {
+	const char		*surfaceNames[64], *shaderNames[64];
+	char			name[MAX_QPATH];
+	viewerModel_t	*vm;
+	tiki_t			*tiki;
+	vec3_t			tikiOrigin;
+	qhandle_t		handle;
+	int				anim, numSurfaces, i;
+
+	if ( viewerNumModels == VIEWER_MAX_MODELS ) {
+		return;
+	}
+
+	// maps leave the directory out
+	if ( Q_stricmpn( model, "models/", 7 ) ) {
+		Com_sprintf( name, sizeof( name ), "models/%s", model );
+	} else {
+		Q_strncpyz( name, model, sizeof( name ) );
+	}
+
+	tiki = TIKI_Register( name );
+	if ( !tiki || !TIKI_NumAnims( tiki ) ) {
+		viewerFailed++;
+		return;
+	}
+	if ( TIKI_IsSkeletal( tiki ) ) {
+		viewerSkeletal++;
+		return;
+	}
+
+	anim = TIKI_Anim_NumForName( tiki, "idle" );
+	if ( anim < 0 ) {
+		anim = 0;
+	}
+	numSurfaces = TIKI_NumSurfaces( tiki );
+	if ( numSurfaces > ARRAY_LEN( surfaceNames ) ) {
+		numSurfaces = ARRAY_LEN( surfaceNames );
+	}
+	for ( i = 0 ; i < numSurfaces ; i++ ) {
+		surfaceNames[i] = TIKI_Surface_NumToName( tiki, i );
+		shaderNames[i] = TIKI_Surface_Shader( tiki, i, 0 );
+	}
+	TIKI_Origin( tiki, tikiOrigin );
+
+	handle = re.RegisterTan( name, TIKI_Anim_File( tiki, anim ), 0, TIKI_Scale( tiki ), tikiOrigin,
+		TIKI_Path( tiki ), numSurfaces, surfaceNames, shaderNames );
+	if ( !handle ) {
+		viewerFailed++;
+		return;
+	}
+
+	vm = &viewerModels[viewerNumModels++];
+	vm->model = handle;
+	VectorCopy( origin, vm->origin );
+	AnglesToAxis( angles, vm->axis );
+	vm->scaled = scale != 1.0f;
+	if ( vm->scaled ) {
+		for ( i = 0 ; i < 3 ; i++ ) {
+			VectorScale( vm->axis[i], scale, vm->axis[i] );
+		}
+	}
 }
 
 /*
@@ -53,12 +139,15 @@ static void CL_Viewer_FindStart( void ) {
 	char		classname[MAX_TOKEN_CHARS];
 	vec3_t		origin;
 	float		angle;
-	char		script[MAX_TOKEN_CHARS];
+	char		script[MAX_TOKEN_CHARS], model[MAX_TOKEN_CHARS];
+	vec3_t		angles;
+	float		scale;
 	qboolean	haveOrigin, haveStart = qfalse;
 
 	VectorClear( viewerOrigin );
 	VectorClear( cl.viewangles );
 	viewerSkyPortal = qfalse;
+	viewerNumModels = viewerSkeletal = viewerFailed = 0;
 
 	while ( re.GetEntityToken( token, sizeof( token ) ) ) {
 		if ( token[0] != '{' ) {
@@ -66,7 +155,11 @@ static void CL_Viewer_FindStart( void ) {
 		}
 		classname[0] = 0;
 		script[0] = 0;
+		model[0] = 0;
 		angle = 0;
+		scale = 1;
+		VectorClear( origin );
+		VectorClear( angles );
 		haveOrigin = qfalse;
 		while ( re.GetEntityToken( key, sizeof( key ) ) && key[0] != '}' ) {
 			if ( !re.GetEntityToken( token, sizeof( token ) ) ) {
@@ -78,6 +171,13 @@ static void CL_Viewer_FindStart( void ) {
 				haveOrigin = sscanf( token, "%f %f %f", &origin[0], &origin[1], &origin[2] ) == 3;
 			} else if ( !Q_stricmp( key, "angle" ) ) {
 				angle = atof( token );
+				angles[YAW] = angle;
+			} else if ( !Q_stricmp( key, "angles" ) ) {
+				sscanf( token, "%f %f %f", &angles[0], &angles[1], &angles[2] );
+			} else if ( !Q_stricmp( key, "scale" ) ) {
+				scale = atof( token );
+			} else if ( !Q_stricmp( key, "model" ) ) {
+				Q_strncpyz( model, token, sizeof( model ) );
 			} else if ( !Q_stricmp( key, "script" ) ) {
 				Q_strncpyz( script, token, sizeof( script ) );
 			}
@@ -94,6 +194,9 @@ static void CL_Viewer_FindStart( void ) {
 		if ( haveOrigin && !viewerSkyPortal && Q_stristr( script, "skyorigin" ) ) {
 			VectorCopy( origin, viewerSkyOrigin );
 			viewerSkyPortal = qtrue;
+		}
+		if ( strlen( model ) > 4 && !Q_stricmp( model + strlen( model ) - 4, ".tik" ) ) {
+			CL_Viewer_AddModel( model, origin, angles, scale > 0 ? scale : 1 );
 		}
 	}
 }
@@ -129,6 +232,8 @@ static void CL_Viewer_ViewMap_f( void ) {
 	if ( viewerSkyPortal ) {
 		Com_Printf( "Sky portal camera at %.0f %.0f %.0f\n", viewerSkyOrigin[0], viewerSkyOrigin[1], viewerSkyOrigin[2] );
 	}
+	Com_Printf( "%i models placed; not drawn: %i skeletal, %i that failed to load\n",
+		viewerNumModels, viewerSkeletal, viewerFailed );
 }
 
 static void CL_Viewer_ViewPos_f( void ) {
@@ -236,6 +341,7 @@ void CL_Viewer_Frame( void ) {
 void CL_Viewer_Draw( void ) {
 	refdef_t	rd;
 	float		fov, x;
+	int			i;
 
 	if ( !viewerActive ) {
 		return;
@@ -264,5 +370,19 @@ void CL_Viewer_Draw( void ) {
 	AxisClear( rd.sky_axis );
 
 	re.ClearScene();
+	for ( i = 0 ; i < viewerNumModels ; i++ ) {
+		const viewerModel_t	*vm = &viewerModels[i];
+		refEntity_t			ent;
+
+		Com_Memset( &ent, 0, sizeof( ent ) );
+		ent.reType = RT_MODEL;
+		ent.hModel = vm->model;
+		VectorCopy( vm->origin, ent.origin );
+		VectorCopy( vm->origin, ent.oldorigin );
+		VectorCopy( vm->origin, ent.lightingOrigin );
+		AxisCopy( vm->axis, ent.axis );
+		ent.nonNormalizedAxes = vm->scaled;
+		re.AddRefEntityToScene( &ent );
+	}
 	re.RenderScene( &rd );
 }

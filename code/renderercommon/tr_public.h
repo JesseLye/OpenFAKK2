@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_types.h"
 
-#define	REF_API_VERSION		8
+#define	REF_API_VERSION		9
 
 //
 // these are the functions exported by the refresh module
@@ -46,6 +46,10 @@ typedef struct {
 	// size display elements
 	void	(*BeginRegistration)( glconfig_t *config );
 	qhandle_t (*RegisterModel)( const char *name );
+	// FAKK2: one frame of a vertex animation file as a static model. The
+	// caller has read the model's .tik definition and passes what it says.
+	qhandle_t (*RegisterTan)( const char *name, const char *tanFile, int frame, float scale, const vec3_t origin,
+		const char *path, int numSurfaceNames, const char **surfaceNames, const char **shaderNames );
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );

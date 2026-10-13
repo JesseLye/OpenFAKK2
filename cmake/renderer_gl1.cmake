@@ -21,6 +21,7 @@ set(RENDERER_GL1_SOURCES
     ${SOURCE_DIR}/renderergl1/tr_mesh.c
     ${SOURCE_DIR}/renderergl1/tr_model.c
     ${SOURCE_DIR}/renderergl1/tr_model_iqm.c
+    ${SOURCE_DIR}/renderergl1/tr_model_tan.c
     ${SOURCE_DIR}/renderergl1/tr_scene.c
     ${SOURCE_DIR}/renderergl1/tr_shade.c
     ${SOURCE_DIR}/renderergl1/tr_shade_calc.c

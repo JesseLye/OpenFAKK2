@@ -38,6 +38,14 @@ const char	*TIKI_Name( const tiki_t *tiki );
 // each model owns one alias list, created on demand by its user
 struct AliasList_s	**TIKI_AliasList( tiki_t *tiki );
 
+// what a renderer needs to draw the model
+qboolean	TIKI_IsSkeletal( const tiki_t *tiki );
+const char	*TIKI_Path( const tiki_t *tiki );
+float		TIKI_Scale( const tiki_t *tiki );
+void		TIKI_Origin( const tiki_t *tiki, vec3_t origin );
+const char	*TIKI_Anim_File( const tiki_t *tiki, int animnum );
+const char	*TIKI_Surface_Shader( const tiki_t *tiki, int num, int skin );
+
 int			TIKI_NumAnims( const tiki_t *tiki );
 int			TIKI_NumSkins( const tiki_t *tiki );
 int			TIKI_NumSurfaces( const tiki_t *tiki );

@@ -759,7 +759,8 @@ typedef enum {
 	MOD_BRUSH,
 	MOD_MESH,
 	MOD_MDR,
-	MOD_IQM
+	MOD_IQM,
+	MOD_TAN
 } modtype_t;
 
 typedef struct model_s {
@@ -770,7 +771,7 @@ typedef struct model_s {
 	int			dataSize;	// just for listing purposes
 	bmodel_t	*bmodel;		// only if type == MOD_BRUSH
 	md3Header_t	*md3[MD3_MAX_LODS];	// only if type == MOD_MESH
-	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM)
+	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM | MOD_TAN)
 
 	int			 numLods;
 } model_t;
@@ -1613,6 +1614,14 @@ void RE_TakeVideoFrame( int width, int height,
 		byte *captureBuffer, byte *encodeBuffer, qboolean motionJpeg );
 
 void R_DrawElements( int numIndexes, const glIndex_t *indexes );
+
+//
+// tr_model_tan.c
+//
+qhandle_t RE_RegisterTan( const char *name, const char *tanFile, int frame, float scale, const vec3_t origin,
+						  const char *path, int numSurfaceNames, const char **surfaceNames, const char **shaderNames );
+void R_AddTanSurfaces( trRefEntity_t *ent );
+float R_TanFarthestPoint( const trRefEntity_t *ent, const model_t *mod );
 void VectorArrayNormalize( vec4_t *normals, unsigned int count );
 
 #ifdef idppc_altivec
