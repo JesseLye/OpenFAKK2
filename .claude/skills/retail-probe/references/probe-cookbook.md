@@ -105,7 +105,10 @@ Moving adds the player's velocity to a projectile (`addownervelocity`), which is
 collision bugs only show standing still.
 
 Jump with `@hold moveup 0.2`. Walking: 91 u/s; jump: 400 u/s up with 160 u/s forward,
-gravity 800, about a second in the air (`probe-walk-jump.scr`). Whenever the player slows
+gravity 800, about a second in the air (`probe-walk-jump.scr`). `+forward` alone walks on
+both engines (`cl_run` defaults to 0, as in retail); if the real client reads `run_norm`
+at 345 u/s, an old `seta cl_run "1"` is sitting in `build\sandbox\home\fakk\config.cfg`,
+archived from an earlier build. Delete the line. Whenever the player slows
 down on the ground (jump wind-up, landing, letting go of the key) the headless comparison
 reads her 1 to 2 units short of retail per slow-down, and 4 to 6 after a walk-jump-stop.
 That is the test player's command cadence, not the physics: see "Read the result" in

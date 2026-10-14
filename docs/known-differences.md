@@ -92,6 +92,7 @@ client is ported.
 | `sv_allowdownload` | 1 | 0 | |
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
 | `paused` | 0 | not registered | OpenFAKK2 has `sv_paused` / `cl_paused` |
+| `cl_run` | 0 | 0 | Was 1 (Quake III's). Registered at `0x422626` with "0", `CVAR_ARCHIVE`; the run button (`0x41e540`) is set when `in_speed.active == (cl_run == 0)`. Julie walks with `+forward` alone until the player turns "always run" on; the shipped `default.cfg` binds only `SHIFT +speed` and sets no `cl_run` |
 
 ## Rules inferred, not read from the binary
 
@@ -505,9 +506,10 @@ frame (`SV_TestPlayer_Frame`, `sv_fps` 20, 50 ms) where the retail client builds
 rendered frame. The stopping distances back this up: retail covers 9.08 units from 91 u/s
 to a stop, which the per-command model gives for 30 to 40 fps; ours at 20 Hz covers 7.54,
 the model's 7.63. At `sv_fps 40` ours stops at -1954.26 and through the real client at
--1957.14, both inside retail's spread. What remains open is the real client's `cl_run`:
-ours defaults it to 1 (`cl_main.c`) and runs with `+forward` alone where retail walks;
-whether `fakk2.exe` defaults it to 0 has not been read from the binary.
+-1957.14, both inside retail's spread. The real client first *ran* this probe at 345 u/s
+because our `cl_run` defaulted to 1; retail's default is 0 (see "Cvar differences"), and
+ours now matches. A sandbox `config.cfg` written by an older build still carries
+`seta cl_run "1"`, since the cvar is archived; delete that line or the client keeps running.
 
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of

@@ -59,6 +59,12 @@ by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.
 
 A probe must end with `pendingevents`; that is how the script knows it has finished.
 
+OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
+`fs_homepath`; the retail runs use a clean copy of the install. So that ours does not
+read the player's own `autoexec.cfg` from the install, `common.ps1` keeps an empty one in
+the sandbox home. Archived cvars persist in the sandbox's `config.cfg` between runs: if
+a client-side default changes (as `cl_run` did), delete the old `seta` line there.
+
 ## The client and the map viewer
 
     tools\retail-compare\run-client.ps1 -Run "+viewmap zoo +wait 30 +screenshotJPEG +wait 5 +quit"
