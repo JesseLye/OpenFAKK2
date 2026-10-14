@@ -54,10 +54,38 @@ static float *TableForFunc( genFunc_t func )
 **
 ** Evaluates a given waveForm_t, referencing backEnd.refdef.time directly
 */
-static float EvalWaveForm( const waveForm_t *wf ) 
-{
-	float	*table;
+/*
+=================
+R_EntityWave
 
+FAKK2: a wave parameter written as "fromEntity" is the entity's, packed by
+the game's "shader wavebase|waveamp|wavephase|wavefreq" into surfaces[0..3]
+(q_shared.h: base and phase signed 3.4 fixed point, amplitude and frequency
+4.4). The world and the 2D entity carry zeros, so such a wave is flat on
+them, as in retail.
+=================
+*/
+const waveForm_t *R_EntityWave( const waveForm_t *wf, waveForm_t *out ) {
+	const byte	*s;
+
+	if ( !wf->fromEntity || !backEnd.currentEntity ) {
+		return wf;
+	}
+	s = backEnd.currentEntity->e.surfaces;
+	*out = *wf;
+	if ( wf->fromEntity & WAVE_ENT_BASE )		out->base = s[0] / 16.0f - 8.0f;
+	if ( wf->fromEntity & WAVE_ENT_AMPLITUDE )	out->amplitude = s[1] / 16.0f;
+	if ( wf->fromEntity & WAVE_ENT_PHASE )		out->phase = s[2] / 16.0f - 8.0f;
+	if ( wf->fromEntity & WAVE_ENT_FREQUENCY )	out->frequency = s[3] / 16.0f;
+	return out;
+}
+
+static float EvalWaveForm( const waveForm_t *wf )
+{
+	float		*table;
+	waveForm_t	ew;
+
+	wf = R_EntityWave( wf, &ew );
 	table = TableForFunc( wf->func );
 
 	return WAVEVALUE( table, wf->base, wf->amplitude, wf->phase, wf->frequency );
@@ -139,16 +167,19 @@ void RB_CalcDeformVertexes( deformStage_t *ds )
 	}
 	else
 	{
-		table = TableForFunc( ds->deformationWave.func );
+		waveForm_t			ew;
+		const waveForm_t	*wf = R_EntityWave( &ds->deformationWave, &ew );
+
+		table = TableForFunc( wf->func );
 
 		for ( i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4 )
 		{
 			float off = ( xyz[0] + xyz[1] + xyz[2] ) * ds->deformationSpread;
 
-			scale = WAVEVALUE( table, ds->deformationWave.base, 
-				ds->deformationWave.amplitude,
-				ds->deformationWave.phase + off,
-				ds->deformationWave.frequency );
+			scale = WAVEVALUE( table, wf->base,
+				wf->amplitude,
+				wf->phase + off,
+				wf->frequency );
 
 			VectorScale( normal, scale, offset );
 			
@@ -236,12 +267,15 @@ void RB_CalcMoveVertexes( deformStage_t *ds ) {
 	float		scale;
 	vec3_t		offset;
 
-	table = TableForFunc( ds->deformationWave.func );
+	waveForm_t			ew;
+	const waveForm_t	*wf = R_EntityWave( &ds->deformationWave, &ew );
 
-	scale = WAVEVALUE( table, ds->deformationWave.base, 
-		ds->deformationWave.amplitude,
-		ds->deformationWave.phase,
-		ds->deformationWave.frequency );
+	table = TableForFunc( wf->func );
+
+	scale = WAVEVALUE( table, wf->base,
+		wf->amplitude,
+		wf->phase,
+		wf->frequency );
 
 	VectorScale( ds->moveVector, scale, offset );
 
@@ -684,6 +718,9 @@ void RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors )
 
 
   if ( wf->func == GF_NOISE ) {
+		waveForm_t	ew;
+
+		wf = R_EntityWave( wf, &ew );
 		glow = wf->base + R_NoiseGet4f( 0, 0, 0, ( tess.shaderTime + wf->phase ) * wf->frequency ) * wf->amplitude;
 	} else {
 		glow = EvalWaveForm( wf ) * tr.identityLight;
@@ -918,7 +955,9 @@ void RB_CalcTurbulentTexCoords( const waveForm_t *wf, float *st )
 {
 	int i;
 	double now;
+	waveForm_t	ew;
 
+	wf = R_EntityWave( wf, &ew );
 	now = ( wf->phase + tess.shaderTime * wf->frequency );
 
 	for ( i = 0; i < tess.numVertexes; i++, st += 2 )

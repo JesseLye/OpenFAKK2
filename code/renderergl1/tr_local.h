@@ -204,7 +204,24 @@ typedef struct {
 	float amplitude;
 	float phase;
 	float frequency;
+
+	// FAKK2: a parameter given as "fromEntity" comes from the entity's
+	// surfaces[0..3] (the game's "shader wavebase|waveamp|wavephase|wavefreq")
+	int			fromEntity;			// WAVE_ENT_* bits
 } waveForm_t;
+
+#define WAVE_ENT_BASE		1
+#define WAVE_ENT_AMPLITUDE	2
+#define WAVE_ENT_PHASE		4
+#define WAVE_ENT_FREQUENCY	8
+
+// FAKK2: texture mods given as "fromEntity" read the entity's shader_data
+#define TMOD_ENT_S			1
+#define TMOD_ENT_T			2
+#define TMOD_ENT_ROTATE		4
+
+// the wave with its "fromEntity" parameters filled from the current entity (tr_shade_calc.c)
+const waveForm_t *R_EntityWave( const waveForm_t *wf, waveForm_t *out );
 
 #define TR_MAX_TEXMODS 4
 
@@ -255,6 +272,7 @@ typedef struct {
 	// - = counterclockwise
 	float			rotateSpeed;
 
+	int				fromEntity;			// FAKK2: TMOD_ENT_* bits (scroll, offset, rotate)
 } texModInfo_t;
 
 

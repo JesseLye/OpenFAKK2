@@ -319,14 +319,16 @@ static void ParseWaveForm( char **text, waveForm_t *wave )
 		return;
 	}
 	wave->func = NameToGenFunc( token );
+	wave->fromEntity = 0;
 
-	// BASE, AMP, PHASE, FREQ
+	// BASE, AMP, PHASE, FREQ; FAKK2 lets any of them be "fromEntity"
 	token = COM_ParseExt( text, qfalse );
 	if ( token[0] == 0 )
 	{
 		ri.Printf( PRINT_WARNING, "WARNING: missing waveform parm in shader '%s'\n", shader.name );
 		return;
 	}
+	if ( !Q_stricmp( token, "fromEntity" ) ) wave->fromEntity |= WAVE_ENT_BASE;
 	wave->base = atof( token );
 
 	token = COM_ParseExt( text, qfalse );
@@ -335,6 +337,7 @@ static void ParseWaveForm( char **text, waveForm_t *wave )
 		ri.Printf( PRINT_WARNING, "WARNING: missing waveform parm in shader '%s'\n", shader.name );
 		return;
 	}
+	if ( !Q_stricmp( token, "fromEntity" ) ) wave->fromEntity |= WAVE_ENT_AMPLITUDE;
 	wave->amplitude = atof( token );
 
 	token = COM_ParseExt( text, qfalse );
@@ -343,6 +346,7 @@ static void ParseWaveForm( char **text, waveForm_t *wave )
 		ri.Printf( PRINT_WARNING, "WARNING: missing waveform parm in shader '%s'\n", shader.name );
 		return;
 	}
+	if ( !Q_stricmp( token, "fromEntity" ) ) wave->fromEntity |= WAVE_ENT_PHASE;
 	wave->phase = atof( token );
 
 	token = COM_ParseExt( text, qfalse );
@@ -351,6 +355,7 @@ static void ParseWaveForm( char **text, waveForm_t *wave )
 		ri.Printf( PRINT_WARNING, "WARNING: missing waveform parm in shader '%s'\n", shader.name );
 		return;
 	}
+	if ( !Q_stricmp( token, "fromEntity" ) ) wave->fromEntity |= WAVE_ENT_FREQUENCY;
 	wave->frequency = atof( token );
 }
 
@@ -445,6 +450,7 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 			ri.Printf( PRINT_WARNING, "WARNING: missing scale scroll parms in shader '%s'\n", shader.name );
 			return;
 		}
+		if ( !Q_stricmp( token, "fromEntity" ) ) tmi->fromEntity |= TMOD_ENT_S;
 		tmi->scroll[0] = atof( token );
 		token = COM_ParseExt( text, qfalse );
 		if ( token[0] == 0 )
@@ -452,6 +458,7 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 			ri.Printf( PRINT_WARNING, "WARNING: missing scale scroll parms in shader '%s'\n", shader.name );
 			return;
 		}
+		if ( !Q_stricmp( token, "fromEntity" ) ) tmi->fromEntity |= TMOD_ENT_T;
 		tmi->scroll[1] = atof( token );
 		tmi->type = TMOD_SCROLL;
 	}
@@ -568,6 +575,7 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 			ri.Printf( PRINT_WARNING, "WARNING: missing tcMod rotate parms in shader '%s'\n", shader.name );
 			return;
 		}
+		if ( !Q_stricmp( token, "fromEntity" ) ) tmi->fromEntity |= TMOD_ENT_ROTATE;
 		tmi->rotateSpeed = atof( token );
 		tmi->type = TMOD_ROTATE;
 	}
@@ -592,8 +600,8 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 		for ( i = 0 ; i < 2 ; i++ )
 		{
 			token = COM_ParseExt( text, qfalse );
-			// an offset the game supplies per entity is not available here
-			tmi->translate[i] = Q_stricmp( token, "fromEntity" ) ? atof( token ) : 0;
+			if ( !Q_stricmp( token, "fromEntity" ) ) tmi->fromEntity |= i ? TMOD_ENT_T : TMOD_ENT_S;
+			tmi->translate[i] = atof( token );
 		}
 		tmi->type = TMOD_TRANSFORM;
 	}

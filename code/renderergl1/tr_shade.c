@@ -911,6 +911,17 @@ static void ComputeTexCoords( shaderStage_t *pStage ) {
 				break;
 
 			case TMOD_SCROLL:
+				if ( pStage->bundle[b].texMods[tm].fromEntity && backEnd.currentEntity ) {
+					// FAKK2: the game's "shader translation", 4.11 fixed point in shader_data
+					const texModInfo_t	*tmi = &pStage->bundle[b].texMods[tm];
+					const short			*sd = backEnd.currentEntity->e.shader_data;
+					float				scroll[2];
+
+					scroll[0] = ( tmi->fromEntity & TMOD_ENT_S ) ? sd[0] / 2048.0f : tmi->scroll[0];
+					scroll[1] = ( tmi->fromEntity & TMOD_ENT_T ) ? sd[1] / 2048.0f : tmi->scroll[1];
+					RB_CalcScrollTexCoords( scroll, ( float * ) tess.svars.texcoords[b] );
+					break;
+				}
 				RB_CalcScrollTexCoords( pStage->bundle[b].texMods[tm].scroll,
 										 ( float * ) tess.svars.texcoords[b] );
 				break;
@@ -926,11 +937,28 @@ static void ComputeTexCoords( shaderStage_t *pStage ) {
 				break;
 
 			case TMOD_TRANSFORM:
+				if ( pStage->bundle[b].texMods[tm].fromEntity && backEnd.currentEntity ) {
+					// FAKK2: "tcMod offset fromEntity": the game's "shader offset",
+					// 1.14 fixed point in shader_data
+					texModInfo_t	tmi = pStage->bundle[b].texMods[tm];
+					const short		*sd = backEnd.currentEntity->e.shader_data;
+
+					if ( tmi.fromEntity & TMOD_ENT_S ) tmi.translate[0] = sd[0] / 16384.0f;
+					if ( tmi.fromEntity & TMOD_ENT_T ) tmi.translate[1] = sd[1] / 16384.0f;
+					RB_CalcTransformTexCoords( &tmi, ( float * ) tess.svars.texcoords[b] );
+					break;
+				}
 				RB_CalcTransformTexCoords( &pStage->bundle[b].texMods[tm],
 						                 ( float * ) tess.svars.texcoords[b] );
 				break;
 
 			case TMOD_ROTATE:
+				if ( ( pStage->bundle[b].texMods[tm].fromEntity & TMOD_ENT_ROTATE ) && backEnd.currentEntity ) {
+					// FAKK2: the game's "shader rotation", 9.6 fixed point in shader_data[0]
+					RB_CalcRotateTexCoords( backEnd.currentEntity->e.shader_data[0] / 64.0f,
+											( float * ) tess.svars.texcoords[b] );
+					break;
+				}
 				RB_CalcRotateTexCoords( pStage->bundle[b].texMods[tm].rotateSpeed,
 										( float * ) tess.svars.texcoords[b] );
 				break;

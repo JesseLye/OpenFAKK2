@@ -567,6 +567,19 @@ What is implemented, and on what basis:
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). Debug lines and sword
   swipes are accepted and not drawn.
+- **Shader parameters from the entity.** FAKK2's shader scripts may write
+  `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
+  `textures/training/floor_voobing`, the training hall's flashing floor pads) and for
+  `tcMod scroll|offset|rotate` values. The game's `shader wavebase|waveamp|wavephase|
+  wavefreq` entity commands pack them into the entity state's `surfaces[0..3]` (base
+  and phase signed 3.4 fixed point, amplitude and frequency 4.4; `q_shared.h`
+  `*_TO_PKT`) and `shader translation|offset|rotation` into `tag_num`/`skinNum`, which
+  the client game module hands the renderer as `shader_data` (4.11, 1.14 and 9.6 fixed
+  point). The renderer read such a word as zero, so the pads never flashed; it now takes
+  the value from the current entity at draw time (`R_EntityWave`, the tcMod cases in
+  `ComputeTexCoords`). Which packed field feeds which parameter was taken from the
+  game's `Entity::Shader`, not read from the retail renderer; the training pads match
+  the retail capture at 25 seconds.
 - **Lens flares** (`tr_lensflare.c`) follow the retail renderer: `0x48b690` reads
   `scripts/lensflare2.txt` into three sets (`sun`, `entity`, `dlight`; defaults
   `dot_min` .8, `fullscale` .7, up to 20 flares), `0x48bf90` registers
