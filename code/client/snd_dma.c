@@ -52,6 +52,8 @@ static char		s_backgroundLoop[MAX_QPATH];
 channel_t   s_channels[MAX_CHANNELS];
 channel_t   loop_channels[MAX_CHANNELS];
 int			numLoopChannels;
+static qboolean	s_channelsPaused;	// FAKK2: the channels are held while the game is paused
+static int		s_pausedAt;			// s_paintedtime when they were
 
 static int	s_soundStarted;
 static		qboolean	s_soundMuted;
@@ -662,6 +664,7 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 	ch->rightvol = ch->master_vol;		// unless the game isn't running
 	ch->doppler = qfalse;
 	ch->fullVolume = fullVolume;
+	ch->paused = qfalse;
 }
 
 /*
@@ -1231,8 +1234,12 @@ void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int 
 		}
 	}
 
-	// add loopsounds
-	S_AddLoopSounds ();
+	// add loopsounds (FAKK2: none while the game is paused)
+	if ( s_channelsPaused ) {
+		numLoopChannels = 0;
+	} else {
+		S_AddLoopSounds ();
+	}
 }
 
 
@@ -1252,7 +1259,7 @@ qboolean S_ScanChannelStarts( void ) {
 	ch = s_channels;
 
 	for (i=0; i<MAX_CHANNELS ; i++, ch++) {
-		if ( !ch->thesfx ) {
+		if ( !ch->thesfx || ch->paused ) {
 			continue;
 		}
 		// if this channel was just started this frame,
@@ -1274,6 +1281,50 @@ qboolean S_ScanChannelStarts( void ) {
 }
 
 /*
+=================
+S_PauseChannels / S_ResumeChannels
+
+FAKK2: the retail sound update (0x45d460) pauses every playing sample when
+the paused cvar comes on (0x45bb80) and resumes them when it goes off
+(0x45bc00); sounds started in between play. The music, on its own handles,
+is not touched (here, the raw streams). A held channel is skipped by the
+mixer and its start moved on by the time it was held, so it carries on
+where it stopped; the loops are left out while held and come back after.
+=================
+*/
+static void S_PauseChannels( void ) {
+	channel_t	*ch;
+	int			i;
+
+	ch = s_channels;
+	for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
+		if ( ch->thesfx ) {
+			ch->paused = qtrue;
+		}
+	}
+	s_pausedAt = s_paintedtime;
+	s_channelsPaused = qtrue;
+	Com_DPrintf( "S_PauseChannels\n" );
+}
+
+static void S_ResumeChannels( void ) {
+	channel_t	*ch;
+	int			i;
+
+	ch = s_channels;
+	for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
+		if ( ch->paused ) {
+			if ( ch->startSample != START_SAMPLE_IMMEDIATE ) {
+				ch->startSample += s_paintedtime - s_pausedAt;
+			}
+			ch->paused = qfalse;
+		}
+	}
+	s_channelsPaused = qfalse;
+	Com_DPrintf( "S_ResumeChannels\n" );
+}
+
+/*
 ============
 S_Update
 
@@ -1288,6 +1339,13 @@ void S_Base_Update( void ) {
 	if ( !s_soundStarted || s_soundMuted ) {
 //		Com_DPrintf ("not started or muted\n");
 		return;
+	}
+
+	// FAKK2: hold the playing sounds while the game is paused
+	if ( cl_paused->integer && !s_channelsPaused ) {
+		S_PauseChannels();
+	} else if ( !cl_paused->integer && s_channelsPaused ) {
+		S_ResumeChannels();
 	}
 
 	//

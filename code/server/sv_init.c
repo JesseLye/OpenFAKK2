@@ -478,7 +478,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	ge->Cleanup();
 
 	// make sure we are not paused
-	Cvar_Set("cl_paused", "0");
+	Cvar_Set("paused", "0");
 
 	// get a new checksum feed and restart the file system
 	sv.checksumFeed = ( ((unsigned int)rand() << 16) ^ (unsigned int)rand() ) ^ Com_Milliseconds();

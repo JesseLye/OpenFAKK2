@@ -993,6 +993,10 @@ static qboolean SV_CheckPaused( void ) {
 	int		i;
 
 	if ( !cl_paused->integer ) {
+		// FAKK2: and sv_paused comes off with it (it used to stay)
+		if ( sv_paused->integer ) {
+			Cvar_Set( "sv_paused", "0" );
+		}
 		return qfalse;
 	}
 

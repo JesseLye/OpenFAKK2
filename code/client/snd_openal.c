@@ -605,6 +605,7 @@ typedef struct src_s
 
 	float		volume;			// FAKK2: the sound's volume, 0 to 1
 	float		minDist;		// FAKK2: full volume within this distance
+	qboolean	isPaused;		// FAKK2: held while the game is paused
 } src_t;
 
 #ifdef __APPLE__
@@ -960,6 +961,7 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 	curSource->isLooping = qfalse;
 	curSource->isTracking = qfalse;
 	curSource->isStream = qfalse;
+	curSource->isPaused = qfalse;
 	curSource->volume = volume;
 	curSource->minDist = minDist;
 	curSource->curGain = s_alGain->value * s_volume->value * volume;
@@ -1159,6 +1161,7 @@ static void S_AL_SrcKill(srcHandle_t src)
 		qalSourceStop(curSource->alSource);
 		curSource->isPlaying = qfalse;
 	}
+	curSource->isPaused = qfalse;
 
 	// Detach any buffers
 	qalSourcei(curSource->alSource, AL_BUFFER, 0);
@@ -1770,6 +1773,10 @@ void S_AL_SrcUpdate( void )
 			continue;
 
 		if(!curSource->isActive)
+			continue;
+
+		// FAKK2: a held source stays as it is until the game goes on
+		if(curSource->isPaused)
 			continue;
 
 		// Update source parameters
@@ -2578,6 +2585,59 @@ void S_AL_Respatialize( int entityNum, const vec3_t origin, vec3_t axis[3], int 
 
 /*
 =================
+S_AL_PauseSounds / S_AL_ResumeSounds
+
+FAKK2: the retail sound update (0x45d460) pauses every playing sample when
+the paused cvar comes on (0x45bb80) and resumes them when it goes off
+(0x45bc00); sounds started in between play. The music, on its own handles,
+is not touched: here that is the streams.
+=================
+*/
+static qboolean s_alPaused;
+
+static void S_AL_PauseSounds( void )
+{
+	int i, count = 0;
+	ALint state;
+
+	for(i = 0; i < srcCount; i++)
+	{
+		src_t *curSource = &srcList[i];
+
+		if(!curSource->isActive || curSource->isLocked || curSource->isStream)
+			continue;
+		qalGetSourcei(curSource->alSource, AL_SOURCE_STATE, &state);
+		if(state != AL_PLAYING)
+			continue;
+		qalSourcePause(curSource->alSource);
+		curSource->isPaused = qtrue;
+		count++;
+	}
+	s_alPaused = qtrue;
+	Com_DPrintf("S_AL_PauseSounds: %i sources held\n", count);
+}
+
+static void S_AL_ResumeSounds( void )
+{
+	int i;
+
+	for(i = 0; i < srcCount; i++)
+	{
+		src_t *curSource = &srcList[i];
+
+		if(curSource->isPaused)
+		{
+			if(curSource->isActive)
+				qalSourcePlay(curSource->alSource);
+			curSource->isPaused = qfalse;
+		}
+	}
+	s_alPaused = qfalse;
+	Com_DPrintf("S_AL_ResumeSounds\n");
+}
+
+/*
+=================
 S_AL_Update
 =================
 */
@@ -2597,6 +2657,12 @@ void S_AL_Update( void )
 		
 		s_muted->modified = qfalse;
 	}
+
+	// FAKK2: hold the playing sounds while the game is paused
+	if(cl_paused->integer && !s_alPaused)
+		S_AL_PauseSounds();
+	else if(!cl_paused->integer && s_alPaused)
+		S_AL_ResumeSounds();
 
 	// Update SFX channels
 	S_AL_SrcUpdate();

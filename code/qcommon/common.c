@@ -77,6 +77,7 @@ cvar_t	*com_introPlayed;
 #endif
 cvar_t	*cl_paused;
 cvar_t	*sv_paused;
+cvar_t	*com_deathmatch;	// FAKK2: the pause command refuses in deathmatch
 cvar_t  *cl_packetdelay;
 cvar_t  *sv_packetdelay;
 cvar_t	*com_cameraMode;
@@ -2662,6 +2663,27 @@ static void Com_InitRand(void)
 
 /*
 =================
+Com_Pause
+
+FAKK2: the retail pause command (0x42e060). paused comes off if it is on, and
+goes on when a local server is running and the game is not deathmatch. The
+menus call it (cl_urc.c), as the retail UI update does.
+=================
+*/
+void Com_Pause( void ) {
+	if ( cl_paused->integer ) {
+		Cvar_Set( "paused", "0" );
+	} else if ( !com_deathmatch->integer && com_sv_running->integer ) {
+		Cvar_Set( "paused", "1" );
+	}
+}
+
+static void Com_Pause_f( void ) {
+	Com_Pause();
+}
+
+/*
+=================
 Com_Init
 =================
 */
@@ -2728,6 +2750,7 @@ void Com_Init( char *commandLine ) {
 	Cmd_AddCommand ("changeVectors", MSG_ReportChangeVectors_f );
 	Cmd_AddCommand ("writeconfig", Com_WriteConfig_f );
 	Cmd_SetCommandCompletionFunc( "writeconfig", Cmd_CompleteCfgName );
+	Cmd_AddCommand ("pause", Com_Pause_f);	// FAKK2
 	Cmd_AddCommand("game_restart", Com_GameRestart_f);
 
 	Com_ExecuteCfg();
@@ -2773,7 +2796,10 @@ void Com_Init( char *commandLine ) {
 	com_timedemo = Cvar_Get ("timedemo", "0", CVAR_CHEAT);
 	com_cameraMode = Cvar_Get ("com_cameraMode", "0", CVAR_CHEAT);
 
-	cl_paused = Cvar_Get ("cl_paused", "0", CVAR_ROM);
+	// FAKK2 calls it paused (retail Com_Init 0x42e0b0 registers it read-only,
+	// after deathmatch); the game and client game modules read it by that name
+	com_deathmatch = Cvar_Get ("deathmatch", "0", 0);
+	cl_paused = Cvar_Get ("paused", "0", CVAR_ROM);
 	sv_paused = Cvar_Get ("sv_paused", "0", CVAR_ROM);
 	cl_packetdelay = Cvar_Get ("cl_packetdelay", "0", CVAR_CHEAT);
 	sv_packetdelay = Cvar_Get ("sv_packetdelay", "0", CVAR_CHEAT);

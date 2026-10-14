@@ -91,7 +91,7 @@ client is ported.
 | `com_maxfps` | 85 | 125 | |
 | `sv_allowdownload` | 1 | 0 | |
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
-| `paused` | 0 | not registered | OpenFAKK2 has `sv_paused` / `cl_paused` |
+| `paused` | 0 | 0 | Was ioquake3's `cl_paused`, renamed; `sv_paused` stays, read-only |
 
 ## Rules inferred, not read from the binary
 
@@ -358,11 +358,29 @@ Not read, done another way:
   identity`, but retail draws its text in the menus' colours, so the renderer gives
   `gfx/fonts/*` stages the caller's colour. Not done: keyboard in menus beyond
   Escape, Field and List editing, `ui_newvidmode` (the resolution box stays empty),
-  borders, `invmodelrender`, `tileshader` tiling (drawn stretched), `ordernumber`,
-  the `paused` cvar retail sets at the menu. The menu shaders use `rgbGen global` /
+  borders, `invmodelrender`, `tileshader` tiling (drawn stretched) and `ordernumber`.
+  The menu shaders use `rgbGen global` /
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
+- **Pause.** The retail engine registers `paused` read-only (`Com_Init`, `0x42e0b0`) with
+  a `pause` command (`0x42e060`) that toggles it, refusing to pause in deathmatch or
+  without a local server. Its UI update (`0x40af50`) pauses the game when a menu is up
+  and the game was not paused already, and lifts the pause it put on when the last menu
+  closes with the game active; `CL_InitRef` (`0x4221e0`), the gamestate (`0x423b60`),
+  `SV_SpawnServer` (`0x445e90`) and the return to the menu (`0x4212f0`) clear it, and
+  the server keeps it only while one client is connected (`0x4475f0`). While it is set
+  the sound update (`0x45d460`) pauses every playing sample and stream once (`0x45bb80`)
+  and resumes them when it clears (`0x45bc00`); sounds started in between play, and the
+  two music handles (`0x9b4118`, `0x9b4134`) sit before the stream table it walks
+  (`0x9b4150`), so the level's music plays on under the menu. OpenFAKK2 registers
+  ioquake3's `cl_paused` under the name `paused` (the client game module reads it: the
+  pause graphic, effects held), adds the `pause` command and the menus' pausing, and
+  holds the playing sources while `paused` is set (OpenAL: `alSourcePause`; software
+  mixer: the channel is skipped and its start moved on by the time it was held, the
+  loops left out until then), leaving the music's streams alone. Not followed: the
+  same update halves the sound volume (`0x43ed10`) while the client's cinematic flag
+  (`0xb129ec`, the one that makes Escape `skipcinematic`) is set.
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
   `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks
