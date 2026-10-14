@@ -88,7 +88,7 @@ client is ported.
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
 | `sv_timeout` | 120 | 200 | |
-| `com_maxfps` | 85 | 125 | |
+| `com_maxfps` | 85 | 85 | Both register 85 (`fakk2.exe` `0x42e31b`, `CVAR_ARCHIVE`). The 125 seen earlier was archived into the sandbox `config.cfg` from the player's own install config, which OpenFAKK2 read through `fs_basepath`; the harness now shadows that (see `tools/retail-compare/README.md`) |
 | `sv_allowdownload` | 1 | 0 | |
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
 | `paused` | 0 | not registered | OpenFAKK2 has `sv_paused` / `cl_paused` |
