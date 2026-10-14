@@ -13,7 +13,9 @@ dualweaphud otherwise, and bosshud when the boss-health stat is at least
 1. Centre and location prints arrive as their own network messages
 (svc_centerprint: string; svc_locprint: short x, short y, string), are
 drawn with the facfont-20 font for 4 seconds (0x418cc0), and a text that
-starts with '@' names a shader to draw instead.
+starts with '@' names a shader to draw instead. While a map loads (from
+CL_MapLoading, 0x4207f0, to the first active snapshot, 0x41d520) the update
+fills the screen black and draws textures/menu/loading in the middle.
 
 This is a fresh implementation of that: the file grammar is what the 31
 shipped files use, the widget classes are drawn as pictures and text, and
@@ -182,6 +184,10 @@ static float		urc_cursorX = 320, urc_cursorY = 240;	// 640x480 units
 static int			urc_hoverWidget = -1;
 static int			urc_dragSlider = -1;		// the slider the left button is held on
 static int			urc_popupWidget = -1;		// the pulldown whose list is open
+static qboolean		urc_loading;				// from a map load's start to its first snapshot
+static qhandle_t	urc_loadingShader;
+
+#define URC_LOADING_SHADER	"textures/menu/loading"	// 256x256, pulsing (scripts/menu.shader)
 
 // the key bind list (FakkBindList), from its "filename" script
 typedef struct {
@@ -1535,6 +1541,9 @@ void URC_PushMenu( const char *name ) {
 		Com_Printf( "Couldn't find menu %s\n", name );
 		return;
 	}
+	if ( urc_loading ) {
+		return;		// the retail pushmenu (0x40bf90) does nothing while a map loads
+	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
 		if ( &urc_menus[urc_stack[i]] == menu ) {
 			return;		// already up
@@ -1563,6 +1572,68 @@ void URC_ClearMenus( void ) {
 	while ( urc_stackDepth ) {
 		URC_PopMenu();
 	}
+}
+
+/*
+=======================================================================
+
+LOADING SCREEN
+
+=======================================================================
+*/
+
+/*
+=================
+URC_BeginLoading / URC_EndLoading
+
+The retail CL_MapLoading (0x4207f0) calls UI_BeginLoad (0x40d520), which
+sets the loading flag, and pops every menu (0x4a29f0) before its first
+screen update. UI_EndLoad (0x40d4f0) is called when the first active
+snapshot makes the client active (0x41d520), when a server restart's
+snapshot arrives (0x423450), and by Com_Error's disconnect (0x4209b0).
+=================
+*/
+void URC_BeginLoading( void ) {
+	if ( !urc_initialised ) {
+		return;
+	}
+	URC_ClearMenus();
+	urc_loading = qtrue;
+}
+
+void URC_EndLoading( void ) {
+	urc_loading = qfalse;
+}
+
+/*
+=================
+URC_DrawLoading
+
+The retail update (0x40af50) while the loading flag is set and no menu is
+up (or the one on top is not fullscreen: retail tests a field of it): the
+screen is filled black (0x40acd0), then textures/menu/loading, registered
+at UI_Init (0x40e9d0), is drawn in white at its own pixel size, centred on
+the screen. The HUD menus are hidden and the prints are not drawn.
+=================
+*/
+static void URC_DrawLoading( void ) {
+	float	w, h;
+
+	if ( !urc_loading || URC_IsFullscreen() ) {
+		return;
+	}
+	re.SetColor( colorBlack );
+	re.DrawBox( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight );
+	re.SetColor( NULL );
+	if ( !urc_loadingShader ) {
+		return;
+	}
+	w = re.GetShaderWidth( urc_loadingShader );
+	h = re.GetShaderHeight( urc_loadingShader );
+	re.SetColor( colorWhite );
+	re.DrawStretchPic( ( cls.glconfig.vidWidth - w ) * 0.5f, ( cls.glconfig.vidHeight - h ) * 0.5f,
+		w, h, 0, 0, 1, 1, urc_loadingShader );
+	re.SetColor( NULL );
 }
 
 /*
@@ -1787,6 +1858,7 @@ void URC_Draw( void ) {
 	}
 
 	URC_UpdateHud();
+	URC_DrawLoading();
 	URC_DrawFade();
 
 	// the widget under the cursor, and its hover sound on arrival
@@ -2196,6 +2268,7 @@ void URC_Init( void ) {
 	Com_Memset( &urc_centerprint, 0, sizeof( urc_centerprint ) );
 	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
 	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
+	urc_loadingShader = re.RegisterShaderNoMip( URC_LOADING_SHADER );
 	URC_LoadAllMenus();
 	INV_Init();
 
@@ -2231,4 +2304,5 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "locationprint" );
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer
+	urc_loadingShader = 0;
 }

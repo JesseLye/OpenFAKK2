@@ -1306,6 +1306,7 @@ void CL_MapLoading( void ) {
 		Com_Memset( clc.serverMessage, 0, sizeof( clc.serverMessage ) );
 		Com_Memset( &cl.gameState, 0, sizeof( cl.gameState ) );
 		clc.lastPacketSentTime = -9999;
+		URC_BeginLoading();		// the retail client's UI_BeginLoad: the loading screen
 		SCR_UpdateScreen();
 	} else {
 		// clear nextmap so the cinematic shutdown doesn't execute it
@@ -1314,6 +1315,7 @@ void CL_MapLoading( void ) {
 		Q_strncpyz( clc.servername, "localhost", sizeof(clc.servername) );
 		clc.state = CA_CHALLENGING;		// so the connect screen is drawn
 		Key_SetCatcher( 0 );
+		URC_BeginLoading();		// the retail client's UI_BeginLoad: the loading screen
 		SCR_UpdateScreen();
 		clc.connectTime = -RETRANSMIT_TIMEOUT;
 		NET_StringToAdr( clc.servername, &clc.serverAddress, NA_UNSPEC);
@@ -1391,6 +1393,10 @@ void CL_Disconnect( qboolean showMainMenu ) {
 
 	// shutting down the client so enter full screen ui mode
 	Cvar_Set("r_uiFullScreen", "1");
+
+	// the retail client ends its loading screen when an error drops the
+	// connection (0x4209b0); CL_MapLoading starts it again after this
+	URC_EndLoading();
 
 	if ( clc.demorecording ) {
 		CL_StopRecord_f ();

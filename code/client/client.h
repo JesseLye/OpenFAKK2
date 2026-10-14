@@ -517,6 +517,8 @@ void CL_Viewer_Draw( void );
 void URC_Init( void );
 void URC_Shutdown( void );
 void URC_Draw( void );
+void URC_BeginLoading( void );
+void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
 qboolean URC_HasMenus( void );
 qboolean URC_IsFullscreen( void );

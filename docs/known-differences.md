@@ -363,6 +363,22 @@ Not read, done another way:
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
+- **The loading screen.** The retail `CL_MapLoading` (`0x4207f0`) calls `UI_BeginLoad`
+  (`0x40d520`), which sets a loading flag, and pops every menu (`0x4a29f0`) before its
+  first screen update; `UI_EndLoad` (`0x40d4f0`) clears the flag when the first active
+  snapshot makes the client active (`0x41d520`), when a server restart's snapshot
+  arrives (`0x423450`), and in `Com_Error`'s disconnect (`0x4209b0`). While the flag is
+  set and no menu is up (or the one on top is not fullscreen: retail tests a field of
+  it), the UI update (`0x40af50`) fills the screen black (`0x40acd0`) and draws
+  `textures/menu/loading` (registered at `UI_Init`, 256x256; `scripts/menu.shader`
+  pulses its second stage) in white at the image's own pixel size, centred on the
+  screen; `pushmenu` does nothing meanwhile (`0x40bf90`). The client game module draws
+  nothing then (its `CG_DrawActiveFrame` returns while `infoScreenText` is set), so
+  without this OpenFAKK2 showed whatever the frame buffer held. OpenFAKK2 does the same
+  from `CL_MapLoading`, `CL_FirstSnapshot` and `CL_Disconnect` (`URC_BeginLoading`,
+  `URC_EndLoading`, `URC_DrawLoading`). Not read from retail: whether the
+  `textures/menu/ritual` and `textures/menu/gathering` pictures `UI_Init` also
+  registers are drawn at any point of a load (they are the intro's logos, `0x40ad90`).
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
   `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks

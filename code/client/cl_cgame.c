@@ -1262,6 +1262,7 @@ void CL_FirstSnapshot( void ) {
 		return;
 	}
 	clc.state = CA_ACTIVE;
+	URC_EndLoading();		// the retail client's UI_EndLoad (0x41d520): the loading screen goes
 
 	// set the timedelta so we are exactly on this first frame
 	cl.serverTimeDelta = cl.snap.serverTime - cls.realtime;
