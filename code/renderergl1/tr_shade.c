@@ -319,21 +319,38 @@ to overflow.
 void RB_BeginSurface( shader_t *shader, int fogNum ) {
 
 	shader_t *state = (shader->remappedShader) ? shader->remappedShader : shader;
+	qboolean farplaneFog;
 
-	// FAKK2: fog towards the far plane, the sky included (it is as far as
-	// anything and comes out in the fog's colour), but not 2D drawing.
-	// (Retail GL-fogs only single-stage shaders of one rgbGen and fogs the
-	// rest by vertex colour, 0x478a60 / 0x494910; not followed yet.)
-	RB_SetFog( backEnd.viewParms.farplaneFog && r_useglfog->integer && !backEnd.projection2D );
+	// FAKK2's far plane fog (fakk2.exe RB_BeginSurface 0x47c510): not in 2D
+	// drawing, and not on the sky unless the far plane culls. A shader of
+	// one lightingDiffuse stage (models) is fogged with OpenGL's fog when
+	// r_useglfog; anything else draws its far plane stages (FinishShader:
+	// the stages faded by distance, then the far plane's colour blended in
+	// by distance) in place of any fog volume. The sky keeps OpenGL's fog:
+	// as far as anything, it comes out in the fog's colour.
+	farplaneFog = backEnd.viewParms.farplaneFog && !backEnd.projection2D
+		&& !( state->isSky && !backEnd.viewParms.farplaneCull );
 
 	tess.numIndexes = 0;
 	tess.numVertexes = 0;
 	tess.shader = state;
 	tess.fogNum = fogNum;
+	tess.farplaneFog = qfalse;
 	tess.dlightBits = 0;		// will be OR'd in by surface functions
 	tess.xstages = state->stages;
 	tess.numPasses = state->numUnfoggedPasses;
 	tess.currentStageIteratorFunc = state->optimalStageIteratorFunc;
+
+	if ( farplaneFog && !state->isSky && !( state->canUseGLFog && r_useglfog->integer ) ) {
+		RB_SetFog( qfalse );
+		tess.fogNum = 0;
+		tess.farplaneFog = qtrue;
+		tess.xstages = state->farplaneStages;
+		tess.numPasses = state->numFarplanePasses;
+		tess.currentStageIteratorFunc = RB_StageIteratorGeneric;
+	} else {
+		RB_SetFog( farplaneFog );
+	}
 
 	tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
 	if (tess.shader->clampTime && tess.shaderTime >= tess.shader->clampTime) {
@@ -694,6 +711,24 @@ static void ComputeColors( shaderStage_t *pStage )
 				}
 			}
 			break;
+		case CGEN_FARPLANE_FOG:
+			{
+				// FAKK2: the far plane's colour (0x4948a0), as the view is
+				// cleared to it, with each vertex's fog for alpha
+				byte	color[4];
+				int		j;
+
+				for ( j = 0 ; j < 3 ; j++ ) {
+					color[j] = Com_Clamp( 0, 255, backEnd.viewParms.farplaneColor[j] * tr.identityLight * 255 );
+				}
+				for ( i = 0; i < tess.numVertexes; i++ ) {
+					tess.svars.colors[i][0] = color[0];
+					tess.svars.colors[i][1] = color[1];
+					tess.svars.colors[i][2] = color[2];
+					tess.svars.colors[i][3] = tess.farplaneFogFactor[i] * 255;
+				}
+			}
+			break;
 		case CGEN_WAVEFORM:
 			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors );
 			break;
@@ -727,6 +762,12 @@ static void ComputeColors( shaderStage_t *pStage )
 			for ( i = 0; i < tess.numVertexes; i++ ) {
 				tess.svars.colors[i][3] = pStage->constantColor[3];
 			}
+		}
+		break;
+	case AGEN_FARPLANE_FOG:
+		// FAKK2: each vertex's distance over the far plane distance
+		for ( i = 0; i < tess.numVertexes; i++ ) {
+			tess.svars.colors[i][3] = tess.farplaneFogFactor[i] * 255;
 		}
 		break;
 	case AGEN_SKY_ALPHA:
@@ -805,7 +846,25 @@ static void ComputeColors( shaderStage_t *pStage )
 	//
 	// fog adjustment for colors to fade out as fog increases
 	//
-	if ( tess.fogNum )
+	if ( tess.farplaneFog )
+	{
+		// FAKK2: under the far plane, by each vertex's distance (0x47d400)
+		switch ( pStage->adjustColorsForFog )
+		{
+		case ACFF_MODULATE_RGB:
+			RB_CalcModulateColorsByFarplaneFog( ( unsigned char * ) tess.svars.colors );
+			break;
+		case ACFF_MODULATE_ALPHA:
+			RB_CalcModulateAlphasByFarplaneFog( ( unsigned char * ) tess.svars.colors );
+			break;
+		case ACFF_MODULATE_RGBA:
+			RB_CalcModulateRGBAsByFarplaneFog( ( unsigned char * ) tess.svars.colors );
+			break;
+		case ACFF_NONE:
+			break;
+		}
+	}
+	else if ( tess.fogNum )
 	{
 		switch ( pStage->adjustColorsForFog )
 		{
@@ -1048,6 +1107,11 @@ void RB_StageIteratorGeneric( void )
 	shader = input->shader;
 
 	RB_DeformTessGeometry();
+
+	// FAKK2: under the far plane, each vertex's fog by its distance (0x47c640)
+	if ( tess.farplaneFog ) {
+		RB_CalcFarplaneFogFactors();
+	}
 
 	//
 	// log this call

@@ -823,6 +823,69 @@ void RB_CalcModulateRGBAsByFog( unsigned char *colors ) {
 
 
 /*
+** RB_CalcFarplaneFogFactors
+**
+** FAKK2: each vertex's distance from the viewer over the far plane distance,
+** at most 1 (fakk2.exe 0x494910): the fog the far plane pass blends in and
+** the stages before it fade by.
+*/
+void RB_CalcFarplaneFogFactors( void ) {
+	int		i;
+	float	scale;
+
+	scale = 1.0f / backEnd.viewParms.farplaneDistance;
+	for ( i = 0 ; i < tess.numVertexes ; i++ ) {
+		vec3_t	d;
+		float	f;
+
+		VectorSubtract( tess.xyz[i], backEnd.or.viewOrigin, d );
+		f = VectorLength( d ) * scale;
+		tess.farplaneFogFactor[i] = f > 1 ? 1 : f;
+	}
+}
+
+/*
+** RB_CalcModulateColorsByFarplaneFog
+*/
+void RB_CalcModulateColorsByFarplaneFog( unsigned char *colors ) {
+	int		i;
+
+	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
+		float f = 1.0 - tess.farplaneFogFactor[i];
+		colors[0] *= f;
+		colors[1] *= f;
+		colors[2] *= f;
+	}
+}
+
+/*
+** RB_CalcModulateAlphasByFarplaneFog
+*/
+void RB_CalcModulateAlphasByFarplaneFog( unsigned char *colors ) {
+	int		i;
+
+	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
+		colors[3] *= 1.0 - tess.farplaneFogFactor[i];
+	}
+}
+
+/*
+** RB_CalcModulateRGBAsByFarplaneFog
+*/
+void RB_CalcModulateRGBAsByFarplaneFog( unsigned char *colors ) {
+	int		i;
+
+	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
+		float f = 1.0 - tess.farplaneFogFactor[i];
+		colors[0] *= f;
+		colors[1] *= f;
+		colors[2] *= f;
+		colors[3] *= f;
+	}
+}
+
+
+/*
 ====================================================================
 
 TEX COORDS
