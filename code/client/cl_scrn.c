@@ -95,7 +95,9 @@ void SCR_FillRect( float x, float y, float width, float height, const float *col
 	re.SetColor( color );
 
 	SCR_AdjustFrom640( &x, &y, &width, &height );
-	re.DrawStretchPic( x, y, width, height, 0, 0, 0, 0, cls.whiteShader );
+	// the renderer's own alpha-blended white: FAKK2's "white" shader
+	// (scripts/sprites.shader) is additive, so a dark fill with it shows nothing
+	re.DrawBox( x, y, width, height );
 
 	re.SetColor( NULL );
 }
@@ -428,8 +430,7 @@ void SCR_DrawDebugGraph (void)
 	x = 0;
 	y = cls.glconfig.vidHeight;
 	re.SetColor( g_color_table[0] );
-	re.DrawStretchPic(x, y - cl_graphheight->integer, 
-		w, cl_graphheight->integer, 0, 0, 0, 0, cls.whiteShader );
+	re.DrawBox( x, y - cl_graphheight->integer, w, cl_graphheight->integer );
 	re.SetColor( NULL );
 
 	for (a=0 ; a<w ; a++)
@@ -441,7 +442,7 @@ void SCR_DrawDebugGraph (void)
 		if (v < 0)
 			v += cl_graphheight->integer * (1+(int)(-v / cl_graphheight->integer));
 		h = (int)v % cl_graphheight->integer;
-		re.DrawStretchPic( x+w-1-a, y - h, 1, h, 0, 0, 0, 0, cls.whiteShader );
+		re.DrawBox( x+w-1-a, y - h, 1, h );
 	}
 }
 
@@ -484,7 +485,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 	if ( uiFullscreen || clc.state < CA_LOADING ) {
 		if ( cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
 			re.SetColor( g_color_table[0] );
-			re.DrawStretchPic( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight, 0, 0, 0, 0, cls.whiteShader );
+			re.DrawBox( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight );
 			re.SetColor( NULL );
 		}
 	}

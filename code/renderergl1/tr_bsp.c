@@ -1698,6 +1698,8 @@ void R_LoadEntities( lump_t *l ) {
 	w->lightGridSize[0] = 64;
 	w->lightGridSize[1] = 64;
 	w->lightGridSize[2] = 128;
+	tr.hasSunFlare = qfalse;
+	tr.sunFlareInPortalSky = qfalse;
 
 	p = (char *)(fileBase + l->fileofs);
 
@@ -1758,6 +1760,17 @@ void R_LoadEntities( lump_t *l ) {
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
+			continue;
+		}
+		// FAKK2: the sun's lens flare (tr_lensflare.c)
+		if (!Q_stricmp(keyname, "sunflare")) {
+			if ( sscanf(value, "%f %f %f", &tr.sunFlareOrigin[0], &tr.sunFlareOrigin[1], &tr.sunFlareOrigin[2] ) == 3 ) {
+				tr.hasSunFlare = qtrue;
+			}
+			continue;
+		}
+		if (!Q_stricmp(keyname, "sunflare_inportalsky")) {
+			tr.sunFlareInPortalSky = atoi( value ) != 0;
 			continue;
 		}
 	}

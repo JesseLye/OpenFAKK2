@@ -119,6 +119,8 @@ cvar_t	*r_vertexLight;
 cvar_t	*r_uiFullScreen;
 cvar_t	*r_shadows;
 cvar_t	*r_flares;
+cvar_t	*r_lensflare;
+cvar_t	*r_lightcoronasize;
 cvar_t	*r_mode;
 cvar_t	*r_nobind;
 cvar_t	*r_singleShader;
@@ -1077,6 +1079,8 @@ void R_Register( void )
 	r_lodCurveError = ri.Cvar_Get( "r_lodCurveError", "250", CVAR_ARCHIVE|CVAR_CHEAT );
 	r_lodbias = ri.Cvar_Get( "r_lodbias", "0", CVAR_ARCHIVE );
 	r_flares = ri.Cvar_Get ("r_flares", "0", CVAR_ARCHIVE );
+	r_lensflare = ri.Cvar_Get ("r_lensflare", "1", CVAR_ARCHIVE );
+	r_lightcoronasize = ri.Cvar_Get ("r_lightcoronasize", ".1", 0 );	// retail 0x4616f7
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );
 	ri.Cvar_CheckRange( r_znear, 0.001f, 200, qfalse );
 	r_zproj = ri.Cvar_Get( "r_zproj", "64", CVAR_ARCHIVE );

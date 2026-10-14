@@ -28,7 +28,11 @@ over a 256-wide image).
 // the SDK's bg_public.h values the HUD menus read (code/fakk/fgame)
 #define URC_STAT_BOSSHEALTH		13
 #define URC_STAT_CINEMATIC		14
+#define URC_STAT_ADDFADE		15			// ps.blend is added rather than blended
+#define URC_STAT_LETTERBOX		16			// letterbox fraction * URC_MAX_LETTERBOX_SIZE
+#define URC_MAX_LETTERBOX_SIZE	0x7fff
 #define URC_ITEM_WEAPON_DUAL	4
+#define URC_ADDFADE_SHADER		"textures/jack/whitefade"	// scripts/sunflare.shader: GL_SRC_ALPHA GL_ONE, fromClient
 
 #define URC_MAX_MENUS		64
 #define URC_MAX_WIDGETS		1024
@@ -39,8 +43,9 @@ over a 256-wide image).
 #define URC_FONT_TEXWIDTH	256.0f
 #define URC_DEFAULT_FONT	"verdana-14"
 #define URC_PRINT_FONT		"facfont-20"
-#define URC_PRINT_TIME		4000		// 0x418cc0 sets 4000.0
-#define URC_PRINT_FADE		1000		// not read from retail
+#define URC_PRINT_TIME		4000		// 0x418cc0 sets 4000.0; retail shows the intro's quote at 1 s and not at 4.5 s
+#define URC_PRINT_FADE		1000		// the fade inside that time; not read from retail
+#define URC_PRINT_HOLD		( URC_PRINT_TIME - URC_PRINT_FADE )
 #define URC_PRINT_FADEIN	500			// the credits fade in; the time is not read from retail
 
 #define Vector4Set( v, a, b, c, d )	( (v)[0] = (a), (v)[1] = (b), (v)[2] = (c), (v)[3] = (d) )
@@ -215,6 +220,7 @@ static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
 static cvar_t		*ui_hud;
 static cvar_t		*ui_urcdebug;
+static qhandle_t	urc_addFadeShader;
 
 /*
 =======================================================================
@@ -1620,25 +1626,38 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 	alpha = pr->alpha;
 	if ( elapsed < URC_PRINT_FADEIN ) {
 		alpha *= elapsed / (float)URC_PRINT_FADEIN;
-	} else if ( elapsed > URC_PRINT_TIME - URC_PRINT_FADE ) {
+	} else if ( elapsed > URC_PRINT_HOLD ) {
 		alpha *= ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE;
 	}
 	Vector4Set( color, 1, 1, 1, alpha );
 	if ( pr->shader ) {
 		float	w = 256, h = 128;		// the image's own size is not known here
 
-		URC_DrawPicST( pr->x - w * 0.5f, pr->y, w, h, 0, 0, 1, 1, pr->shader, color );
+		URC_DrawPicST( 320 - w * 0.5f, 240 - h * 0.5f, w, h, 0, 0, 1, 1, pr->shader, color );
 		return;
 	}
 	font = URC_LoadFont( URC_PRINT_FONT );
 	if ( !font ) {
 		return;
 	}
-	y = pr->y;
+	// retail captures: a centre print is centred on the screen, line by
+	// line; a location print's x is its left edge and its y is measured up
+	// from the bottom of the screen to the bottom of its first line, the
+	// other lines following below
+	if ( pr->located ) {
+		y = 480 - pr->y - font->height;
+	} else {
+		int		lines = 1;
+
+		for ( line = pr->text ; *line ; line++ ) {
+			lines += ( *line == '\n' );
+		}
+		y = 240 - lines * font->height * 0.5f;
+	}
 	for ( line = pr->text ; *line ; ) {
 		float	w = URC_StringWidth( font, line );
 
-		URC_DrawString( font, pr->x - w * 0.5f, y, line, color );
+		URC_DrawString( font, pr->located ? pr->x : 320 - w * 0.5f, y, line, color );
 		y += font->height;
 		while ( *line && *line != '\n' ) {
 			line++;
@@ -1656,6 +1675,49 @@ FRAME
 
 =======================================================================
 */
+
+/*
+=================
+URC_DrawFade
+
+The script's fadein/fadeout and letterbox reach the client in the player
+state (the game's player.cpp: ps.blend, STAT_ADDFADE, STAT_LETTERBOX); the
+SDK cgame never draws them, so the retail engine does, under the prints and
+the menus. The letterbox stat is the fraction of the screen each bar
+covers (the game's default is 1/8); the bar heights are not read from
+retail.
+=================
+*/
+static void URC_DrawFade( void ) {
+	const playerState_t	*ps = &cl.snap.ps;
+	vec4_t				color;
+	float				frac;
+
+	if ( clc.state != CA_ACTIVE || !cl.snap.valid ) {
+		return;
+	}
+	if ( ps->blend[3] > 0 ) {
+		Vector4Copy( ps->blend, color );
+		if ( color[3] > 1 ) {
+			color[3] = 1;
+		}
+		if ( ps->stats[URC_STAT_ADDFADE] && urc_addFadeShader ) {
+			URC_DrawPicST( 0, 0, 640, 480, 0, 0, 1, 1, urc_addFadeShader, color );
+		} else {
+			URC_FillRect( 0, 0, 640, 480, color );
+		}
+	}
+	frac = ps->stats[URC_STAT_LETTERBOX] / (float)URC_MAX_LETTERBOX_SIZE;
+	if ( frac > 0 ) {
+		float	h = frac * 480;
+
+		if ( h > 240 ) {
+			h = 240;
+		}
+		URC_FillRect( 0, 0, 640, h, colorBlack );
+		URC_FillRect( 0, 480 - h, 640, h, colorBlack );
+	}
+}
 
 /*
 =================
@@ -1689,6 +1751,7 @@ void URC_Draw( void ) {
 	}
 
 	URC_UpdateHud();
+	URC_DrawFade();
 
 	// the widget under the cursor, and its hover sound on arrival
 	{
@@ -2065,6 +2128,7 @@ void URC_Init( void ) {
 	urc_stackDepth = 0;
 	Com_Memset( &urc_centerprint, 0, sizeof( urc_centerprint ) );
 	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
+	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
 	URC_LoadAllMenus();
 
 	Cmd_AddCommand( "pushmenu", URC_PushMenu_f );

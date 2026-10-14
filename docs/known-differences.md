@@ -283,7 +283,21 @@ Not read, done another way:
 - **The console** has no `console` shader in FAKK2 (the retail console was a window);
   it is drawn on a dark translucent sheet rather than the default shader's black.
 - **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets
-  it does not leave the next normal run without a mouse.- **User interface** (`cl_urc.c`). The retail engine draws its menus, HUD and prints
+  it does not leave the next normal run without a mouse.
+- **Filled rectangles.** FAKK2's `white` shader (`scripts/sprites.shader`) is additive,
+  so Quake III's `SCR_FillRect` with it could never darken anything: the console sheet,
+  a menu's `bgfill`, the fade to black. Fills go through the renderer's own
+  alpha-blended white (`re.DrawBox`) now.
+- **The screen fade and letterbox.** The level script's `fadein`/`fadeout` and
+  `letterbox` reach the client in the player state (`ps.blend`, `STAT_ADDFADE`,
+  `STAT_LETTERBOX`, see the game's `player.cpp`), which the SDK's client game module
+  never reads, so the retail engine draws them. OpenFAKK2 draws them under the prints
+  and menus (`URC_DrawFade`): the blend over the whole screen, additively through
+  `textures/jack/whitefade` when `STAT_ADDFADE` is set, and black bars of
+  `STAT_LETTERBOX / 0x7fff` of the screen's height at the top and bottom. Not read from
+  retail: that the bars are that tall (the game's default fraction is 1/8, which gives
+  a 16:9 picture), and where in the frame retail draws the blend.
+- **User interface** (`cl_urc.c`). The retail engine draws its menus, HUD and prints
   itself from `ui/*.urc`; `UI_Init` (`0x40e9d0`) loads every file, registers the
   commands, and keeps the four HUD menus by the name in the file (note `ui/weaphud.urc`
   holds `dualweaphud` and vice versa); its update (`0x40af50`) hides them all unless
@@ -296,9 +310,14 @@ Not read, done another way:
   4 seconds (`0x418cc0`); a text starting with `@` names a shader. OpenFAKK2 does the
   same, as a fresh implementation of the file grammar the 31 shipped files use. Not
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
-  tests a field of its print object), the print's screen position (y 160 here), its
-  fade (the last second), the `@shader` size (256x128), the stat-bar flash (half a
-  second after a change), and `ui_hud`, a command in retail, is a cvar here. The retail
+  tests a field of its print object), the print's fade (in over the first half second,
+  out over the last), the `@shader` size (256x128), the stat-bar flash (half a second
+  after a change), and `ui_hud`, a command in retail, is a cvar here. The prints'
+  places come from retail captures of the intro: a location print's x is its left edge
+  and its y is measured up from the bottom of the screen to the bottom of its first
+  line (`locprint 230 220` puts the quote's first line at y 241, left-aligned at
+  x 230), later lines following below; a centre print is centred on the screen line by
+  line. The retail
   client shows the system cursor over a menu (`ShowCursor`); so does this one: the
   mouse is released while a menu is up and its window position reaches the menu, whose
   topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)
@@ -541,9 +560,36 @@ What is implemented, and on what basis:
 - **Render flags** (`RF_*`) use FAKK2's values throughout, so that the client game
   module's flags mean the same thing to the renderer. The `refEntity_t`, `refdef_t`
   and `glconfig_t` layouts are the SDK's, since the module fills them in.
-- **Dynamic lights** are Quake III's; of FAKK2's light types only `additive` is
-  honoured, the lens flare bits are ignored. Debug lines and sword swipes are accepted
-  and not drawn.
+- **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
+  and the lens flare bits give the light a lens flare (next). Debug lines and sword
+  swipes are accepted and not drawn.
+- **Lens flares** (`tr_lensflare.c`) follow the retail renderer: `0x48b690` reads
+  `scripts/lensflare2.txt` into three sets (`sun`, `entity`, `dlight`; defaults
+  `dot_min` .8, `fullscale` .7, up to 20 flares), `0x48bf90` registers
+  `textures/sprites/corona` with them, and `0x48bb20` draws them after the world in a
+  -1..1 screen space: a light's point P comes from the view's matrices (`0x48b030`),
+  flare i sits at P (1 - 2 where) with a quad of +-size in that space (so wider than
+  tall on a wide screen) and alpha = alphascale * t, t = (dot - dot_min) / (1 - dot_min);
+  it shows only when P is inside the view, dot > dot_min and a world trace
+  (`CM_BoxTrace`, `CONTENTS_SOLID`) from the eye is clear: to the light itself, or to a
+  far point 16384 units along its direction that must hit a `SURF_SKY` surface when the
+  light is in the portal sky (`0x48af10` turns a sky-camera point by the sky's axis
+  into the view's world). The set's full-screen blend (`0x48b5a0`) is white at
+  fullscale * t^4, fading over `fullfade` ms once the light has gone. The sun is
+  worldspawn's `sunflare` (`0x48bf50`), in the sky camera's world when
+  `sunflare_inportalsky` is set; a refentity with `RF_LENSFLARE` gets the entity set in
+  its `shaderRGBA`, plus a corona quad of `r_lightcoronasize` (default .1) half-size
+  at the light whenever it is in front of the eye and visible (`0x48b3c0`); a dynamic
+  light with the `lensflare` or `viewlensflare` bit gets the same in its colour; an
+  entity with `RF_VIEWLENSFLARE` gets the dlight set. The intro's Lochnar (a green
+  light with `+lensflare`) matches the retail captures at 13 to 15 seconds. Not read
+  from retail: the sun's colour (white here), what happens to a flare in the sky
+  portal's own pass (retail skips `RF_SKYENTITY` entities in the main pass and has a
+  second pass; here every light is drawn once, in the main view), and `r_sunflare`,
+  retail's developer cvar that places the sun by hand. The 2D "fromClient" colour: a
+  stretched picture's `rgbGen/alphaGen fromClient` stages read the entity colour, so
+  `RB_SetColor` now copies the 2D colour there too. `r_lensflare 0` turns the flares
+  off, `2` prints each set's dot product four times a second.
 - **The far plane and its fog** come from the scene (`refdef_t.farplane_*`, which the
   client game module fills from `CS_FOGINFO`; the game sets it from worldspawn's
   `farplane`, `farplane_color` and `farplane_cull`). Read from the retail renderer: its

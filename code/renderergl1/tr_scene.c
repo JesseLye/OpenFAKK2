@@ -303,18 +303,24 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	dl->color[1] = g;
 	dl->color[2] = b;
 	dl->additive = additive;
+	dl->flags = 0;
 }
 
 /*
 =====================
 RE_AddLightToScene
 
-FAKK2's type bits: "additive" selects an additive light; the lens flare
-bits are not drawn yet.
+FAKK2's type bits: "additive" selects an additive light; the lensflare
+and viewlensflare bits give the light a lens flare (tr_lensflare.c).
 =====================
 */
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int type ) {
+	int		n = r_numdlights;
+
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, ( type & additive ) != 0 );
+	if ( r_numdlights > n ) {
+		backEndData->dlights[n].flags = type;
+	}
 }
 
 /*
@@ -452,6 +458,11 @@ void RE_RenderScene( const refdef_t *fd ) {
 	VectorCopy( fd->vieworg, parms.pvsOrigin );
 
 	R_RenderView( &parms );
+
+	// FAKK2: the sun's and the lensflare lights' flares over the world view
+	if ( r_lensflare->integer && !( fd->rdflags & RDF_NOWORLDMODEL ) ) {
+		R_DrawLensFlares( &parms );
+	}
 
 	// the next scene rendered in this frame will tack on after this one
 	r_firstSceneDrawSurf = tr.refdef.numDrawSurfs;

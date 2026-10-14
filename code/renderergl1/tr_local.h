@@ -58,6 +58,7 @@ typedef struct dlight_s {
 
 	vec3_t	transformed;		// origin in local coordinate system
 	int		additive;			// texture detail is lost tho when the lightmap is dark
+	int		flags;				// FAKK2: the cgame's lensflare/viewlensflare/additive bits
 } dlight_t;
 
 
@@ -1002,6 +1003,11 @@ typedef struct {
 	float					fogTable[FOG_TABLE_SIZE];
 
 	qboolean				portalSkyVisible;	// the view being built has seen a portal sky surface
+
+	// FAKK2: the worldspawn's sun flare (tr_lensflare.c)
+	qboolean				hasSunFlare;
+	vec3_t					sunFlareOrigin;
+	qboolean				sunFlareInPortalSky;
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -1088,6 +1094,8 @@ extern	cvar_t	*r_clear;						// force screen clear every frame
 
 extern	cvar_t	*r_shadows;						// controls shadows: 0 = none, 1 = blur, 2 = stencil, 3 = black planar projection
 extern	cvar_t	*r_flares;						// light flares
+extern	cvar_t	*r_lensflare;					// FAKK2: the sun's and lensflare lights' flares (tr_lensflare.c)
+extern	cvar_t	*r_lightcoronasize;				// FAKK2: half-size of a lensflare light's corona, as a share of the half screen
 
 extern	cvar_t	*r_intensity;
 
@@ -1332,6 +1340,10 @@ FLARES
 */
 
 void R_ClearFlares( void );
+
+// FAKK2 lens flares (tr_lensflare.c)
+void R_LensFlareReset( void );
+void R_DrawLensFlares( const viewParms_t *view );
 
 void RB_AddFlare( void *surface, int fogNum, vec3_t point, vec3_t color, vec3_t normal );
 void RB_AddDlightFlares( void );

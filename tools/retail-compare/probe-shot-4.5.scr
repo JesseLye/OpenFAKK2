@@ -1,0 +1,7 @@
+probe:
+waitforplayer
+wait 4.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

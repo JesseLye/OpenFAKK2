@@ -868,6 +868,8 @@ const void	*RB_SetColor( const void *data ) {
 	backEnd.color2D[1] = cmd->color[1] * 255;
 	backEnd.color2D[2] = cmd->color[2] * 255;
 	backEnd.color2D[3] = cmd->color[3] * 255;
+	// FAKK2: a 2D picture's "fromClient" stages read the entity's colour
+	*(int *)backEnd.entity2D.e.shaderRGBA = *(int *)backEnd.color2D;
 
 	return (const void *)(cmd + 1);
 }

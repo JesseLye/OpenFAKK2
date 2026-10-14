@@ -904,6 +904,7 @@ void RE_BeginRegistration( glconfig_t *glconfigOut ) {
 
 	tr.viewCluster = -1;		// force markleafs to regenerate
 	R_ClearFlares();
+	R_LensFlareReset();		// FAKK2: its shaders are the new map's
 	RE_ClearScene();
 
 	tr.registered = qtrue;

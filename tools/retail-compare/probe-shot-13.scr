@@ -1,0 +1,13 @@
+probe:
+waitforplayer
+wait 12
+stuffcmd "screenshot"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
