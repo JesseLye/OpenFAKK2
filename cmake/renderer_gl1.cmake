@@ -17,6 +17,7 @@ set(RENDERER_GL1_SOURCES
     ${SOURCE_DIR}/renderergl1/tr_image.c
     ${SOURCE_DIR}/renderergl1/tr_init.c
     ${SOURCE_DIR}/renderergl1/tr_light.c
+    ${SOURCE_DIR}/renderergl1/tr_entlight.c
     ${SOURCE_DIR}/renderergl1/tr_main.c
     ${SOURCE_DIR}/renderergl1/tr_marks.c
     ${SOURCE_DIR}/renderergl1/tr_mesh.c

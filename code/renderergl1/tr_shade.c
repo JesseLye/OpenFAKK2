@@ -632,7 +632,12 @@ static void ComputeColors( shaderStage_t *pStage )
 			Com_Memset( tess.svars.colors, tr.identityLightByte, tess.numVertexes * 4 );
 			break;
 		case CGEN_LIGHTING_DIFFUSE:
-			RB_CalcDiffuseColor( ( unsigned char * ) tess.svars.colors );
+			// FAKK2: a model flagged betterlighting takes its light cube
+			if ( backEnd.currentEntity->lightCubeSet ) {
+				RB_CalcLightCubeColors( ( unsigned char * ) tess.svars.colors );
+			} else {
+				RB_CalcDiffuseColor( ( unsigned char * ) tess.svars.colors );
+			}
 			break;
 		case CGEN_EXACT_VERTEX:
 			Com_Memcpy( tess.svars.colors, tess.vertexColors, tess.numVertexes * sizeof( tess.vertexColors[0] ) );

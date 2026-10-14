@@ -1120,6 +1120,10 @@ void R_Register( void )
 	r_showImages = ri.Cvar_Get( "r_showImages", "0", CVAR_TEMP );
 
 	r_debugLight = ri.Cvar_Get( "r_debuglight", "0", CVAR_TEMP );
+	// FAKK2's light cube scaling (tr_entlight.c), off as in retail
+	r_light_emphasize = ri.Cvar_Get( "r_light_emphasize", "0", 0 );
+	r_light_emphasizePercent = ri.Cvar_Get( "r_light_emphasizePercent", "0", 0 );
+	r_entityLights = ri.Cvar_Get( "r_entityLights", "1", CVAR_CHEAT );
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0 );
 	r_saveFontData = ri.Cvar_Get( "r_saveFontData", "0", 0 );

@@ -1017,7 +1017,13 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		VectorMA( lightOrigin, local[0], ent->e.axis[0], lightOrigin );
 		VectorMA( lightOrigin, local[1], ent->e.axis[1], lightOrigin );
 		VectorMA( lightOrigin, local[2], ent->e.axis[2], lightOrigin );
-		R_SetupEntityLighting( &tr.refdef, ent, lightOrigin );
+		if ( ent->e.renderfx & ( RF_EXTRALIGHT | RF_INVISIBLE ) ) {
+			// betterlighting: a light cube from the map's lights instead
+			// of the grid (fakk2.exe 0x48e170)
+			R_SetupEntityLightCube( ent, lightOrigin, local, frame->radius * escale * 0.5f );
+		} else {
+			R_SetupEntityLighting( &tr.refdef, ent, lightOrigin );
+		}
 	}
 
 	for ( i = 0 ; i < numSurfaces ; i++ ) {

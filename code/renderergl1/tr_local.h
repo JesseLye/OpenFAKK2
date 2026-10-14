@@ -75,6 +75,15 @@ typedef struct {
 	vec3_t		ambientLight;	// color normalized to 0-255
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
+
+	// FAKK2: a model flagged betterlighting is lit from a six-sided light
+	// cube in its own axes instead (tr_entlight.c)
+	qboolean	lightCubeSet;
+	qboolean	lightCubeDlights;	// the scene's dynamic lights are added per vertex
+	vec3_t		lightCube[6];		// +x -x +y -y +z -z, 0-255
+	vec3_t		lightOrigin;		// where the model is lit from, in the world
+	vec3_t		lightLocalOrigin;	// the same in the model's axes
+	float		lightRadius;
 } trRefEntity_t;
 
 
@@ -737,7 +746,24 @@ typedef struct mnode_s {
 
 	msurface_t	**firstmarksurface;
 	int			nummarksurfaces;
+
+	// FAKK2: the entity lights that reach the leaf (tr_entlight.c)
+	struct entLight_s	**entLights;
+	int			numEntLights;
 } mnode_t;
+
+// FAKK2: one of the map's static lights (LUMP_ENTLIGHTS)
+typedef struct entLight_s {
+	vec3_t		origin;
+	vec3_t		color;
+	float		intensity;		// negative: lights only invisible models
+	mnode_t		*leaf;
+	int			needsTrace;		// only lights what it can see
+	int			spot;
+	float		spotRadius;		// the cone's width a unit out; negative: a line of light
+	vec3_t		spotDir;
+	int			visited;		// tr.entLightVisit when last added to a cube
+} entLight_t;
 
 typedef struct {
 	vec3_t		bounds[2];		// for culling
@@ -778,6 +804,10 @@ typedef struct {
 	int			lightGridBounds[3];
 	byte		*lightGridData;
 
+	// FAKK2: the map's static lights and whether its leaves list them
+	int			numEntLights;
+	entLight_t	*entLights;
+	qboolean	entLightsVis;
 
 	int			numClusters;
 	int			clusterBytes;
@@ -1026,6 +1056,13 @@ typedef struct {
 	qboolean				hasSunFlare;
 	vec3_t					sunFlareOrigin;
 	qboolean				sunFlareInPortalSky;
+
+	// FAKK2: the worldspawn's sun and ambient for the light cubes (tr_entlight.c)
+	qboolean				hasSun;
+	vec3_t					sunColor;			// scaled by the overbright shift
+	vec3_t					sunDir;				// towards the sun
+	vec3_t					entAmbient;			// "ambientlight"
+	int						entLightVisit;
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -1379,6 +1416,16 @@ LIGHTS
 
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent, const vec3_t origin );
+
+// tr_entlight.c
+void R_LoadEntLights( world_t *w, const byte *fileBase, lump_t *l );
+void R_LoadEntLightsVis( world_t *w, const byte *fileBase, lump_t *l );
+void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3_t localOrigin, float radius );
+void RB_CalcLightCubeColors( unsigned char *colors );
+mnode_t *R_PointInLeaf( const vec3_t p );
+extern cvar_t	*r_light_emphasize;
+extern cvar_t	*r_light_emphasizePercent;
+extern cvar_t	*r_entityLights;
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 

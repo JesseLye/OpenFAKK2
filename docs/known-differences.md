@@ -588,12 +588,27 @@ What is implemented, and on what basis:
   flashing when hit) adds its colour to the ambient. A TIKI model is lit from the centre
   of its frame's bounds, not its origin (`0x48cff0`). `r_debugLight 2` prints every
   entity's light origin, ambient, directed light and direction.
-- **Extra light** (the `betterlighting` render flag, which the player and actors carry) is
-  not done. Retail lights such a model per vertex from a six-sided light cube built from
-  the grid and the map's entity lights (the `ENTLIGHTS`, `ENTLIGHTSVIS` and `LIGHTDEFS`
-  lumps; `0x48e170`, `0x48d1d0`, `0x48d620`, `0x48e6e0`), so Julie and the trainer are
-  darker here than in retail where the room's lights reach them. Models without the flag
-  (the door button) match.
+- **Entity lights and the light cube** (`tr_entlight.c`). A model the game flags
+  `betterlighting` (`RF_EXTRALIGHT`: the player and the actors) or `invisible` is not lit
+  from the grid at all. The BSP's `ENTLIGHTS` lump holds the map's static lights (56
+  bytes each: origin, colour, intensity, leaf, a trace flag, a spot flag, spot direction
+  and radius; `0x4830c0`) and `ENTLIGHTSVIS` the lights that reach each leaf (`0x483220`;
+  `LIGHTDEFS` is not read by the renderer). For such a model (`0x48e170`) a six-sided
+  light cube in the model's axes starts from the worldspawn's `ambientlight` plus the
+  game's `lightoffset` or `minlight` (`0x48d3d0`), adds `suncolor` where a trace along
+  `sundirection` reaches the sky (`0x48cd50`), and the lights of up to four leaves the
+  model's bounds reach (centre and eight probes half a radius out, `0x48d1d0`), each once
+  and none from an area the view's area mask hides: a point light adds
+  `intensity * 7500 / d^2` to the faces that face it (`0x48dd80`), a spot light only when
+  the cube's centre is inside its cone, soft over the outer 32 units (`0x48d990`), a light
+  of negative intensity only to invisible models, and a light with the trace flag only
+  when nothing solid is in the way. Each vertex takes the three faces its normal points at,
+  weighted by the normal's components (`0x48e6e0`); with dynamic lights in the scene
+  those are added per vertex instead and the colour is held to 255 by scaling
+  (`0x48e2e0`). `r_light_emphasize` and `r_light_emphasizePercent` scale the cube as
+  retail's cvars do (both 0); `r_entityLights 0` turns the lights off. Julie seen from
+  the same camera matches the retail capture within a unit or two on every patch
+  measured; `r_debugLight 3` prints each model's cube and the lights that went into it.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). Debug lines and sword
   swipes are accepted and not drawn.

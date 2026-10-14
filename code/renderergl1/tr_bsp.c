@@ -1704,6 +1704,10 @@ void R_LoadEntities( lump_t *l ) {
 	w->lightGridSize[2] = 320;
 	tr.hasSunFlare = qfalse;
 	tr.sunFlareInPortalSky = qfalse;
+	tr.hasSun = qfalse;
+	VectorClear( tr.sunColor );
+	VectorClear( tr.sunDir );
+	VectorClear( tr.entAmbient );
 
 	p = (char *)(fileBase + l->fileofs);
 
@@ -1776,6 +1780,31 @@ void R_LoadEntities( lump_t *l ) {
 		}
 		if (!Q_stricmp(keyname, "sunflare_inportalsky")) {
 			tr.sunFlareInPortalSky = atoi( value ) != 0;
+			continue;
+		}
+		// FAKK2: the sun and ambient of the light cubes (tr_entlight.c;
+		// fakk2.exe 0x48e8d0): the sun's colour takes the lightmaps'
+		// overbright shift as it is read
+		if (!Q_stricmp(keyname, "suncolor")) {
+			if ( sscanf(value, "%f %f %f", &tr.sunColor[0], &tr.sunColor[1], &tr.sunColor[2] ) == 3 ) {
+				float	shift = 1 << ( r_mapOverBrightBits->integer - tr.overbrightBits );
+
+				VectorScale( tr.sunColor, shift, tr.sunColor );
+				tr.hasSun = qtrue;
+			}
+			continue;
+		}
+		if (!Q_stricmp(keyname, "sundirection")) {
+			vec3_t	angles;
+
+			if ( sscanf(value, "%f %f %f", &angles[0], &angles[1], &angles[2] ) == 3 ) {
+				AngleVectors( angles, tr.sunDir, NULL, NULL );
+				tr.hasSun = qtrue;
+			}
+			continue;
+		}
+		if (!Q_stricmp(keyname, "ambientlight")) {
+			sscanf(value, "%f %f %f", &tr.entAmbient[0], &tr.entAmbient[1], &tr.entAmbient[2] );
 			continue;
 		}
 	}
@@ -1874,6 +1903,8 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
 	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
+	R_LoadEntLights( &s_worldData, fileBase, &header->lumps[LUMP_ENTLIGHTS] );
+	R_LoadEntLightsVis( &s_worldData, fileBase, &header->lumps[LUMP_ENTLIGHTSVIS] );
 
 	s_worldData.dataSize = (byte *)ri.Hunk_Alloc(0, h_low) - startMarker;
 
