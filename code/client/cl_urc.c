@@ -41,6 +41,7 @@ over a 256-wide image).
 #define URC_PRINT_FONT		"facfont-20"
 #define URC_PRINT_TIME		4000		// 0x418cc0 sets 4000.0
 #define URC_PRINT_FADE		1000		// not read from retail
+#define URC_PRINT_FADEIN	500			// the credits fade in; the time is not read from retail
 
 #define Vector4Set( v, a, b, c, d )	( (v)[0] = (a), (v)[1] = (b), (v)[2] = (c), (v)[3] = (d) )
 
@@ -1617,7 +1618,9 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 		return;
 	}
 	alpha = pr->alpha;
-	if ( elapsed > URC_PRINT_TIME - URC_PRINT_FADE ) {
+	if ( elapsed < URC_PRINT_FADEIN ) {
+		alpha *= elapsed / (float)URC_PRINT_FADEIN;
+	} else if ( elapsed > URC_PRINT_TIME - URC_PRINT_FADE ) {
 		alpha *= ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE;
 	}
 	Vector4Set( color, 1, 1, 1, alpha );

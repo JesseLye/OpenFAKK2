@@ -1405,6 +1405,9 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("sectorlist", SV_SectorList_f);
 	Cmd_AddCommand ("map", SV_Map_f);
 	Cmd_SetCommandCompletionFunc( "map", SV_CompleteMapName );
+	// FAKK2: the game module ends a level with "gamemap <next>" (G_ExitLevel)
+	Cmd_AddCommand ("gamemap", SV_Map_f);
+	Cmd_SetCommandCompletionFunc( "gamemap", SV_CompleteMapName );
 #ifndef PRE_RELEASE_DEMO
 	Cmd_AddCommand ("devmap", SV_Map_f);
 	Cmd_SetCommandCompletionFunc( "devmap", SV_CompleteMapName );

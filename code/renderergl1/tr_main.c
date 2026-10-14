@@ -1325,6 +1325,22 @@ void R_AddEntitySurfaces (void) {
 			continue;
 		}
 
+		// FAKK2: the client game module adds a ".spr" temp model as
+		// RT_SPRITE with the model handle and no custom shader; the model
+		// names the shader and the entity's scale sizes it
+		if ( ent->e.reType == RT_SPRITE && !ent->e.customShader && ent->e.hModel ) {
+			model_t	*sprModel = R_GetModelByHandle( ent->e.hModel );
+
+			if ( sprModel && sprModel->type == MOD_SPRITE ) {
+				if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+					continue;
+				}
+				ent->e.radius = R_SpriteRadius( sprModel->spriteShader, ent->e.scale );
+				R_AddDrawSurf( &entitySurface, sprModel->spriteShader, R_SpriteFogNum( ent ), 0 );
+				continue;
+			}
+		}
+
 		// simple generated models, like sprites and beams, are not culled
 		switch ( ent->e.reType ) {
 		case RT_PORTALSURFACE:

@@ -1313,7 +1313,9 @@ void IN_Init( void *windowData )
 
 	// mouse variables
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
-	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE );
+	// OpenFAKK2: not archived, so a test harness run with +set in_nograb 1
+	// does not leave the next normal run without a mouse
+	in_nograb = Cvar_Get( "in_nograb", "0", 0 );
 
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE|CVAR_LATCH );
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE );

@@ -538,6 +538,7 @@ void S_Init( void )
 		Cmd_AddCommand( "stopmusic", S_StopMusic_f );
 		Cmd_AddCommand( "s_list", S_SoundList );
 		Cmd_AddCommand( "s_stop", S_StopAllSounds );
+		Cmd_AddCommand( "stopsound", S_StopAllSounds );	// FAKK2: the game sends it when a level ends
 		Cmd_AddCommand( "s_info", S_SoundInfo );
 		Cmd_AddCommand( "s_soundinfo", S_SoundInfo_f );	// FAKK2
 		Cmd_AddCommand( "s_setreverb", S_SetReverb_f );	// FAKK2
@@ -589,6 +590,7 @@ void S_Shutdown( void )
 	Cmd_RemoveCommand( "stopmusic");
 	Cmd_RemoveCommand( "s_list" );
 	Cmd_RemoveCommand( "s_stop" );
+	Cmd_RemoveCommand( "stopsound" );
 	Cmd_RemoveCommand( "s_info" );
 	Cmd_RemoveCommand( "s_soundinfo" );
 	Cmd_RemoveCommand( "s_setreverb" );

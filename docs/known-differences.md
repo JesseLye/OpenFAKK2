@@ -271,7 +271,19 @@ Not read, done another way:
   sound, `sound/feedback/hit.wav`, is not in FAKK2; a sound that cannot be loaded is
   silence on both backends.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
-- **User interface** (`cl_urc.c`). The retail engine draws its menus, HUD and prints
+- **Sprite temp models.** The client game module adds a `.spr` temp model (emitter
+  smoke, the intro's meteor trails) as `RT_SPRITE` with the model handle and no custom
+  shader; Quake III's sprite path would draw the custom shader at the entity's radius,
+  which are none and zero, so nothing appeared. The renderer now draws such an entity
+  with the model's shader at the size the entity's scale gives (`R_AddEntitySurfaces`).
+  The intro's trails match the retail capture at 60 seconds.
+- **Level changes.** The game module ends a level with `gamemap <next>` (`G_ExitLevel`),
+  which Quake III names but this tree had dropped; it is the `map` command again. The
+  `stopsound` command it sends first stops all sounds.
+- **The console** has no `console` shader in FAKK2 (the retail console was a window);
+  it is drawn on a dark translucent sheet rather than the default shader's black.
+- **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets
+  it does not leave the next normal run without a mouse.- **User interface** (`cl_urc.c`). The retail engine draws its menus, HUD and prints
   itself from `ui/*.urc`; `UI_Init` (`0x40e9d0`) loads every file, registers the
   commands, and keeps the four HUD menus by the name in the file (note `ui/weaphud.urc`
   holds `dualweaphud` and vice versa); its update (`0x40af50`) hides them all unless

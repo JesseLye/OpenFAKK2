@@ -687,8 +687,14 @@ void Con_DrawSolidConsole( float frac ) {
 	if ( y < 1 ) {
 		y = 0;
 	}
-	else {
+	else if ( cls.consoleShader ) {
 		SCR_DrawPic( 0, 0, SCREEN_WIDTH, y, cls.consoleShader );
+	} else {
+		// FAKK2 has no "console" shader (its console was a window); a
+		// dark translucent sheet, rather than the default shader's black
+		vec4_t	back = { 0.05f, 0.05f, 0.05f, 0.85f };
+
+		SCR_FillRect( 0, 0, SCREEN_WIDTH, y, back );
 	}
 
 	color[0] = 1;
