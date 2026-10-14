@@ -672,7 +672,28 @@ static void TIKI_ParseSetup( tikiParse_t *parse, char **tokens, int numTokens ) 
 	const char	*key = tokens[0];
 
 	if ( !Q_stricmp( key, "surface" ) ) {
-		TIKI_AddCommand( &parse->surfaceCmds, 0, tokens + 1, numTokens - 1 );
+		// A shader name with an extension is a texture under the path in
+		// force on that line, as the retail parser resolves it (TIKI_ParseSetup,
+		// fakk2.exe 0x44c170: strstr for '.', then path + name); a name without
+		// one is a shader script's. ammo_gasplant.tik names its texture before
+		// its path line, so it resolves under the definition's own directory,
+		// models/, and not under the path.
+		char	resolved[TIKI_MAX_SKINS][MAX_QPATH];
+		char	*args[TIKI_MAX_LINE_TOKENS];
+		int		i, n = 0;
+
+		for ( i = 1 ; i < numTokens ; i++ ) {
+			args[i - 1] = tokens[i];
+		}
+		if ( numTokens >= 3 && !Q_stricmp( tokens[2], "shader" ) && tiki->path[0] ) {
+			for ( i = 3 ; i < numTokens && n < TIKI_MAX_SKINS ; i++ ) {
+				if ( strchr( tokens[i], '.' ) ) {
+					Com_sprintf( resolved[n], sizeof( resolved[n] ), "%s/%s", tiki->path, tokens[i] );
+					args[i - 1] = resolved[n++];
+				}
+			}
+		}
+		TIKI_AddCommand( &parse->surfaceCmds, 0, args, numTokens - 1 );
 		return;
 	}
 	if ( numTokens < 2 ) {
@@ -1097,6 +1118,19 @@ tiki_t *TIKI_Register( const char *name ) {
 	Q_strncpyz( tiki->name, name, sizeof( tiki->name ) );
 	tiki->loadScale = 1.0f;
 	tiki->lodScale = 1.0f;
+	// the path starts as the definition file's own directory, until a path
+	// line replaces it (TIKI_LoadTIKIfile, fakk2.exe 0x44ca70, through 0x44a440)
+	{
+		const char	*slash = strrchr( name, '/' );
+		const char	*backslash = strrchr( name, '\\' );
+
+		if ( backslash > slash ) {
+			slash = backslash;
+		}
+		if ( slash && slash - name < (int)sizeof( tiki->path ) ) {
+			Q_strncpyz( tiki->path, name, (int)( slash - name ) + 1 );
+		}
+	}
 	tiki->next = tiki_list;
 	tiki_list = tiki;
 

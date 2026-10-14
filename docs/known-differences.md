@@ -544,7 +544,20 @@ What is implemented, and on what basis:
   skin the entity's surface flags select, and `MDL_SURFACE_NODRAW` hides one. A
   surface's skins may be named on one `shader` line or on several (`obj_button.tik`
   names red and green, inactive and lit, on four lines); the first named is skin 0.
-  Until that was read, each line replaced the last and every button was green. Assumed:
+  Until that was read, each line replaced the last and every button was green. A shader
+  name with an extension is a texture under the path in force on that line, which
+  starts as the definition file's own directory and changes at its `path` line; a name
+  without one is a shader script's. From the retail parser (`TIKI_ParseSetup` `0x44c170`
+  looks for a `.` and prefixes the path at that moment; `TIKI_LoadTIKIfile` `0x44ca70`
+  seeds the path from the file name through `0x44a440`). The one definition where the
+  order matters is `ammo_gasplant.tik`, whose surface line precedes its `path` line:
+  retail reads its texture as `models/monster/gasyerass2/gasyerass2.tga`, which exists,
+  and the shipped `.cik` cache agrees. Until this was read the path was applied after the
+  whole file was parsed, the texture was looked for under `models/ammo/gasplant/`, and the
+  swamp's gas pods drew as nothing. The retail engine also loads the shipped `.cik` cache
+  in preference to the `.tik` (`TIKI_RegisterTiki` `0x44d5e0` tries `TIKI_LoadCachedTIKI`
+  `0x44d3a0` first); OpenFAKK2 parses the `.tik`, and on the retail data the two agree on
+  every surface's shader. Assumed:
   that vertex normals use Quake III's two-angle encoding. The origin is added before
   scaling, as `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso
   animations and level of detail are not applied.
