@@ -1316,6 +1316,12 @@ void IN_Init( void *windowData )
 	// OpenFAKK2: not archived, so a test harness run with +set in_nograb 1
 	// does not leave the next normal run without a mouse
 	in_nograb = Cvar_Get( "in_nograb", "0", 0 );
+	if ( in_nograb->flags & CVAR_ARCHIVE ) {
+		// a "seta in_nograb" left in config.cfg by an older build would keep
+		// the mouse free in every run and be written back on every quit
+		in_nograb->flags &= ~CVAR_ARCHIVE;
+		Cvar_Set( "in_nograb", "0" );
+	}
 
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE|CVAR_LATCH );
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE );
