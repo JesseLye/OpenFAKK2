@@ -1096,6 +1096,8 @@ extern	cvar_t	*r_shadows;						// controls shadows: 0 = none, 1 = blur, 2 = sten
 extern	cvar_t	*r_flares;						// light flares
 extern	cvar_t	*r_lensflare;					// FAKK2: the sun's and lensflare lights' flares (tr_lensflare.c)
 extern	cvar_t	*r_lightcoronasize;				// FAKK2: half-size of a lensflare light's corona, as a share of the half screen
+extern	cvar_t	*r_sunflare;					// FAKK2: "x y z" puts the sun there instead of worldspawn's
+extern	cvar_t	*r_sunflare_inportalsky;		// FAKK2: ... in the portal sky
 
 extern	cvar_t	*r_intensity;
 

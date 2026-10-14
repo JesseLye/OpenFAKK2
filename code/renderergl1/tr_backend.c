@@ -868,8 +868,27 @@ const void	*RB_SetColor( const void *data ) {
 	backEnd.color2D[1] = cmd->color[1] * 255;
 	backEnd.color2D[2] = cmd->color[2] * 255;
 	backEnd.color2D[3] = cmd->color[3] * 255;
-	// FAKK2: a 2D picture's "fromClient" stages read the entity's colour
-	*(int *)backEnd.entity2D.e.shaderRGBA = *(int *)backEnd.color2D;
+
+	// FAKK2: a 2D picture's "fromClient" stages read the entity's colour, and
+	// they read it when their batch is flushed, so pictures already queued
+	// with such a shader must go out before the colour changes under them
+	if ( *(int *)backEnd.entity2D.e.shaderRGBA != *(int *)backEnd.color2D ) {
+		if ( tess.numIndexes && backEnd.currentEntity == &backEnd.entity2D && tess.shader ) {
+			int		i;
+
+			for ( i = 0 ; i < tess.shader->numUnfoggedPasses ; i++ ) {
+				const shaderStage_t	*st = tess.shader->stages[i];
+
+				if ( st && ( st->rgbGen == CGEN_ENTITY || st->rgbGen == CGEN_ONE_MINUS_ENTITY ||
+						st->alphaGen == AGEN_ENTITY || st->alphaGen == AGEN_ONE_MINUS_ENTITY ) ) {
+					RB_EndSurface();
+					RB_BeginSurface( tess.shader, tess.fogNum );
+					break;
+				}
+			}
+		}
+		*(int *)backEnd.entity2D.e.shaderRGBA = *(int *)backEnd.color2D;
+	}
 
 	return (const void *)(cmd + 1);
 }

@@ -589,11 +589,16 @@ What is implemented, and on what basis:
   light with `+lensflare`) matches the retail captures at 13 to 15 seconds. Not read
   from retail: the sun's colour (white here), what happens to a flare in the sky
   portal's own pass (retail skips `RF_SKYENTITY` entities in the main pass and has a
-  second pass; here every light is drawn once, in the main view), and `r_sunflare`,
-  retail's developer cvar that places the sun by hand. The 2D "fromClient" colour: a
-  stretched picture's `rgbGen/alphaGen fromClient` stages read the entity colour, so
-  `RB_SetColor` now copies the 2D colour there too. `r_lensflare 0` turns the flares
-  off, `2` prints each set's dot product four times a second.
+  second pass; here every light is drawn once, in the main view). `r_sunflare "x y z"`
+  (with `r_sunflare_inportalsky`) places the sun by hand as retail's developer cvar
+  does, which is how the sun flare was compared: with the sun put at `training`'s
+  player start, ours and retail show the same disc and ring at the same strength. The
+  2D "fromClient" colour: a stretched picture's `rgbGen/alphaGen fromClient` stages read
+  the entity colour, and read it when their batch is flushed, so `RB_SetColor` copies
+  the 2D colour there and first flushes any queued pictures whose shader reads it
+  (without that, every flare took the next flare's colour and the full-screen blend
+  took the reset colour and whited the screen out). `r_lensflare 0` turns the flares
+  off, `2` prints each set's dot product and bearing four times a second.
 - **The far plane and its fog** come from the scene (`refdef_t.farplane_*`, which the
   client game module fills from `CS_FOGINFO`; the game sets it from worldspawn's
   `farplane`, `farplane_color` and `farplane_cull`). Read from the retail renderer: its

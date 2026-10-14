@@ -321,9 +321,14 @@ static void LF_DrawSet( lfSet_t *set, const viewParms_t *view ) {
 		return;
 	}
 	if ( r_lensflare->integer > 1 && tr.refdef.time / 250 != set->lastPrint ) {
+		vec3_t	dir, angles;
+
 		set->lastPrint = tr.refdef.time / 250;
-		ri.Printf( PRINT_ALL, "lensflare: %s dot %.3f (min %.3f) colour %.2f %.2f %.2f %.2f at %d\n", set->name, dot, set->dotMin,
-			set->color[0], set->color[1], set->color[2], set->color[3], tr.refdef.time );
+		VectorSubtract( set->origin, view->or.origin, dir );
+		vectoangles( dir, angles );
+		ri.Printf( PRINT_ALL, "lensflare: %s dot %.3f (min %.3f) colour %.2f %.2f %.2f %.2f at yaw %.0f pitch %.0f, screen %.2f %.2f, time %d\n",
+			set->name, dot, set->dotMin, set->color[0], set->color[1], set->color[2], set->color[3],
+			angles[YAW], angles[PITCH], set->screenX, set->screenY, tr.refdef.time );
 	}
 	if ( fabs( set->screenX ) >= 1 || fabs( set->screenY ) >= 1 ) {
 		return;
@@ -416,7 +421,15 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		R_LoadLensFlares();
 	}
 
-	if ( tr.hasSunFlare && tr.world ) {
+	if ( tr.world && r_sunflare->string[0] && Q_stricmp( r_sunflare->string, "0 0 0" ) ) {
+		// retail's developer placing of the sun (0x48bb20 reads r_sunflare)
+		vec3_t	pos;
+
+		if ( sscanf( r_sunflare->string, "%f %f %f", &pos[0], &pos[1], &pos[2] ) == 3 ) {
+			LF_SetLight( &lf_sun, view, pos, r_sunflare_inportalsky->integer != 0, white );
+			LF_DrawSet( &lf_sun, view );
+		}
+	} else if ( tr.hasSunFlare && tr.world ) {
 		LF_SetLight( &lf_sun, view, tr.sunFlareOrigin, tr.sunFlareInPortalSky, white );
 		LF_DrawSet( &lf_sun, view );
 	}
