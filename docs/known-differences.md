@@ -564,6 +564,9 @@ What is implemented, and on what basis:
 - **Render flags** (`RF_*`) use FAKK2's values throughout, so that the client game
   module's flags mean the same thing to the renderer. The `refEntity_t`, `refdef_t`
   and `glconfig_t` layouts are the SDK's, since the module fills them in.
+- **A scene without a world** (`RDF_NOWORLDMODEL`: the inventory's model windows)
+  lights its TIKI models with the flat ambient Quake III gives such scenes; the TIKI
+  path had skipped the lighting setup there and drew them black.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). Debug lines and sword
   swipes are accepted and not drawn.
@@ -581,9 +584,21 @@ What is implemented, and on what basis:
   highlighted item by sending the game `use "<item>" lefthand|righthand|dualhand`
   (`0x409e50`, `0x40a090`), or a bare `use "<item>"` for one that is used; the bar goes
   away five seconds after its last change. OpenFAKK2 does the same in `cl_inv.c`,
-  drawing the slot buttons and item frames from the script's shaders; not done: the
-  turning item models in the frames, the ammo bars, the arrow and wheel navigation
-  inside the bar, and the full `inventory` screen (here `inventory` toggles the bar).
+  drawing the slot buttons and item frames from the script's shaders, each frame's
+  model turning ("move spin") or rocking ("move bob") in its `modelwindow`, and the
+  item's ammo as the script's bar (`barshader`, filled by the count over the limit from
+  the player state's ammo arrays) with the count beside it. The HUD's `invmodelrender
+  <n>` widgets (`weaphud.urc`, `dualweaphud.urc`) show the wielded weapons the same way,
+  the item being the one `activeItems[n]` names (2 the left hand, 3 the right, 4 the
+  two-handed one). Not read from retail: how its windows place a model. The script's
+  `offset`, `angles` and `rotateoffset` are for the retail camera, whose placing was
+  not read, so here a model is framed by its bounds, its longest extent across the
+  window, seen from a little above and aside, and only the script's motion is kept.
+  `inventory` (the `i` key) is retail's full-screen inventory, which switches the
+  video mode (`0x40ab60`, `ui_newvidmode`) and draws a screen of its own; here it opens
+  a screen of this client's own layout, a row per slot with the items the player
+  carries, which the arrows, the wheel and the number keys move through, the attack
+  keys equip from, and escape closes.
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for

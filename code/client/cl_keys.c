@@ -1276,6 +1276,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 	}
 
+	// FAKK2: while the inventory bar or screen is up, the attack keys equip
+	// the item it shows instead of firing, escape closes the screen (cl_inv.c)
+	if ( !( Key_GetCatcher() & ( KEYCATCH_CONSOLE | KEYCATCH_UI ) ) && INV_KeyEvent( key ) ) {
+		return;
+	}
+
 	// escape is always handled special
 	if ( key == K_ESCAPE ) {
 		if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE ) {
@@ -1314,12 +1320,6 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		VM_Call( uivm, UI_KEY_EVENT, key, qtrue );
-		return;
-	}
-
-	// FAKK2: while the inventory bar is up, the attack keys equip the item
-	// it shows instead of firing (cl_inv.c)
-	if ( INV_KeyEvent( key ) ) {
 		return;
 	}
 

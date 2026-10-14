@@ -538,6 +538,7 @@ void INV_Init( void );
 void INV_Shutdown( void );
 void INV_Draw( void );
 qboolean INV_KeyEvent( int key );
+void INV_DrawHudModel( int slot, float x, float y, float w, float h, float alpha );
 void CL_ShutdownInput(void);
 void CL_SendCmd (void);
 void CL_ClearState (void);

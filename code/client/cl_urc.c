@@ -1397,6 +1397,11 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 		}
 	}
 
+	// the HUD's weapon windows: the wielded item's model (cl_inv.c)
+	if ( w->invmodelrender >= 0 ) {
+		INV_DrawHudModel( w->invmodelrender, x, y, wd, ht, alpha );
+	}
+
 	// text: a label with a cvar shows its value (through its linkstrings);
 	// otherwise the title. Check boxes, sliders and pulldowns show none.
 	if ( w->cls == WC_LABEL || w->cls == WC_BUTTON || w->cls == WC_FIELD || w->cls == WC_LIST || w->cls == WC_OTHER ) {

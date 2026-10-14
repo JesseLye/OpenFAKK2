@@ -998,9 +998,9 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		return;
 	}
 
-	if ( !( tr.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
-		R_SetupEntityLighting( &tr.refdef, ent );
-	}
+	// a scene without a world (the inventory's windows) lights its entities
+	// with the flat ambient R_SetupEntityLighting gives it
+	R_SetupEntityLighting( &tr.refdef, ent );
 
 	for ( i = 0 ; i < numSurfaces ; i++ ) {
 		void		*surf;
