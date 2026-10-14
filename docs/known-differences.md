@@ -271,6 +271,10 @@ Not read, done another way:
   sound, `sound/feedback/hit.wav`, is not in FAKK2; a sound that cannot be loaded is
   silence on both backends.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
+- **Mouse look.** Quake III scales the mouse by a value its client game module sends
+  every frame (`trap_SetUserCmdValue`), which starts at zero when the client state is
+  cleared; FAKK2's module has no such call, so the mouse never turned the view. The
+  scale starts at 1 now (`CL_ClearState`).
 - **Sprite temp models.** The client game module adds a `.spr` temp model (emitter
   smoke, the intro's meteor trails) as `RT_SPRITE` with the model handle and no custom
   shader; Quake III's sprite path would draw the custom shader at the entity's radius,

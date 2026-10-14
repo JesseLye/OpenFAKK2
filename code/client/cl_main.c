@@ -1335,6 +1335,10 @@ void CL_ClearState (void) {
 //	S_StopAllSounds();
 
 	Com_Memset( &cl, 0, sizeof( cl ) );
+	// Quake III's client game module scales the mouse every frame
+	// (trap_SetUserCmdValue); FAKK2's never does, so the scale must start at 1
+	// or the mouse never turns the view
+	cl.cgameSensitivity = 1.0f;
 }
 
 /*
