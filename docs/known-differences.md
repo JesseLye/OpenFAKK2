@@ -292,9 +292,24 @@ Not read, done another way:
   topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)
   and takes the left button (`clicksound`, `stuffcommand`; a check box toggles its
   `linkcvar`). `aliascache` names are picked by weight among the aliases sharing the
-  prefix. Not done: keyboard in menus beyond Escape, Field/Slider/List/Pulldown
-  behaviour (drawn only), borders, `invmodelrender`, `tileshader` tiling (drawn
-  stretched), `linkstring`, `ordernumber`. The menu shaders use `rgbGen global` /
+  prefix; a new sound on the menu channel stops the one before it. Sliders
+  (`setrange`, `stepsize`, `slidertype`) drag their thumb (the 8x16 `slider_thumb`
+  images) and set their cvar; check boxes draw their 16x16 image at the left of their
+  rect; a label with a `linkcvar` shows the cvar's value through its `linkstring`
+  names; a pulldown (`menushader`, `addpopup`) opens a list under its arrow and runs
+  the entry's command. The retail client's return to the menu (`0x4212f0`) puts on
+  `music/intro.mus` when no map is active; so does this one's, when it shows the main
+  menu. `togglemenu` without a name toggles `main`, which is what `default.cfg` binds
+  to Escape. The FakkBindList widget reads its `filename` script (`ui/bind.scr`:
+  headers, widths, colours, sounds, `binditem` rows) and shows each command's first two
+  bound keys; a clicked key cell takes the next key pressed in place of the old one,
+  Escape leaves it, the wheel scrolls. Its rows are set in `verdana-12` (a guess from
+  the retail capture; the script names no font). The font scripts say `rgbGen
+  identity`, but retail draws its text in the menus' colours, so the renderer gives
+  `gfx/fonts/*` stages the caller's colour. Not done: keyboard in menus beyond
+  Escape, Field and List editing, `ui_newvidmode` (the resolution box stays empty),
+  borders, `invmodelrender`, `tileshader` tiling (drawn stretched), `ordernumber`,
+  the `paused` cvar retail sets at the menu. The menu shaders use `rgbGen global` /
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.

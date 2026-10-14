@@ -2566,6 +2566,21 @@ static shader_t *FinishShader( void ) {
 	stage -= CollapseNextBundles();
 
 	//
+	// FAKK2: the font scripts (gfx/fonts/*) say "rgbGen identity", yet the
+	// retail user interface draws its text in the colours the menus give
+	// (yellow bind list headers, hidden labels with no alpha), so a font's
+	// stages take the caller's colour and alpha
+	//
+	if ( !Q_stricmpn( shader.name, "gfx/fonts/", 10 ) ) {
+		int		i;
+
+		for ( i = 0 ; i < stage ; i++ ) {
+			stages[i].rgbGen = CGEN_VERTEX;
+			stages[i].alphaGen = AGEN_VERTEX;
+		}
+	}
+
+	//
 	// look for multitexture potential
 	//
 	if ( stage > 1 && !shader.multitextureEnv && CollapseMultitexture() ) {

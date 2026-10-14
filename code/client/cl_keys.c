@@ -1367,6 +1367,9 @@ void CL_KeyUpEvent( int key, unsigned time )
 	//
 	CL_ParseBinding( key, qfalse, time );
 
+	if ( Key_GetCatcher( ) & KEYCATCH_UI && !uivm ) {
+		URC_KeyEvent( key, qfalse );
+	}
 	if ( Key_GetCatcher( ) & KEYCATCH_UI && uivm ) {
 		VM_Call( uivm, UI_KEY_EVENT, key, qfalse );
 	}

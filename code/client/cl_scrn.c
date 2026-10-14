@@ -502,8 +502,8 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			SCR_DrawCinematic();
 			break;
 		case CA_DISCONNECTED:
-			// force menu up
-			S_StopAllSounds();
+			// force menu up (Quake III stopped all sounds here every frame;
+			// FAKK2's menu plays music and its buttons speak, so it does not)
 			if ( uivm ) {
 				VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
 			}

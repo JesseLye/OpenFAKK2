@@ -84,6 +84,27 @@ typedef struct {
 	char		hoverSound[MAX_QPATH];
 	char		linkcvar[64];
 	char		stuffcommand[256];
+	char		checkedCommand[256];
+	char		uncheckedCommand[256];
+	// "linkstring <value> <text>": what a label shows for a cvar value
+	int			numLinkStrings;
+	struct {
+		char	value[32];
+		char	text[64];
+	}			linkStrings[16];
+	// sliders: "setrange <min> <max>", "stepsize <s>", "slidertype float|int"
+	float		rangeMin, rangeMax, stepSize;
+	qboolean	sliderInt;
+	// pulldowns: 'menushader "MENU" <shader>', 'addpopup "MENU" <text> command <cmd>'
+	char		menuShaderName[MAX_QPATH];
+	char		selMenuShaderName[MAX_QPATH];
+	qhandle_t	menuShader, selMenuShader;
+	int			numPopups;
+	struct {
+		char	text[64];
+		char	command[128];
+	}			popups[16];
+	char		bindFile[MAX_QPATH];	// FakkBindList: "filename ui/bind.scr"
 	int			playerstat;			// -1 none
 	int			maxplayerstat;		// -1 none
 	int			statbar;			// 0 none, 1 vertical, 2 horizontal
@@ -153,6 +174,41 @@ static urcAlias_t	urc_aliases[URC_MAX_ALIASES];
 static int			urc_numAliases;
 static float		urc_cursorX = 320, urc_cursorY = 240;	// 640x480 units
 static int			urc_hoverWidget = -1;
+static int			urc_dragSlider = -1;		// the slider the left button is held on
+static int			urc_popupWidget = -1;		// the pulldown whose list is open
+
+// the key bind list (FakkBindList), from its "filename" script
+typedef struct {
+	char		name[64];
+	char		command[128];
+	char		shader[MAX_QPATH];
+} urcBindItem_t;
+
+#define URC_MAX_BINDITEMS	64
+
+typedef struct {
+	char			file[MAX_QPATH];
+	qboolean		loaded;
+	char			headerName[3][MAX_QPATH];
+	qhandle_t		headerShader[3];
+	int				fillWidth, cmdWidth, rowHeight, keyWidth;
+	char			fillName[MAX_QPATH];
+	qhandle_t		fillShader;
+	vec4_t			titleFg, titleBg, activeFg, activeBg, inactiveFg, inactiveBg, selectFg, selectBg;
+	char			changeSound[MAX_QPATH], activeSound[MAX_QPATH], enterSound[MAX_QPATH];
+	int				numItems;
+	urcBindItem_t	items[URC_MAX_BINDITEMS];
+	// runtime
+	int				scroll;
+	int				selected;
+	int				waitingSlot;		// -1, or the key column waiting for a key press
+} urcBindList_t;
+
+static urcBindList_t	urc_bindList;
+static qhandle_t		urc_sliderThumb, urc_sliderThumbSel;
+
+static void URC_PlaySound( const char *name );
+static void URC_DrawPopup( void );
 
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
@@ -389,10 +445,8 @@ static void URC_ParseAlign( urcMenu_t *menu, char args[][MAX_QPATH], int n ) {
 
 // keys the shipped files use that this implementation reads and ignores
 static const char *urc_ignoredKeys[] = {
-	"linkstring", "additem", "addpopup",
-	"setrange", "slidertype", "stepsize", "initdata",
-	"menushader", "selmenushader", "updatecvar", "filename", "edit", "checked_command",
-	"unchecked_command", "bordercolor", "noparentclip", "noparentadjust", "hidecommand",
+	"additem", "initdata", "updatecvar", "edit",
+	"bordercolor", "noparentclip", "noparentadjust", "hidecommand",
 	"showcommand", "stretchdir", "vidmode", "alpha", "soundname", NULL
 };
 
@@ -449,6 +503,9 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 	w->statMin = 0;
 	w->statMax = 100;
 	w->lastStat = -99999;
+	w->rangeMin = 0;
+	w->rangeMax = 1;
+	w->stepSize = 0;
 
 	while ( 1 ) {
 		tok = COM_Parse( p );
@@ -493,6 +550,35 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 			Q_strncpyz( w->checkedName, args[0], sizeof( w->checkedName ) );
 		} else if ( !Q_stricmp( tok, "unchecked_shader" ) && n ) {
 			Q_strncpyz( w->uncheckedName, args[0], sizeof( w->uncheckedName ) );
+		} else if ( !Q_stricmp( tok, "checked_command" ) && n ) {
+			Q_strncpyz( w->checkedCommand, args[0], sizeof( w->checkedCommand ) );
+		} else if ( !Q_stricmp( tok, "unchecked_command" ) && n ) {
+			Q_strncpyz( w->uncheckedCommand, args[0], sizeof( w->uncheckedCommand ) );
+		} else if ( !Q_stricmp( tok, "linkstring" ) && n >= 2 ) {
+			if ( w->numLinkStrings < ARRAY_LEN( w->linkStrings ) ) {
+				Q_strncpyz( w->linkStrings[w->numLinkStrings].value, args[0], sizeof( w->linkStrings[0].value ) );
+				Q_strncpyz( w->linkStrings[w->numLinkStrings].text, args[1], sizeof( w->linkStrings[0].text ) );
+				w->numLinkStrings++;
+			}
+		} else if ( !Q_stricmp( tok, "setrange" ) && n >= 2 ) {
+			w->rangeMin = atof( args[0] );
+			w->rangeMax = atof( args[1] );
+		} else if ( !Q_stricmp( tok, "stepsize" ) && n ) {
+			w->stepSize = atof( args[0] );
+		} else if ( !Q_stricmp( tok, "slidertype" ) && n ) {
+			w->sliderInt = !Q_stricmp( args[0], "int" );
+		} else if ( !Q_stricmp( tok, "menushader" ) && n >= 2 ) {
+			Q_strncpyz( w->menuShaderName, args[1], sizeof( w->menuShaderName ) );
+		} else if ( !Q_stricmp( tok, "selmenushader" ) && n >= 2 ) {
+			Q_strncpyz( w->selMenuShaderName, args[1], sizeof( w->selMenuShaderName ) );
+		} else if ( !Q_stricmp( tok, "addpopup" ) && n >= 4 ) {
+			if ( w->numPopups < ARRAY_LEN( w->popups ) ) {
+				Q_strncpyz( w->popups[w->numPopups].text, args[1], sizeof( w->popups[0].text ) );
+				Q_strncpyz( w->popups[w->numPopups].command, args[3], sizeof( w->popups[0].command ) );
+				w->numPopups++;
+			}
+		} else if ( !Q_stricmp( tok, "filename" ) && n ) {
+			Q_strncpyz( w->bindFile, args[0], sizeof( w->bindFile ) );
 		} else if ( !Q_stricmp( tok, "clicksound" ) && n ) {
 			Q_strncpyz( w->clickSound, args[0], sizeof( w->clickSound ) );
 		} else if ( !Q_stricmp( tok, "hoversound" ) && n ) {
@@ -691,6 +777,340 @@ static void URC_LoadWidgetShaders( urcWidget_t *w ) {
 	if ( w->statFlashName[0] ) w->statFlash = re.RegisterShaderNoMip( w->statFlashName );
 	if ( w->checkedName[0] ) w->checkedShader = re.RegisterShaderNoMip( w->checkedName );
 	if ( w->uncheckedName[0] ) w->uncheckedShader = re.RegisterShaderNoMip( w->uncheckedName );
+	if ( w->menuShaderName[0] ) w->menuShader = re.RegisterShaderNoMip( w->menuShaderName );
+	if ( w->selMenuShaderName[0] ) w->selMenuShader = re.RegisterShaderNoMip( w->selMenuShaderName );
+}
+
+/*
+=======================================================================
+
+THE KEY BIND LIST
+
+"ui/bind.scr": header <n> <text> <shader>, bind_width/height,
+bind_fillwidth <w> <shader>, bind_commandwidth/height,
+bind_primarykeywidth/height, bind_alternatekeywidth/height, colours,
+changesound/activesound/entersound, binditem <name> <command> <shader>.
+
+Drawn as the retail list draws it: a header row, then a row per item
+with the command's name and the first two keys bound to it; a key cell
+clicked waits for the next key, which takes the place of the old one;
+escape leaves it; the wheel scrolls.
+
+=======================================================================
+*/
+
+static void URC_LoadBindList( const char *file ) {
+	urcBindList_t	*bl = &urc_bindList;
+	char			*buf, *p, *tok;
+	char			key[64];
+	char			args[8][MAX_QPATH];
+	int				n, i;
+
+	if ( bl->loaded && !Q_stricmp( bl->file, file ) ) {
+		return;
+	}
+	Com_Memset( bl, 0, sizeof( *bl ) );
+	Q_strncpyz( bl->file, file, sizeof( bl->file ) );
+	bl->loaded = qtrue;
+	bl->fillWidth = 16;
+	bl->cmdWidth = 128;
+	bl->rowHeight = 16;
+	bl->keyWidth = 64;
+	bl->waitingSlot = -1;
+	Vector4Set( bl->titleFg, 1, 1, 0, 1 );
+	Vector4Set( bl->titleBg, 0, 0, 0, 1 );
+	Vector4Set( bl->activeFg, 1, 1, 1, 1 );
+	Vector4Set( bl->activeBg, 0, 0, 0, 1 );
+	Vector4Set( bl->inactiveFg, 1, 1, 1, 1 );
+	Vector4Set( bl->inactiveBg, 0.1f, 0.1f, 0.1f, 1 );
+	Vector4Set( bl->selectFg, 1, 1, 0, 1 );
+	Vector4Set( bl->selectBg, 0, 0, 0, 1 );
+
+	if ( FS_ReadFile( file, (void **)&buf ) <= 0 ) {
+		Com_Printf( S_COLOR_YELLOW "WARNING: bind list %s not found\n", file );
+		return;
+	}
+	p = buf;
+	while ( 1 ) {
+		tok = COM_Parse( &p );
+		if ( !tok[0] ) {
+			break;
+		}
+		Q_strncpyz( key, tok, sizeof( key ) );
+		n = URC_LineArgs( &p, args, 8 );
+		if ( !Q_stricmp( key, "header" ) && n >= 3 ) {
+			i = atoi( args[0] ) - 1;
+			if ( i >= 0 && i < 3 ) {
+				Q_strncpyz( bl->headerName[i], args[2], sizeof( bl->headerName[i] ) );
+			}
+		} else if ( !Q_stricmp( key, "bind_fillwidth" ) && n >= 1 ) {
+			bl->fillWidth = atoi( args[0] );
+			if ( n >= 2 ) {
+				Q_strncpyz( bl->fillName, args[1], sizeof( bl->fillName ) );
+			}
+		} else if ( !Q_stricmp( key, "bind_commandwidth" ) && n ) {
+			bl->cmdWidth = atoi( args[0] );
+		} else if ( !Q_stricmp( key, "bind_commandheight" ) && n ) {
+			bl->rowHeight = atoi( args[0] );
+		} else if ( !Q_stricmp( key, "bind_primarykeywidth" ) && n ) {
+			bl->keyWidth = atoi( args[0] );
+		} else if ( !Q_stricmp( key, "titleforegroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->titleFg );
+		} else if ( !Q_stricmp( key, "titlebackgroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->titleBg );
+		} else if ( !Q_stricmp( key, "activeforegroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->activeFg );
+		} else if ( !Q_stricmp( key, "activebackgroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->activeBg );
+		} else if ( !Q_stricmp( key, "inactiveforegroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->inactiveFg );
+		} else if ( !Q_stricmp( key, "inactivebackgroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->inactiveBg );
+		} else if ( !Q_stricmp( key, "selectforegroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->selectFg );
+		} else if ( !Q_stricmp( key, "selectbackgroundcolor" ) ) {
+			URC_ParseColor( args, n, bl->selectBg );
+		} else if ( !Q_stricmp( key, "changesound" ) && n ) {
+			Q_strncpyz( bl->changeSound, args[0], sizeof( bl->changeSound ) );
+		} else if ( !Q_stricmp( key, "activesound" ) && n ) {
+			Q_strncpyz( bl->activeSound, args[0], sizeof( bl->activeSound ) );
+		} else if ( !Q_stricmp( key, "entersound" ) && n ) {
+			Q_strncpyz( bl->enterSound, args[0], sizeof( bl->enterSound ) );
+		} else if ( !Q_stricmp( key, "binditem" ) && n >= 2 ) {
+			if ( bl->numItems < URC_MAX_BINDITEMS ) {
+				urcBindItem_t	*item = &bl->items[bl->numItems++];
+
+				Q_strncpyz( item->name, args[0], sizeof( item->name ) );
+				Q_strncpyz( item->command, args[1], sizeof( item->command ) );
+				if ( n >= 3 ) {
+					Q_strncpyz( item->shader, args[2], sizeof( item->shader ) );
+				}
+			}
+		}
+		// bind_width, bind_height, the key heights, align, the other colours: the widget's rect rules
+	}
+	FS_FreeFile( buf );
+
+	for ( i = 0 ; i < 3 ; i++ ) {
+		if ( bl->headerName[i][0] ) {
+			bl->headerShader[i] = re.RegisterShaderNoMip( bl->headerName[i] );
+		}
+	}
+	if ( bl->fillName[0] ) {
+		bl->fillShader = re.RegisterShaderNoMip( bl->fillName );
+	}
+}
+
+// the first two keys bound to a command; -1 for none
+static void URC_BindKeys( const char *command, int bound[2] ) {
+	int		k, n = 0;
+
+	bound[0] = bound[1] = -1;
+	for ( k = 0 ; k < MAX_KEYS && n < 2 ; k++ ) {
+		const char	*b = Key_GetBinding( k );
+
+		if ( b && b[0] && !Q_stricmp( b, command ) ) {
+			bound[n++] = k;
+		}
+	}
+}
+
+static int URC_BindVisibleRows( const urcWidget_t *w ) {
+	int		rows = (int)( w->rect[3] / urc_bindList.rowHeight ) - 1;
+
+	return rows < 1 ? 1 : rows;
+}
+
+/*
+=================
+URC_DrawBindList
+=================
+*/
+static void URC_DrawBindList( const urcWidget_t *w, float x, float y, float alpha ) {
+	urcBindList_t	*bl = &urc_bindList;
+	urcFont_t		*font;
+	float			colX[3], colW[3], rowH, fillX[3], barX, barW;
+	int				rows, r, c, i;
+	vec4_t			color;
+
+	URC_LoadBindList( w->bindFile );
+	font = URC_LoadFont( "verdana-12" );	// the retail list's rows are set in the smaller face
+	rowH = bl->rowHeight;
+	colX[0] = x;
+	colW[0] = bl->cmdWidth;
+	fillX[0] = colX[0] + colW[0];
+	colX[1] = fillX[0] + bl->fillWidth;
+	colW[1] = bl->keyWidth;
+	fillX[1] = colX[1] + colW[1];
+	colX[2] = fillX[1] + bl->fillWidth;
+	colW[2] = bl->keyWidth;
+	fillX[2] = colX[2] + colW[2];
+	barX = fillX[2] + bl->fillWidth;
+	barW = w->rect[0] + w->rect[2] - barX;
+	rows = URC_BindVisibleRows( w );
+	if ( bl->scroll > bl->numItems - rows ) {
+		bl->scroll = bl->numItems - rows;
+	}
+	if ( bl->scroll < 0 ) {
+		bl->scroll = 0;
+	}
+
+	// the fills between the columns, the whole height
+	Vector4Set( color, 1, 1, 1, alpha );
+	for ( c = 0 ; c < 3 ; c++ ) {
+		if ( bl->fillShader ) {
+			URC_DrawPicST( fillX[c], y, bl->fillWidth, w->rect[3], 0, 0, 1, w->rect[3] / rowH, bl->fillShader, color );
+		}
+	}
+
+	// the header row
+	for ( c = 0 ; c < 3 ; c++ ) {
+		Vector4Copy( bl->titleBg, color );
+		color[3] *= alpha;
+		URC_FillRect( colX[c], y, colW[c], rowH, color );
+		if ( bl->headerShader[c] ) {
+			Vector4Set( color, 1, 1, 1, alpha );
+			URC_DrawPicST( colX[c], y, colW[c], rowH, 0, 0, 1, 1, bl->headerShader[c], color );
+		}
+	}
+
+	// the items
+	for ( r = 0 ; r < rows ; r++ ) {
+		float			ry = y + rowH * ( r + 1 );
+		urcBindItem_t	*item;
+		int				bound[2];
+		qboolean		selected;
+
+		i = bl->scroll + r;
+		if ( i >= bl->numItems ) {
+			break;
+		}
+		item = &bl->items[i];
+		selected = ( i == bl->selected );
+		URC_BindKeys( item->command, bound );
+		for ( c = 0 ; c < 3 ; c++ ) {
+			const char	*text;
+			const float	*bg, *fg;
+
+			if ( c == 0 ) {
+				text = item->name;
+			} else {
+				text = bound[c - 1] >= 0 ? Key_KeynumToString( bound[c - 1] ) : "None";
+			}
+			if ( selected && bl->waitingSlot == c - 1 && c > 0 ) {
+				bg = bl->activeBg;
+				fg = bl->activeFg;
+				text = "???";
+			} else if ( selected ) {
+				bg = bl->selectBg;
+				fg = bl->selectFg;
+			} else {
+				bg = bl->inactiveBg;
+				fg = bl->inactiveFg;
+			}
+			Vector4Copy( bg, color );
+			color[3] *= alpha;
+			URC_FillRect( colX[c], ry, colW[c], rowH, color );
+			if ( font ) {
+				float	tw = URC_StringWidth( font, text );
+
+				Vector4Copy( fg, color );
+				color[3] *= alpha;
+				URC_DrawString( font, colX[c] + ( colW[c] - tw ) * 0.5f, ry + ( rowH - font->height ) * 0.5f, text, color );
+			}
+		}
+	}
+
+	// the scroll bar
+	if ( barW > 0 ) {
+		float	trackH = w->rect[3] - rowH;
+		float	thumbH, thumbY;
+
+		Vector4Copy( bl->inactiveBg, color );
+		color[3] *= alpha;
+		URC_FillRect( barX, y + rowH, barW, trackH, color );
+		if ( bl->numItems > rows ) {
+			thumbH = trackH * rows / bl->numItems;
+			thumbY = y + rowH + ( trackH - thumbH ) * bl->scroll / ( bl->numItems - rows );
+		} else {
+			thumbH = trackH;
+			thumbY = y + rowH;
+		}
+		Vector4Set( color, 0.6f, 0.6f, 0.6f, alpha );
+		URC_FillRect( barX + 2, thumbY, barW - 4, thumbH, color );
+	}
+}
+
+/*
+=================
+URC_BindListClick
+
+A row selects; a key cell of the selected row waits for a key.
+=================
+*/
+static void URC_BindListClick( const urcWidget_t *w, const float rect[4] ) {
+	urcBindList_t	*bl = &urc_bindList;
+	int				row, col, i;
+	float			cx = urc_cursorX - rect[0];
+
+	row = (int)( ( urc_cursorY - rect[1] ) / bl->rowHeight ) - 1;
+	if ( row < 0 ) {
+		return;
+	}
+	i = bl->scroll + row;
+	if ( i >= bl->numItems ) {
+		return;
+	}
+	if ( cx < bl->cmdWidth ) {
+		col = 0;
+	} else if ( cx >= bl->cmdWidth + bl->fillWidth && cx < bl->cmdWidth + bl->fillWidth + bl->keyWidth ) {
+		col = 1;
+	} else if ( cx >= bl->cmdWidth + 2 * bl->fillWidth + bl->keyWidth && cx < bl->cmdWidth + 2 * bl->fillWidth + 2 * bl->keyWidth ) {
+		col = 2;
+	} else {
+		return;
+	}
+	bl->selected = i;
+	if ( col > 0 ) {
+		bl->waitingSlot = col - 1;
+		URC_PlaySound( bl->enterSound );
+	} else {
+		bl->waitingSlot = -1;
+	}
+}
+
+/*
+=================
+URC_BindListKey
+
+The key pressed while a cell waits. Returns whether it was taken.
+=================
+*/
+static qboolean URC_BindListKey( int key ) {
+	urcBindList_t	*bl = &urc_bindList;
+	urcBindItem_t	*item;
+	int				bound[2];
+
+	if ( bl->waitingSlot < 0 || bl->selected < 0 || bl->selected >= bl->numItems ) {
+		return qfalse;
+	}
+	if ( key == K_ESCAPE ) {
+		bl->waitingSlot = -1;
+		URC_PlaySound( bl->activeSound );
+		return qtrue;
+	}
+	if ( key == K_MWHEELUP || key == K_MWHEELDOWN ) {
+		return qfalse;
+	}
+	item = &bl->items[bl->selected];
+	URC_BindKeys( item->command, bound );
+	if ( bound[bl->waitingSlot] >= 0 ) {
+		Key_SetBinding( bound[bl->waitingSlot], "" );
+	}
+	Key_SetBinding( key, item->command );
+	bl->waitingSlot = -1;
+	URC_PlaySound( bl->changeSound );
+	return qtrue;
 }
 
 /*
@@ -709,6 +1129,7 @@ static void URC_PlaySound( const char *name ) {
 	if ( !name[0] ) {
 		return;
 	}
+	S_StopLocalSound( CHAN_MENU );		// one voice at a time
 	if ( strchr( name, '/' ) ) {
 		path = name;
 	} else {
@@ -804,7 +1225,8 @@ static int URC_WidgetUnderCursor( void ) {
 	for ( i = menu->numWidgets - 1 ; i >= 0 ; i-- ) {
 		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
 
-		if ( w->cls != WC_BUTTON && w->cls != WC_CHECKBOX ) {
+		if ( w->cls != WC_BUTTON && w->cls != WC_CHECKBOX && w->cls != WC_SLIDER &&
+			w->cls != WC_PULLDOWN && !w->bindFile[0] ) {
 			continue;
 		}
 		URC_WidgetRect( w, menu, ox, oy, elapsed, rect );
@@ -890,14 +1312,52 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, w->tileShader, color );
 	}
 	shader = w->shader;
-	if ( w->cls == WC_CHECKBOX && w->linkcvar[0] ) {
-		shader = Cvar_VariableValue( w->linkcvar ) ? w->checkedShader : w->uncheckedShader;
-	}
 	if ( onTop && w->hoverShader && ( w - urc_widgets ) == urc_hoverWidget ) {
 		shader = w->hoverShader;
 	}
+	if ( w->cls == WC_CHECKBOX ) {
+		// a 16x16 box at the left of the rect (the images are 16x16); the
+		// caption beside it is another widget's picture
+		float	box = 16;
+
+		shader = ( w->linkcvar[0] && Cvar_VariableValue( w->linkcvar ) ) ? w->checkedShader : w->uncheckedShader;
+		if ( shader ) {
+			URC_DrawPicST( x + 2, y + ( ht - box ) * 0.5f, box, box, 0, 0, 1, 1, shader, color );
+		}
+		shader = 0;
+	} else if ( w->cls == WC_SLIDER ) {
+		// the track is the shader; the thumb (8x16 images) sits at the value
+		float		thumbW = 8, frac = 0;
+		qhandle_t	thumb;
+
+		if ( !urc_sliderThumb ) {
+			urc_sliderThumb = re.RegisterShaderNoMip( "textures/menu/slider_thumb" );
+			urc_sliderThumbSel = re.RegisterShaderNoMip( "textures/menu/slider_thumb_sel" );
+		}
+		if ( shader ) {
+			URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, shader, color );
+		}
+		if ( w->linkcvar[0] && w->rangeMax > w->rangeMin ) {
+			frac = ( Cvar_VariableValue( w->linkcvar ) - w->rangeMin ) / ( w->rangeMax - w->rangeMin );
+			if ( frac < 0 ) frac = 0;
+			if ( frac > 1 ) frac = 1;
+		}
+		thumb = ( onTop && ( ( w - urc_widgets ) == urc_hoverWidget || ( w - urc_widgets ) == urc_dragSlider ) ) ?
+			urc_sliderThumbSel : urc_sliderThumb;
+		if ( thumb ) {
+			URC_DrawPicST( x + frac * ( wd - thumbW ), y, thumbW, ht, 0, 0, 1, 1, thumb, color );
+		}
+		shader = 0;
+	} else if ( w->cls == WC_PULLDOWN ) {
+		shader = ( onTop && w->selMenuShader && ( ( w - urc_widgets ) == urc_hoverWidget || ( w - urc_widgets ) == urc_popupWidget ) ) ?
+			w->selMenuShader : w->menuShader;
+	}
 	if ( shader ) {
 		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, shader, color );
+	}
+	if ( w->bindFile[0] ) {
+		URC_DrawBindList( w, x, y, alpha );
+		return;
 	}
 
 	// a stat bar fills from the bottom or the left with the stat's share
@@ -930,14 +1390,24 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 		}
 	}
 
-	// text: the title, or the linked cvar's value
-	{
+	// text: a label with a cvar shows its value (through its linkstrings);
+	// otherwise the title. Check boxes, sliders and pulldowns show none.
+	if ( w->cls == WC_LABEL || w->cls == WC_BUTTON || w->cls == WC_FIELD || w->cls == WC_LIST || w->cls == WC_OTHER ) {
 		const char	*text = w->title;
 
-		if ( !text[0] && w->linkcvar[0] && w->cls != WC_CHECKBOX && w->cls != WC_SLIDER ) {
+		if ( w->linkcvar[0] ) {
+			int		i;
+
 			text = Cvar_VariableString( w->linkcvar );
+			for ( i = 0 ; i < w->numLinkStrings ; i++ ) {
+				if ( !Q_stricmp( w->linkStrings[i].value, text ) ||
+					( atof( w->linkStrings[i].value ) == atof( text ) && Q_isanumber( text ) ) ) {
+					text = w->linkStrings[i].text;
+					break;
+				}
+			}
 		}
-		if ( text[0] && w->invmodelrender < 0 ) {
+		if ( text[0] && w->invmodelrender < 0 && w->fgcolor[3] > 0 ) {
 			urcFont_t	*font = URC_LoadFont( w->font );
 
 			if ( font ) {
@@ -1040,6 +1510,9 @@ void URC_PopMenu( void ) {
 		return;
 	}
 	URC_HideMenu( &urc_menus[urc_stack[--urc_stackDepth]] );
+	urc_popupWidget = -1;
+	urc_dragSlider = -1;
+	urc_bindList.waitingSlot = -1;
 	URC_UpdateCatcher();
 }
 
@@ -1206,6 +1679,10 @@ void URC_Draw( void ) {
 	if ( clc.state == CA_DISCONNECTED && !urc_stackDepth && !CL_Viewer_Active() &&
 		!( Key_GetCatcher() & KEYCATCH_CONSOLE ) && URC_FindMenu( "main" ) ) {
 		URC_PushMenu( "main" );
+		// the retail client's return to the menu (0x4212f0) puts on
+		// music/intro.mus, the title theme, when no map is active
+		MUSIC_NewSoundtrack( "music/intro" );
+		MUSIC_UpdateMood( 1, 1 );		// mood_normal
 	}
 
 	URC_UpdateHud();
@@ -1239,6 +1716,7 @@ void URC_Draw( void ) {
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
 		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1 );
 	}
+	URC_DrawPopup();
 
 	if ( clc.state == CA_ACTIVE ) {
 		URC_DrawPrint( &urc_centerprint );
@@ -1254,23 +1732,172 @@ Only while a menu is up: escape pops it, the left button works the
 button or check box under the cursor. The other keys do nothing yet.
 =================
 */
-void URC_KeyEvent( int key, qboolean down ) {
-	if ( !down || !urc_stackDepth ) {
+static void URC_SliderSet( urcWidget_t *w, const float rect[4] ) {
+	float	thumbW = 8, frac, value;
+
+	if ( !w->linkcvar[0] || w->rangeMax <= w->rangeMin ) {
 		return;
 	}
+	frac = ( urc_cursorX - rect[0] - thumbW * 0.5f ) / ( rect[2] - thumbW );
+	if ( frac < 0 ) frac = 0;
+	if ( frac > 1 ) frac = 1;
+	value = w->rangeMin + frac * ( w->rangeMax - w->rangeMin );
+	if ( w->stepSize > 0 ) {
+		value = w->rangeMin + floor( ( value - w->rangeMin ) / w->stepSize + 0.5f ) * w->stepSize;
+	}
+	if ( w->sliderInt ) {
+		Cvar_Set( w->linkcvar, va( "%d", (int)value ) );
+	} else {
+		Cvar_Set( w->linkcvar, va( "%g", value ) );
+	}
+}
+
+// the rect of a widget of the menu on top, this frame
+static qboolean URC_TopWidgetRect( int index, float rect[4] ) {
+	urcMenu_t	*menu;
+	float		ox, oy;
+	int			elapsed;
+
+	if ( !urc_stackDepth || index < 0 ) {
+		return qfalse;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	elapsed = cls.realtime - menu->showTime;
+	URC_MenuOrigin( menu, elapsed, &ox, &oy );
+	URC_WidgetRect( &urc_widgets[index], menu, ox, oy, elapsed, rect );
+	return qtrue;
+}
+
+#define URC_POPUP_WIDTH		184
+
+static void URC_PopupRect( int index, float rect[4] ) {
+	float	arrow[4];
+
+	URC_TopWidgetRect( index, arrow );
+	rect[0] = arrow[0];
+	rect[1] = arrow[1] + arrow[3];
+	rect[2] = URC_POPUP_WIDTH;
+	rect[3] = urc_widgets[index].numPopups * 16.0f;
+}
+
+static void URC_DrawPopup( void ) {
+	urcWidget_t	*w;
+	urcFont_t	*font;
+	float		rect[4];
+	vec4_t		color;
+	int			i;
+
+	if ( urc_popupWidget < 0 || !urc_stackDepth ) {
+		return;
+	}
+	w = &urc_widgets[urc_popupWidget];
+	URC_PopupRect( urc_popupWidget, rect );
+	font = URC_LoadFont( w->font );
+	for ( i = 0 ; i < w->numPopups ; i++ ) {
+		float	ry = rect[1] + i * 16.0f;
+		float	rowRect[4] = { rect[0], ry, rect[2], 16 };
+
+		Vector4Set( color, 0, 0, 0, 0.85f );
+		if ( URC_CursorIn( rowRect ) ) {
+			Vector4Set( color, 0.25f, 0.25f, 0.5f, 0.95f );
+		}
+		URC_FillRect( rect[0], ry, rect[2], 16, color );
+		if ( font ) {
+			Vector4Set( color, 1, 1, 1, 1 );
+			URC_DrawString( font, rect[0] + 4, ry + ( 16 - font->height ) * 0.5f, w->popups[i].text, color );
+		}
+	}
+}
+
+/*
+=================
+URC_KeyEvent
+
+Only while a menu is up: escape pops it, the left button works the
+button, check box, slider, pulldown or bind list under the cursor, the
+wheel scrolls the bind list. The other keys do nothing.
+=================
+*/
+void URC_KeyEvent( int key, qboolean down ) {
+	float	rect[4];
+	int		i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	if ( !down ) {
+		if ( key == K_MOUSE1 ) {
+			urc_dragSlider = -1;
+		}
+		return;
+	}
+
+	// a bind list cell waiting for its key takes everything
+	if ( URC_BindListKey( key ) ) {
+		return;
+	}
+
+	// an open pulldown list takes the click
+	if ( urc_popupWidget >= 0 ) {
+		urcWidget_t	*w = &urc_widgets[urc_popupWidget];
+
+		if ( key == K_MOUSE1 ) {
+			URC_PopupRect( urc_popupWidget, rect );
+			if ( URC_CursorIn( rect ) ) {
+				i = (int)( ( urc_cursorY - rect[1] ) / 16 );
+				if ( i >= 0 && i < w->numPopups ) {
+					Cbuf_AddText( va( "%s\n", w->popups[i].command ) );
+					URC_PlaySound( w->clickSound );
+				}
+			}
+		}
+		urc_popupWidget = -1;
+		return;
+	}
+
 	if ( key == K_ESCAPE ) {
 		URC_PopMenu();
 		return;
 	}
+	if ( key == K_MWHEELUP || key == K_MWHEELDOWN ) {
+		urc_bindList.scroll += ( key == K_MWHEELUP ) ? -1 : 1;
+		return;
+	}
 	if ( key == K_MOUSE1 ) {
-		int		i = URC_WidgetUnderCursor();
-
+		i = URC_WidgetUnderCursor();
 		if ( i >= 0 ) {
 			urcWidget_t	*w = &urc_widgets[i];
 
-			URC_PlaySound( w->clickSound );
-			if ( w->cls == WC_CHECKBOX && w->linkcvar[0] ) {
-				Cvar_Set( w->linkcvar, Cvar_VariableValue( w->linkcvar ) ? "0" : "1" );
+			URC_TopWidgetRect( i, rect );
+			switch ( w->cls ) {
+			case WC_CHECKBOX:
+				URC_PlaySound( w->clickSound );
+				if ( w->linkcvar[0] ) {
+					qboolean	on = Cvar_VariableValue( w->linkcvar ) == 0;
+
+					Cvar_Set( w->linkcvar, on ? "1" : "0" );
+					if ( on && w->checkedCommand[0] ) {
+						Cbuf_AddText( va( "%s\n", w->checkedCommand ) );
+					} else if ( !on && w->uncheckedCommand[0] ) {
+						Cbuf_AddText( va( "%s\n", w->uncheckedCommand ) );
+					}
+				}
+				break;
+			case WC_SLIDER:
+				urc_dragSlider = i;
+				URC_SliderSet( w, rect );
+				break;
+			case WC_PULLDOWN:
+				URC_PlaySound( w->clickSound );
+				urc_popupWidget = w->numPopups ? i : -1;
+				break;
+			default:
+				if ( w->bindFile[0] ) {
+					URC_BindListClick( w, rect );
+					break;
+				}
+				URC_PlaySound( w->clickSound );
+				break;
 			}
 			if ( w->stuffcommand[0] ) {
 				Cbuf_AddText( va( "%s\n", w->stuffcommand ) );
@@ -1287,9 +1914,14 @@ The system cursor, in window pixels, while a menu is up.
 =================
 */
 void CL_MouseAbsEvent( int x, int y ) {
+	float	rect[4];
+
 	if ( cls.glconfig.vidWidth > 0 && cls.glconfig.vidHeight > 0 ) {
 		urc_cursorX = x * 640.0f / cls.glconfig.vidWidth;
 		urc_cursorY = y * 480.0f / cls.glconfig.vidHeight;
+	}
+	if ( urc_dragSlider >= 0 && URC_TopWidgetRect( urc_dragSlider, rect ) ) {
+		URC_SliderSet( &urc_widgets[urc_dragSlider], rect );
 	}
 }
 
@@ -1331,15 +1963,14 @@ static void URC_HideMenu_f( void ) {
 
 static void URC_ToggleMenu_f( void ) {
 	urcMenu_t	*menu;
+	const char	*name;
 	int			i;
 
-	if ( Cmd_Argc() < 2 ) {
-		Com_Printf( "Usage: togglemenu <menuname>\n" );
-		return;
-	}
-	menu = URC_FindMenu( Cmd_Argv( 1 ) );
+	// default.cfg binds escape to "togglemenu" alone: the main menu
+	name = Cmd_Argc() < 2 ? "main" : Cmd_Argv( 1 );
+	menu = URC_FindMenu( name );
 	if ( !menu ) {
-		Com_Printf( "Couldn't find menu %s\n", Cmd_Argv( 1 ) );
+		Com_Printf( "Couldn't find menu %s\n", name );
 		return;
 	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
@@ -1398,7 +2029,10 @@ static void URC_LoadAllMenus( void ) {
 	int		numFiles, i;
 
 	urc_numMenus = urc_numWidgets = urc_numAliases = 0;
-	urc_hoverWidget = -1;
+	urc_hoverWidget = urc_dragSlider = urc_popupWidget = -1;
+	urc_sliderThumb = urc_sliderThumbSel = 0;
+	Com_Memset( &urc_bindList, 0, sizeof( urc_bindList ) );
+	urc_bindList.waitingSlot = -1;
 	files = FS_ListFiles( "ui", ".urc", &numFiles );
 	for ( i = 0 ; i < numFiles ; i++ ) {
 		URC_LoadMenuFile( va( "ui/%s", files[i] ) );

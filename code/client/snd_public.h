@@ -30,6 +30,7 @@ void S_Shutdown( void );
 void S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float minDist );
 void S_StartLocalSound( sfxHandle_t sfx, int channelNum );
 void S_StopSound( int entnum, int entchannel );
+void S_StopLocalSound( int channel );		// FAKK2: what S_StartLocalSound started on the channel
 // FAKK2: the EAX environment (eax_* in the SDK, 0 generic .. 25 psychotic) and its level, 0 to 1
 void S_SetReverb( int type, float level );
 

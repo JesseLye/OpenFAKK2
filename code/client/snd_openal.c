@@ -1583,6 +1583,18 @@ static void S_AL_StopSound( int entnum, int entchannel )
 
 /*
 =================
+S_AL_StopLocalSound
+
+FAKK2: local sounds are set up with entity -1 (S_AL_StartLocalSoundEx).
+=================
+*/
+static void S_AL_StopLocalSound( int channel )
+{
+	S_AL_StopSound( -1, channel );
+}
+
+/*
+=================
 S_AL_ClearLoopingSounds
 =================
 */
@@ -3022,6 +3034,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 	si->StartSound = S_AL_StartSound;
 	si->StartLocalSound = S_AL_StartLocalSound;
 	si->StopSound = S_AL_StopSound;
+	si->StopLocalSound = S_AL_StopLocalSound;
 	si->SetReverb = S_AL_SetReverb;
 	si->StartBackgroundTrack = S_AL_StartBackgroundTrack;
 	si->StopBackgroundTrack = S_AL_StopBackgroundTrack;

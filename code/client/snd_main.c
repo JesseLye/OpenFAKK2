@@ -103,6 +103,18 @@ void S_StopSound( int entnum, int entchannel )
 
 /*
 =================
+S_StopLocalSound
+=================
+*/
+void S_StopLocalSound( int channel )
+{
+	if( si.StopLocalSound ) {
+		si.StopLocalSound( channel );
+	}
+}
+
+/*
+=================
 S_SetReverb
 =================
 */

@@ -167,6 +167,7 @@ typedef struct
 	void (*StartSound)( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float minDist );
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
 	void (*StopSound)( int entnum, int entchannel );
+	void (*StopLocalSound)( int channel );
 	void (*SetReverb)( int type, float level );		// FAKK2: an EAX environment and how much of it
 	void (*StartBackgroundTrack)( const char *intro, const char *loop );
 	void (*StopBackgroundTrack)( void );

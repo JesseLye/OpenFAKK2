@@ -695,6 +695,19 @@ void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum ) {
 
 /*
 ==================
+S_Base_StopLocalSound
+
+FAKK2: local sounds play on the listener's entity.
+==================
+*/
+void S_Base_StopSound( int entityNum, int entchannel );
+
+void S_Base_StopLocalSound( int channel ) {
+	S_Base_StopSound( listener_number, channel );
+}
+
+/*
+==================
 S_SetReverb
 
 FAKK2: the environment the player is in (snd_reverb.c).
@@ -1654,6 +1667,7 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 	si->StartSound = S_Base_StartSound;
 	si->StartLocalSound = S_Base_StartLocalSound;
 	si->StopSound = S_Base_StopSound;
+	si->StopLocalSound = S_Base_StopLocalSound;
 	si->SetReverb = S_Base_SetReverb;
 	si->StartBackgroundTrack = S_Base_StartBackgroundTrack;
 	si->StopBackgroundTrack = S_Base_StopBackgroundTrack;
