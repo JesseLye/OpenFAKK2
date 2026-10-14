@@ -232,8 +232,12 @@ Not read, done another way:
   `s_reverb` defaults to 1 here. `s_setreverb [<type|name> [level]]` sets or lists the
   environments by hand (until the next trigger). Checked by trace on `fog` and by an
   offline simulation of the filter's arithmetic (decay times within 20% of the presets',
-  no clipping at full level); not by ear. The OpenAL backend ignores reverb (an EFX
-  auxiliary slot with the same presets is the obvious implementation).
+  no clipping at full level); not by ear. The OpenAL backend, which is the default, does
+  it the way the retail engine did: an EFX auxiliary effect slot holds an EAX reverb
+  effect (`AL_EFFECT_EAXREVERB`, or the standard reverb where a driver lacks it) set from
+  the same preset table, the slot's gain is the trigger's level (retail's "EAX effect
+  volume"), and only world sources send to it. Checked by trace on `fog` through four
+  environments and an `s_reverb` toggle, without AL errors; not by ear.
 - **Music** follows the retail engine's mood system, read from `fakk2.exe`. The
   soundtrack the game names in its configstring is a `.mus` file
   (`MUSIC_LoadSoundtrackFile`, `0x440be0`): `path <dir>` prefixes the files after it, a
@@ -258,9 +262,15 @@ Not read, done another way:
   backend. Not followed: the retail engine truncates fade times to whole seconds, and
   its fade-down of the game's volume starts from 1 rather than the current value. The
   retail console commands `loadsoundtrack <name>` and `playsong <mood> [fallback]`
-  exist, plus `music_info`. Checked by trace on `swamp1` and from the console; not by
-  ear. The OpenAL backend's version of this compiles but has not been
-  run (no OpenAL runtime on the test machine); the software mixer's has.
+  exist, plus `music_info`. Checked by trace on `swamp1` and from the console on both
+  sound backends; not by ear.
+- **Sound backends.** The build ships OpenAL Soft 1.24.3 (`OpenAL32.dll`, LGPL 2.1,
+  `code/thirdparty/libs/`) beside the executable and `s_useOpenAL` defaults to 1, so the
+  OpenAL backend is what plays; `s_useOpenAL 0` selects Quake III's software mixer, which
+  has everything the OpenAL one has (its reverb is the Freeverb above). The retail
+  engine's Miles Sound System had no counterpart to this choice. Quake III's default
+  sound, `sound/feedback/hit.wav`, is not in FAKK2; a sound that cannot be loaded is
+  silence on both backends.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at

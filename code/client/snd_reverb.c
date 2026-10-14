@@ -292,6 +292,11 @@ const char *S_ReverbName( int type ) {
 	return ( type >= 0 && type < REVERB_TYPES ) ? reverbNames[type] : "";
 }
 
+// for the OpenAL backend, which hands the preset to EFX
+const EFXEAXREVERBPROPERTIES *S_ReverbPreset( int type ) {
+	return &reverbPresets[( type >= 0 && type < REVERB_TYPES ) ? type : 0];
+}
+
 /*
 =================
 S_SetReverb_f

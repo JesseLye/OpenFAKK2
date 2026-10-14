@@ -29,6 +29,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "qal.h"
 
+// FAKK2: EFX, for the reverb
+#ifdef USE_INTERNAL_OPENAL_HEADERS
+#include "AL/efx.h"
+#elif defined(_MSC_VER) || defined(__APPLE__)
+#include <efx.h>
+#else
+#include <AL/efx.h>
+#endif
+#include "../thirdparty/openal-soft-1.24.3/include/AL/efx-presets.h"
+const EFXEAXREVERBPROPERTIES *S_ReverbPreset( int type );	// snd_reverb.c
+
 // Console variables specific to OpenAL
 cvar_t *s_alPrecache;
 cvar_t *s_alGain;
@@ -236,6 +247,8 @@ static sfxHandle_t S_AL_BufferFind(const char *filename)
 	return sfx;
 }
 
+static qboolean S_AL_GenBuffers(ALsizei numBuffers, ALuint *buffers, const char *name);
+
 /*
 =================
 S_AL_BufferUseDefault
@@ -244,7 +257,20 @@ S_AL_BufferUseDefault
 static void S_AL_BufferUseDefault(sfxHandle_t sfx)
 {
 	if(sfx == default_sfx)
-		Com_Error(ERR_FATAL, "Can't load default sound effect %s", knownSfx[sfx].filename);
+	{
+		// FAKK2 has no sound/feedback/hit.wav: a sound that cannot be loaded
+		// plays silence, as it does in the software mixer (sfx_t::defaultSound)
+		byte silence[ 2 ] = { 0 };
+
+		if(!S_AL_GenBuffers(1, &knownSfx[sfx].buffer, knownSfx[sfx].filename))
+			Com_Error(ERR_FATAL, "Can't create the default sound buffer");
+		qalBufferData(knownSfx[sfx].buffer, AL_FORMAT_MONO16, (void *)silence, 2, 22050);
+		if(qalGetError() != AL_NO_ERROR)
+			Com_Error(ERR_FATAL, "Can't fill the default sound buffer");
+		knownSfx[sfx].inMemory = qtrue;
+		Com_DPrintf( "default sound %s is silence\n", knownSfx[sfx].filename );
+		return;
+	}
 
 	Com_Printf( S_COLOR_YELLOW "WARNING: Using default sound for %s\n", knownSfx[sfx].filename);
 	knownSfx[sfx].isDefault = qtrue;
@@ -699,6 +725,142 @@ static qboolean S_AL_HearingThroughEntity( int entityNum )
 }
 
 /*
+=======================================================================
+FAKK2's reverb: an EFX auxiliary effect slot holding an EAX reverb set
+from the same OpenAL Soft presets the software mixer renders itself
+(snd_reverb.c). World sources send to the slot; local sources, music and
+the other streams do not. The retail engine (0x45d3d0) gave Miles the EAX
+room type and the level as the EAX effect volume; here the preset is the
+environment and the slot's gain is the level.
+=======================================================================
+*/
+static qboolean	alEfx;					// ALC_EXT_EFX is there and the slot exists
+static ALuint	alReverbSlot;
+static ALuint	alReverbEffect;
+static qboolean	alReverbEax;			// AL_EFFECT_EAXREVERB rather than AL_EFFECT_REVERB
+static int		alReverbType = -1;
+static float	alReverbLevel;
+
+static LPALGENEFFECTS					qalGenEffects;
+static LPALDELETEEFFECTS				qalDeleteEffects;
+static LPALEFFECTI						qalEffecti;
+static LPALEFFECTF						qalEffectf;
+static LPALEFFECTFV						qalEffectfv;
+static LPALGENAUXILIARYEFFECTSLOTS		qalGenAuxiliaryEffectSlots;
+static LPALDELETEAUXILIARYEFFECTSLOTS	qalDeleteAuxiliaryEffectSlots;
+static LPALAUXILIARYEFFECTSLOTI			qalAuxiliaryEffectSloti;
+static LPALAUXILIARYEFFECTSLOTF			qalAuxiliaryEffectSlotf;
+
+/*
+=================
+S_AL_ReverbInit
+=================
+*/
+static void S_AL_ReverbInit( ALCdevice *device )
+{
+	alEfx = qfalse;
+	alReverbType = -1;
+
+	if( !qalcIsExtensionPresent( device, ALC_EXT_EFX_NAME ) )
+	{
+		Com_Printf( "No ALC_EXT_EFX support, no reverb.\n" );
+		return;
+	}
+
+	qalGenEffects = (LPALGENEFFECTS) qalGetProcAddress( "alGenEffects" );
+	qalDeleteEffects = (LPALDELETEEFFECTS) qalGetProcAddress( "alDeleteEffects" );
+	qalEffecti = (LPALEFFECTI) qalGetProcAddress( "alEffecti" );
+	qalEffectf = (LPALEFFECTF) qalGetProcAddress( "alEffectf" );
+	qalEffectfv = (LPALEFFECTFV) qalGetProcAddress( "alEffectfv" );
+	qalGenAuxiliaryEffectSlots = (LPALGENAUXILIARYEFFECTSLOTS) qalGetProcAddress( "alGenAuxiliaryEffectSlots" );
+	qalDeleteAuxiliaryEffectSlots = (LPALDELETEAUXILIARYEFFECTSLOTS) qalGetProcAddress( "alDeleteAuxiliaryEffectSlots" );
+	qalAuxiliaryEffectSloti = (LPALAUXILIARYEFFECTSLOTI) qalGetProcAddress( "alAuxiliaryEffectSloti" );
+	qalAuxiliaryEffectSlotf = (LPALAUXILIARYEFFECTSLOTF) qalGetProcAddress( "alAuxiliaryEffectSlotf" );
+	if( !qalGenEffects || !qalDeleteEffects || !qalEffecti || !qalEffectf || !qalEffectfv ||
+		!qalGenAuxiliaryEffectSlots || !qalDeleteAuxiliaryEffectSlots ||
+		!qalAuxiliaryEffectSloti || !qalAuxiliaryEffectSlotf )
+	{
+		Com_Printf( "EFX functions missing, no reverb.\n" );
+		return;
+	}
+
+	S_AL_ClearError( qfalse );
+	qalGenEffects( 1, &alReverbEffect );
+	if( qalGetError() != AL_NO_ERROR )
+	{
+		Com_Printf( "Can't create an EFX effect, no reverb.\n" );
+		return;
+	}
+	qalEffecti( alReverbEffect, AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB );
+	alReverbEax = qalGetError() == AL_NO_ERROR;
+	if( !alReverbEax )
+	{
+		qalEffecti( alReverbEffect, AL_EFFECT_TYPE, AL_EFFECT_REVERB );
+		if( qalGetError() != AL_NO_ERROR )
+		{
+			qalDeleteEffects( 1, &alReverbEffect );
+			Com_Printf( "No EFX reverb effect, no reverb.\n" );
+			return;
+		}
+	}
+	qalGenAuxiliaryEffectSlots( 1, &alReverbSlot );
+	if( qalGetError() != AL_NO_ERROR )
+	{
+		qalDeleteEffects( 1, &alReverbEffect );
+		Com_Printf( "Can't create an EFX effect slot, no reverb.\n" );
+		return;
+	}
+	qalAuxiliaryEffectSlotf( alReverbSlot, AL_EFFECTSLOT_GAIN, 0.0f );
+	alEfx = qtrue;
+	Com_Printf( "EFX %s reverb ready.\n", alReverbEax ? "EAX" : "standard" );
+}
+
+/*
+=================
+S_AL_ReverbShutdown
+=================
+*/
+static void S_AL_ReverbShutdown( void )
+{
+	if( !alEfx )
+		return;
+	qalDeleteAuxiliaryEffectSlots( 1, &alReverbSlot );
+	qalDeleteEffects( 1, &alReverbEffect );
+	alEfx = qfalse;
+	alReverbType = -1;
+}
+
+/*
+=================
+S_AL_SrcSend
+
+Whether a source feeds the reverb: the world's sounds do, local sounds
+and the streams (music, cinematics, voice) do not. Sources are reused
+between those roles, so every setup says.
+=================
+*/
+static void S_AL_SrcSend( ALuint source, qboolean world )
+{
+	if( !alEfx )
+		return;
+	qalSource3i( source, AL_AUXILIARY_SEND_FILTER, world ? alReverbSlot : AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL );
+}
+
+/*
+=================
+S_AL_ReverbGain
+
+The slot's gain is the trigger's level; s_reverb 0 silences it.
+=================
+*/
+static void S_AL_ReverbGain( void )
+{
+	if( !alEfx || alReverbType < 0 )
+		return;
+	qalAuxiliaryEffectSlotf( alReverbSlot, AL_EFFECTSLOT_GAIN, s_reverb->integer ? alReverbLevel : 0.0f );
+}
+
+/*
 =================
 S_AL_SrcInit
 =================
@@ -833,6 +995,7 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 		qalSourcei(curSource->alSource, AL_SOURCE_RELATIVE, AL_FALSE);
 		qalSourcef(curSource->alSource, AL_ROLLOFF_FACTOR, 1.0f);
 	}
+	S_AL_SrcSend(curSource->alSource, !local);
 }
 
 /*
@@ -1317,12 +1480,81 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 =================
 S_AL_SetReverb
 
-FAKK2: not done for OpenAL yet (it would be an EFX auxiliary slot with the
-same presets the software mixer uses); the software mixer has it.
+FAKK2: the environment the player is in, as the EFX slot's effect, and
+how much of it, as the slot's gain.
 =================
 */
 static void S_AL_SetReverb( int type, float level )
 {
+	const EFXEAXREVERBPROPERTIES *p;
+	ALenum error;
+
+	// the mixer's record of it, for s_setreverb (its filter is not running)
+	S_ReverbSet( type, level );
+
+	if( !alEfx )
+		return;
+	if( level < 0 )
+		level = 0;
+	else if( level > 1 )
+		level = 1;
+
+	if( type != alReverbType )
+	{
+		p = S_ReverbPreset( type );
+		S_AL_ClearError( qfalse );
+		if( alReverbEax )
+		{
+			qalEffectf( alReverbEffect, AL_EAXREVERB_DENSITY, p->flDensity );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_DIFFUSION, p->flDiffusion );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_GAIN, p->flGain );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_GAINHF, p->flGainHF );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_GAINLF, p->flGainLF );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_DECAY_TIME, p->flDecayTime );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_DECAY_HFRATIO, p->flDecayHFRatio );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_DECAY_LFRATIO, p->flDecayLFRatio );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_REFLECTIONS_GAIN, p->flReflectionsGain );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_REFLECTIONS_DELAY, p->flReflectionsDelay );
+			qalEffectfv( alReverbEffect, AL_EAXREVERB_REFLECTIONS_PAN, p->flReflectionsPan );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_LATE_REVERB_GAIN, p->flLateReverbGain );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_LATE_REVERB_DELAY, p->flLateReverbDelay );
+			qalEffectfv( alReverbEffect, AL_EAXREVERB_LATE_REVERB_PAN, p->flLateReverbPan );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_ECHO_TIME, p->flEchoTime );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_ECHO_DEPTH, p->flEchoDepth );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_MODULATION_TIME, p->flModulationTime );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_MODULATION_DEPTH, p->flModulationDepth );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_AIR_ABSORPTION_GAINHF, p->flAirAbsorptionGainHF );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_HFREFERENCE, p->flHFReference );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_LFREFERENCE, p->flLFReference );
+			qalEffectf( alReverbEffect, AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, p->flRoomRolloffFactor );
+			qalEffecti( alReverbEffect, AL_EAXREVERB_DECAY_HFLIMIT, p->iDecayHFLimit );
+		}
+		else
+		{
+			qalEffectf( alReverbEffect, AL_REVERB_DENSITY, p->flDensity );
+			qalEffectf( alReverbEffect, AL_REVERB_DIFFUSION, p->flDiffusion );
+			qalEffectf( alReverbEffect, AL_REVERB_GAIN, p->flGain );
+			qalEffectf( alReverbEffect, AL_REVERB_GAINHF, p->flGainHF );
+			qalEffectf( alReverbEffect, AL_REVERB_DECAY_TIME, p->flDecayTime );
+			qalEffectf( alReverbEffect, AL_REVERB_DECAY_HFRATIO, p->flDecayHFRatio );
+			qalEffectf( alReverbEffect, AL_REVERB_REFLECTIONS_GAIN, p->flReflectionsGain );
+			qalEffectf( alReverbEffect, AL_REVERB_REFLECTIONS_DELAY, p->flReflectionsDelay );
+			qalEffectf( alReverbEffect, AL_REVERB_LATE_REVERB_GAIN, p->flLateReverbGain );
+			qalEffectf( alReverbEffect, AL_REVERB_LATE_REVERB_DELAY, p->flLateReverbDelay );
+			qalEffectf( alReverbEffect, AL_REVERB_AIR_ABSORPTION_GAINHF, p->flAirAbsorptionGainHF );
+			qalEffectf( alReverbEffect, AL_REVERB_ROOM_ROLLOFF_FACTOR, p->flRoomRolloffFactor );
+			qalEffecti( alReverbEffect, AL_REVERB_DECAY_HFLIMIT, p->iDecayHFLimit );
+		}
+		// a slot takes an effect's values when the effect is (re)attached
+		qalAuxiliaryEffectSloti( alReverbSlot, AL_EFFECTSLOT_EFFECT, alReverbEffect );
+		error = qalGetError();
+		if( error != AL_NO_ERROR )
+			Com_Printf( S_COLOR_RED "ERROR: setting reverb %s - %s\n", S_ReverbName( type ), S_AL_ErrorMsg( error ) );
+		alReverbType = type;
+		Com_DPrintf( "reverb: %s, level %.2f (EFX)\n", S_ReverbName( type ), level );
+	}
+	alReverbLevel = level;
+	S_AL_ReverbGain();
 }
 
 /*
@@ -1436,6 +1668,7 @@ static void S_AL_SrcLoop( alSrcPriority_t priority, sfxHandle_t sfx,
 	if( info->localSound || S_AL_HearingThroughEntity( entityNum ) )
 	{
 		curSource->local = qtrue;
+		S_AL_SrcSend(curSource->alSource, qfalse);
 
 		VectorClear(sorigin);
 
@@ -1445,6 +1678,7 @@ static void S_AL_SrcLoop( alSrcPriority_t priority, sfxHandle_t sfx,
 	else
 	{
 		curSource->local = qfalse;
+		S_AL_SrcSend(curSource->alSource, qtrue);
 
 		if(origin)
 			VectorCopy(origin, sorigin);
@@ -1786,6 +2020,7 @@ static void S_AL_AllocateStreamChannel(int stream, int entityNum)
         	qalSource3f(alsrc, AL_DIRECTION,       0.0, 0.0, 0.0);
         	qalSourcef (alsrc, AL_ROLLOFF_FACTOR,  0.0          );
         	qalSourcei (alsrc, AL_SOURCE_RELATIVE, AL_TRUE      );
+        	S_AL_SrcSend(alsrc, qfalse);
         }
 
         streamSourceHandles[stream] = cursrc;
@@ -2013,6 +2248,7 @@ static void S_AL_MusicSourceGet( void )
 	qalSource3f(musicSource, AL_DIRECTION,       0.0, 0.0, 0.0);
 	qalSourcef (musicSource, AL_ROLLOFF_FACTOR,  0.0          );
 	qalSourcei (musicSource, AL_SOURCE_RELATIVE, AL_TRUE      );
+	S_AL_SrcSend(musicSource, qfalse);
 }
 
 /*
@@ -2380,6 +2616,13 @@ void S_AL_Update( void )
 		s_alDopplerSpeed->modified = qfalse;
 	}
 
+	// FAKK2: s_reverb switches the effect slot
+	if(s_reverb->modified)
+	{
+		S_AL_ReverbGain();
+		s_reverb->modified = qfalse;
+	}
+
 	// Clear the modified flags on the other cvars
 	s_alGain->modified = qfalse;
 	s_volume->modified = qfalse;
@@ -2530,6 +2773,7 @@ void S_AL_Shutdown( void )
 	S_AL_StopBackgroundTrack( );
 	S_AL_SrcShutdown( );
 	S_AL_BufferShutdown( );
+	S_AL_ReverbShutdown( );
 
 	qalcDestroyContext(alContext);
 	qalcCloseDevice(alDevice);
@@ -2680,8 +2924,12 @@ qboolean S_AL_Init( soundInterface_t *si )
 		return qfalse;
 	}
 
-	// Create OpenAL context
-	alContext = qalcCreateContext( alDevice, NULL );
+	// Create OpenAL context; FAKK2: with a send for the reverb when EFX is there
+	{
+		ALCint attrs[] = { ALC_MAX_AUXILIARY_SENDS, 1, 0 };
+
+		alContext = qalcCreateContext( alDevice, qalcIsExtensionPresent( alDevice, ALC_EXT_EFX_NAME ) ? attrs : NULL );
+	}
 	if( !alContext )
 	{
 		QAL_Shutdown( );
@@ -2694,6 +2942,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 	// Initialize sources, buffers, music
 	S_AL_BufferInit( );
 	S_AL_SrcInit( );
+	S_AL_ReverbInit( alDevice );	// FAKK2
 
 	// Set up OpenAL parameters (doppler, etc)
 	qalDistanceModel(AL_INVERSE_DISTANCE_CLAMPED);
