@@ -923,8 +923,10 @@ static void TIKI_ApplySurfaceCommands( tiki_t *tiki, const tikiCommandList_t *cm
 				continue;
 			}
 			if ( !Q_stricmp( cmd->args[1], "shader" ) ) {
-				surface->numSkins = 0;
-				// further skins repeat the keyword: shader <first> shader <second>
+				// further skins repeat the keyword, on the line ("shader <first>
+				// shader <second>") or on lines of their own (obj_button.tik
+				// names its four, red and green, inactive and lit); the first
+				// named is skin 0
 				for ( k = 2 ; k < cmd->numArgs && surface->numSkins < TIKI_MAX_SKINS ; k++ ) {
 					if ( !Q_stricmp( cmd->args[k], "shader" ) ) {
 						continue;

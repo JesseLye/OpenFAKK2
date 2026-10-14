@@ -998,9 +998,27 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		return;
 	}
 
-	// a scene without a world (the inventory's windows) lights its entities
-	// with the flat ambient R_SetupEntityLighting gives it
-	R_SetupEntityLighting( &tr.refdef, ent );
+	// FAKK2 lights a TIKI model from the centre of its frame's bounds, not
+	// from its origin (fakk2.exe 0x48cff0), which keeps a model whose origin
+	// sits in a wall (the training room's door button, in the door frame)
+	// sampling the grid where the model is. A scene without a world (the
+	// inventory's windows) gets the flat ambient R_SetupEntityLighting gives it.
+	{
+		const tikiFrame_t	*frame = &frames[ent->e.frame];
+		float				escale = R_TikiEntityScale( &ent->e );
+		vec3_t				local, lightOrigin;
+
+		VectorScale( frame->localOrigin, escale, local );
+		if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
+			VectorCopy( ent->e.lightingOrigin, lightOrigin );
+		} else {
+			VectorCopy( ent->e.origin, lightOrigin );
+		}
+		VectorMA( lightOrigin, local[0], ent->e.axis[0], lightOrigin );
+		VectorMA( lightOrigin, local[1], ent->e.axis[1], lightOrigin );
+		VectorMA( lightOrigin, local[2], ent->e.axis[2], lightOrigin );
+		R_SetupEntityLighting( &tr.refdef, ent, lightOrigin );
+	}
 
 	for ( i = 0 ; i < numSurfaces ; i++ ) {
 		void		*surf;

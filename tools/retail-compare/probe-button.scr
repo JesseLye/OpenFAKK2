@@ -1,0 +1,17 @@
+probe:
+waitforplayer
+wait 25
+spawn Camera targetname probecam origin "-440 400 40" angles "5 0 0"
+wait .2
+cuecamera $probecam
+wait 1
+stuffcmd "screenshot"
+wait 1
+spawn Camera targetname probecam2 origin "1401 170 310" angles "12 -90 0"
+wait .2
+cuecamera $probecam2
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

@@ -526,7 +526,10 @@ What is implemented, and on what basis:
   for is loaded on first use, and the entity's frame and old frame are decoded and
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by
   the definition's `scale` and moved by its `origin`. Surfaces take the shader of the
-  skin the entity's surface flags select, and `MDL_SURFACE_NODRAW` hides one. Assumed:
+  skin the entity's surface flags select, and `MDL_SURFACE_NODRAW` hides one. A
+  surface's skins may be named on one `shader` line or on several (`obj_button.tik`
+  names red and green, inactive and lit, on four lines); the first named is skin 0.
+  Until that was read, each line replaced the last and every button was green. Assumed:
   that vertex normals use Quake III's two-angle encoding. The origin is added before
   scaling, as `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso
   animations and level of detail are not applied.
@@ -567,6 +570,26 @@ What is implemented, and on what basis:
 - **A scene without a world** (`RDF_NOWORLDMODEL`: the inventory's model windows)
   lights its TIKI models with the flat ambient Quake III gives such scenes; the TIKI
   path had skipped the lighting setup there and drew them black.
+- **The light grid** is 192 x 192 x 320 units a sample (`fakk2.exe` `0x4839c0`), not
+  Quake III's 64 x 64 x 128 (and the retail engine reads no `gridsize` key). With the
+  Quake III size no FAKK2 map's grid lump was the expected length, so "light grid
+  mismatch" dropped it and every model was lit with the flat ambient a world-less scene
+  gets, plus a minimum light add this port had made unconditional. The training room's
+  door button, whose origin is inside the door frame, came out twice as bright as retail.
+- **Entity lighting** follows `R_SetupEntityLighting` in the exe (`0x48ed10`) where it
+  differs from Quake III: only an entity the game flags `minlight` gets the 32-unit
+  minimum add, a `fullbright` entity skips the grid, a dynamic light reaches only its
+  radius (`radius * 7500 / d^2`) and does not bend the light direction, directed light is
+  held to 255 (scaling the ambient with it), and a `lightoffset` entity (a sentient
+  flashing when hit) adds its colour to the ambient. A TIKI model is lit from the centre
+  of its frame's bounds, not its origin (`0x48cff0`). `r_debugLight 2` prints every
+  entity's light origin, ambient, directed light and direction.
+- **Extra light** (the `betterlighting` render flag, which the player and actors carry) is
+  not done. Retail lights such a model per vertex from a six-sided light cube built from
+  the grid and the map's entity lights (the `ENTLIGHTS`, `ENTLIGHTSVIS` and `LIGHTDEFS`
+  lumps; `0x48e170`, `0x48d1d0`, `0x48d620`, `0x48e6e0`), so Julie and the trainer are
+  darker here than in retail where the room's lights reach them. Models without the flag
+  (the door button) match.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). Debug lines and sword
   swipes are accepted and not drawn.

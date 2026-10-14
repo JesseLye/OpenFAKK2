@@ -1695,9 +1695,13 @@ void R_LoadEntities( lump_t *l ) {
 	world_t	*w;
 
 	w = &s_worldData;
-	w->lightGridSize[0] = 64;
-	w->lightGridSize[1] = 64;
-	w->lightGridSize[2] = 128;
+	// FAKK2's light grid is 192 x 192 x 320 units a sample (fakk2.exe
+	// 0x4839c0), not Quake III's 64 x 64 x 128; with the Quake III size no
+	// FAKK2 map's grid lump was the expected length, "light grid mismatch"
+	// dropped it and every model was lit with the flat ambient instead
+	w->lightGridSize[0] = 192;
+	w->lightGridSize[1] = 192;
+	w->lightGridSize[2] = 320;
 	tr.hasSunFlare = qfalse;
 	tr.sunFlareInPortalSky = qfalse;
 
@@ -1757,7 +1761,8 @@ void R_LoadEntities( lump_t *l ) {
 			R_RemapShader(value, s, "0");
 			continue;
 		}
-		// check for a different grid size
+		// check for a different grid size (Quake III's key; the retail
+		// engine does not read it and no FAKK2 map has it)
 		if (!Q_stricmp(keyname, "gridsize")) {
 			sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
 			continue;

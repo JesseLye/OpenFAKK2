@@ -123,7 +123,7 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
+static void R_SetupEntityLightingGrid( trRefEntity_t *ent, const vec3_t origin ) {
 	vec3_t	lightOrigin;
 	int		pos[3];
 	int		i, j;
@@ -133,16 +133,7 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 	vec3_t	direction;
 	float	totalFactor;
 
-	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
-		// separate lightOrigins are needed so an object that is
-		// sinking into the ground can still be lit, and so
-		// multi-part models can be lit identically
-		VectorCopy( ent->e.lightingOrigin, lightOrigin );
-	} else {
-		VectorCopy( ent->e.origin, lightOrigin );
-	}
-
-	VectorSubtract( lightOrigin, tr.world->lightGridOrigin, lightOrigin );
+	VectorSubtract( origin, tr.world->lightGridOrigin, lightOrigin );
 	for ( i = 0 ; i < 3 ; i++ ) {
 		float	v;
 
@@ -253,8 +244,20 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent ) {
 LogLight
 ===============
 */
-static void LogLight( trRefEntity_t *ent ) {
+static void LogLight( trRefEntity_t *ent, const vec3_t origin ) {
 	int	max1, max2;
+
+	if ( r_debugLight->integer > 1 ) {
+		// every entity, with where it was lit from
+		ri.Printf( PRINT_ALL, "light: ent %d renderfx %x at %.0f %.0f %.0f lit at %.0f %.0f %.0f amb %.0f %.0f %.0f dir %.0f %.0f %.0f from %.2f %.2f %.2f (identityLight %.2f, grid %s, rdflags %x)\n",
+			ent->e.entityNumber, ent->e.renderfx, ent->e.origin[0], ent->e.origin[1], ent->e.origin[2],
+			origin[0], origin[1], origin[2],
+			ent->ambientLight[0], ent->ambientLight[1], ent->ambientLight[2],
+			ent->directedLight[0], ent->directedLight[1], ent->directedLight[2],
+			ent->lightDir[0], ent->lightDir[1], ent->lightDir[2], tr.identityLight,
+			tr.world && tr.world->lightGridData ? "yes" : "no", tr.refdef.rdflags );
+		return;
+	}
 
 	if ( !(ent->e.renderfx & RF_FIRST_PERSON ) ) {
 		return;
@@ -285,7 +288,7 @@ Calculates all the lighting values that will be used
 by the Calc_* functions
 =================
 */
-void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
+void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent, const vec3_t origin ) {
 	int				i;
 	dlight_t		*dl;
 	float			power;
@@ -294,7 +297,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	vec3_t			lightDir;
 	vec3_t			lightOrigin;
 
-	// lighting calculations 
+	// lighting calculations
 	if ( ent->lightingCalculated ) {
 		return;
 	}
@@ -303,7 +306,11 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	//
 	// trace a sample point down to find ambient light
 	//
-	if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
+	if ( origin ) {
+		// the model code knows where its model is lit from (a TIKI model
+		// at the centre of its frame's bounds)
+		VectorCopy( origin, lightOrigin );
+	} else if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
 		// separate lightOrigins are needed so an object that is
 		// sinking into the ground can still be lit, and so
 		// multi-part models can be lit identically
@@ -312,21 +319,30 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		VectorCopy( ent->e.origin, lightOrigin );
 	}
 
+	// This follows the retail renderer (fakk2.exe 0x48ed10) rather than
+	// Quake III where the two differ: a fullbright entity skips the grid,
+	// only an entity the game flags "minlight" gets the minimum add, a
+	// dynamic light reaches only as far as its radius and does not bend the
+	// light direction, directed light is held to 255, and a "lightoffset"
+	// entity adds its colour to the ambient light.
+
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
-	if ( !(refdef->rdflags & RDF_NOWORLDMODEL ) 
-		&& tr.world->lightGridData ) {
-		R_SetupEntityLightingGrid( ent );
+	if ( !(refdef->rdflags & RDF_NOWORLDMODEL )
+		&& tr.world->lightGridData
+		&& !(ent->e.renderfx & RF_FULLBRIGHT) ) {
+		R_SetupEntityLightingGrid( ent, lightOrigin );
 	} else {
-		ent->ambientLight[0] = ent->ambientLight[1] = 
+		ent->ambientLight[0] = ent->ambientLight[1] =
 			ent->ambientLight[2] = tr.identityLight * 150;
-		ent->directedLight[0] = ent->directedLight[1] = 
+		ent->directedLight[0] = ent->directedLight[1] =
 			ent->directedLight[2] = tr.identityLight * 150;
 		VectorCopy( tr.sunDirection, ent->lightDir );
 	}
 
-	// bonus items and view weapons have a fixed minimum add
-	if ( 1 /* ent->e.renderfx & RF_MINLIGHT */ ) {
-		// give everything a minimum light add
+	// view models and some items have a fixed minimum add; a model set
+	// into a dark place without it stays dark (the training room's door
+	// button, whose origin is inside the door frame)
+	if ( ent->e.renderfx & RF_MINLIGHT ) {
 		ent->ambientLight[0] += tr.identityLight * 32;
 		ent->ambientLight[1] += tr.identityLight * 32;
 		ent->ambientLight[2] += tr.identityLight * 32;
@@ -341,16 +357,37 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	for ( i = 0 ; i < refdef->num_dlights ; i++ ) {
 		dl = &refdef->dlights[i];
 		VectorSubtract( dl->origin, lightOrigin, dir );
-		d = VectorNormalize( dir );
-
-		power = DLIGHT_AT_RADIUS * ( dl->radius * dl->radius );
-		if ( d < DLIGHT_MINIMUM_RADIUS ) {
-			d = DLIGHT_MINIMUM_RADIUS;
+		d = VectorLength( dir );
+		if ( d > dl->radius ) {
+			continue;
 		}
-		d = power / ( d * d );
+		if ( d < 1 ) {
+			d = 1;
+		}
+		power = dl->radius * 7500.0f / ( d * d );
 
-		VectorMA( ent->directedLight, d, dl->color, ent->directedLight );
-		VectorMA( lightDir, d, dir, lightDir );
+		VectorMA( ent->directedLight, power, dl->color, ent->directedLight );
+	}
+
+	// directed light is held to 255, and the ambient light scaled with it
+	if ( ent->directedLight[0] > 255 || ent->directedLight[1] > 255 || ent->directedLight[2] > 255 ) {
+		d = ent->directedLight[0];
+		if ( ent->directedLight[1] > d ) {
+			d = ent->directedLight[1];
+		}
+		if ( ent->directedLight[2] > d ) {
+			d = ent->directedLight[2];
+		}
+		d = 255.0f / d;
+		VectorScale( ent->directedLight, d, ent->directedLight );
+		VectorScale( ent->ambientLight, d, ent->ambientLight );
+	}
+
+	// the game's light offset (a sentient flashing when hit) adds to the ambient
+	if ( ent->e.renderfx & RF_LIGHTOFFSET ) {
+		ent->ambientLight[0] += ent->e.shaderRGBA[0];
+		ent->ambientLight[1] += ent->e.shaderRGBA[1];
+		ent->ambientLight[2] += ent->e.shaderRGBA[2];
 	}
 
 	// clamp ambient
@@ -361,7 +398,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 	}
 
 	if ( r_debugLight->integer ) {
-		LogLight( ent );
+		LogLight( ent, lightOrigin );
 	}
 
 	// save out the byte packet version
@@ -391,7 +428,7 @@ int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, ve
 
 	Com_Memset(&ent, 0, sizeof(ent));
 	VectorCopy( point, ent.e.origin );
-	R_SetupEntityLightingGrid( &ent );
+	R_SetupEntityLightingGrid( &ent, point );
 	VectorCopy(ent.ambientLight, ambientLight);
 	VectorCopy(ent.directedLight, directedLight);
 	VectorCopy(ent.lightDir, lightDir);

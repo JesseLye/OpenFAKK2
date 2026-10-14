@@ -243,7 +243,7 @@ void R_MDRAddAnimSurfaces( trRefEntity_t *ent ) {
 	// set up lighting
 	if ( !personalModel || r_shadows->integer > 1 )
 	{
-		R_SetupEntityLighting( &tr.refdef, ent );
+		R_SetupEntityLighting( &tr.refdef, ent, NULL );
 	}
 
 	// fogNum?

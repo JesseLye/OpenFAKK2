@@ -337,7 +337,7 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 		return;
 	}
 	
-	R_SetupEntityLighting( &tr.refdef, ent );
+	R_SetupEntityLighting( &tr.refdef, ent, NULL );
 	R_DlightBmodel( bmodel );
 
 	for ( i = 0 ; i < bmodel->numSurfaces ; i++ ) {
