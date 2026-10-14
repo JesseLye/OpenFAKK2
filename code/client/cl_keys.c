@@ -1317,6 +1317,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	// FAKK2: while the inventory bar is up, the attack keys equip the item
+	// it shows instead of firing (cl_inv.c)
+	if ( INV_KeyEvent( key ) ) {
+		return;
+	}
+
 	// send the bound action
 	CL_ParseBinding( key, qtrue, time );
 

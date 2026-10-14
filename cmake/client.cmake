@@ -21,6 +21,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_tiki.c
     ${SOURCE_DIR}/client/cl_ui.c
     ${SOURCE_DIR}/client/cl_urc.c
+    ${SOURCE_DIR}/client/cl_inv.c
     ${SOURCE_DIR}/client/cl_viewer.c
     ${SOURCE_DIR}/client/cl_avi.c
     ${SOURCE_DIR}/client/libmumblelink.c

@@ -525,6 +525,19 @@ void URC_PopMenu( void );
 void URC_ClearMenus( void );
 void URC_CenterPrint( const char *text, float alpha );
 void URC_LocationPrint( int x, int y, const char *text, float alpha );
+// drawing helpers for the inventory (cl_inv.c), in 640x480 coordinates
+float URC_TextWidth( const char *font, const char *text );
+float URC_DrawText( const char *font, float x, float y, const char *text, const vec4_t color );
+void URC_DrawPic( float x, float y, float w, float h, qhandle_t shader, const vec4_t color );
+void URC_PlayAliasSound( const char *name );
+
+//
+// cl_inv.c: the inventory bar (global/inventory.scr)
+//
+void INV_Init( void );
+void INV_Shutdown( void );
+void INV_Draw( void );
+qboolean INV_KeyEvent( int key );
 void CL_ShutdownInput(void);
 void CL_SendCmd (void);
 void CL_ClearState (void);

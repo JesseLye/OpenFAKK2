@@ -1783,6 +1783,7 @@ void URC_Draw( void ) {
 		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1 );
 	}
 	URC_DrawPopup();
+	INV_Draw();
 
 	if ( clc.state == CA_ACTIVE ) {
 		URC_DrawPrint( &urc_centerprint );
@@ -2119,6 +2120,36 @@ static void URC_LoadMenu_f( void ) {
 	URC_LoadAllMenus();
 }
 
+/*
+=======================================================================
+
+HELPERS FOR THE INVENTORY BAR (cl_inv.c)
+
+=======================================================================
+*/
+
+float URC_TextWidth( const char *font, const char *text ) {
+	urcFont_t	*f = URC_LoadFont( font );
+
+	return f ? URC_StringWidth( f, text ) : 0;
+}
+
+float URC_DrawText( const char *font, float x, float y, const char *text, const vec4_t color ) {
+	urcFont_t	*f = URC_LoadFont( font );
+
+	return f ? URC_DrawString( f, x, y, text, color ) : 0;
+}
+
+void URC_DrawPic( float x, float y, float w, float h, qhandle_t shader, const vec4_t color ) {
+	if ( shader ) {
+		URC_DrawPicST( x, y, w, h, 0, 0, 1, 1, shader, color );
+	}
+}
+
+void URC_PlayAliasSound( const char *name ) {
+	URC_PlaySound( name );
+}
+
 void URC_Init( void ) {
 	ui_hud = Cvar_Get( "ui_hud", "1", CVAR_ARCHIVE );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
@@ -2130,6 +2161,7 @@ void URC_Init( void ) {
 	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
 	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
 	URC_LoadAllMenus();
+	INV_Init();
 
 	Cmd_AddCommand( "pushmenu", URC_PushMenu_f );
 	Cmd_AddCommand( "forcemenu", URC_PushMenu_f );
@@ -2149,6 +2181,7 @@ void URC_Shutdown( void ) {
 	if ( !urc_initialised ) {
 		return;
 	}
+	INV_Shutdown();
 	URC_ClearMenus();
 	Cmd_RemoveCommand( "pushmenu" );
 	Cmd_RemoveCommand( "forcemenu" );

@@ -66,6 +66,18 @@ void IN_MLookDown( void ) {
 	in_mlooking = qtrue;
 }
 
+// FAKK2's +cameralook (TAB): the retail client turns the camera about the
+// player with the mouse while it is held; not done here yet
+qboolean	in_cameraLook;
+
+void IN_CameraLookDown( void ) {
+	in_cameraLook = qtrue;
+}
+
+void IN_CameraLookUp( void ) {
+	in_cameraLook = qfalse;
+}
+
 void IN_MLookUp( void ) {
 	in_mlooking = qfalse;
 	if ( !cl_freelook->integer ) {
@@ -979,6 +991,24 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-speed", IN_SpeedUp);
 	Cmd_AddCommand ("+attack", IN_Button0Down);
 	Cmd_AddCommand ("-attack", IN_Button0Up);
+	// FAKK2's buttons, by their bit in usercmd_t.buttons (q_shared.h
+	// BUTTON_*_BITINDEX); default.cfg binds +attackleft, +attackright and +use
+	Cmd_AddCommand ("+attackright", IN_Button0Down);
+	Cmd_AddCommand ("-attackright", IN_Button0Up);
+	Cmd_AddCommand ("+attackleft", IN_Button1Down);
+	Cmd_AddCommand ("-attackleft", IN_Button1Up);
+	Cmd_AddCommand ("+sneak", IN_Button2Down);
+	Cmd_AddCommand ("-sneak", IN_Button2Up);
+	Cmd_AddCommand ("+run", IN_Button3Down);
+	Cmd_AddCommand ("-run", IN_Button3Up);
+	Cmd_AddCommand ("+holsterweapon", IN_Button4Down);
+	Cmd_AddCommand ("-holsterweapon", IN_Button4Up);
+	Cmd_AddCommand ("+use", IN_Button5Down);
+	Cmd_AddCommand ("-use", IN_Button5Up);
+	// the retail client's camera look (TAB): the mouse turns the camera about
+	// the player; not done here, the key must not reach the server as chat
+	Cmd_AddCommand ("+cameralook", IN_CameraLookDown);
+	Cmd_AddCommand ("-cameralook", IN_CameraLookUp);
 	Cmd_AddCommand ("+button0", IN_Button0Down);
 	Cmd_AddCommand ("-button0", IN_Button0Up);
 	Cmd_AddCommand ("+button1", IN_Button1Down);
@@ -1056,6 +1086,20 @@ void CL_ShutdownInput(void)
 	Cmd_RemoveCommand("-speed");
 	Cmd_RemoveCommand("+attack");
 	Cmd_RemoveCommand("-attack");
+	Cmd_RemoveCommand("+attackright");
+	Cmd_RemoveCommand("-attackright");
+	Cmd_RemoveCommand("+attackleft");
+	Cmd_RemoveCommand("-attackleft");
+	Cmd_RemoveCommand("+sneak");
+	Cmd_RemoveCommand("-sneak");
+	Cmd_RemoveCommand("+run");
+	Cmd_RemoveCommand("-run");
+	Cmd_RemoveCommand("+holsterweapon");
+	Cmd_RemoveCommand("-holsterweapon");
+	Cmd_RemoveCommand("+use");
+	Cmd_RemoveCommand("-use");
+	Cmd_RemoveCommand("+cameralook");
+	Cmd_RemoveCommand("-cameralook");
 	Cmd_RemoveCommand("+button0");
 	Cmd_RemoveCommand("-button0");
 	Cmd_RemoveCommand("+button1");

@@ -567,6 +567,23 @@ What is implemented, and on what basis:
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). Debug lines and sword
   swipes are accepted and not drawn.
+- **The player's buttons and the inventory bar.** `default.cfg` binds `+attackleft`,
+  `+attackright`, `+use` and `+cameralook`, which Quake III's client does not know, so
+  the keys fired nothing (an unknown command goes to the server as chat). The client
+  registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
+  `+attackleft` 1, `+sneak` 2, `+run` 3, `+holsterweapon` 4, `+use` 5) and `+cameralook`
+  as a client flag that does nothing yet (retail turns the camera about the player
+  with the mouse while it is held). The number keys and the wheel are `warpinv <slot>`,
+  `nextinv` and `previnv`, which the retail client handles itself (`0x408dc0`):
+  `global/inventory.scr` defines the slots and their items, the bar shows the slot's
+  items the player carries (named by the player state's `inventory_name_index`
+  through the item config strings), and while it is up the attack keys equip the
+  highlighted item by sending the game `use "<item>" lefthand|righthand|dualhand`
+  (`0x409e50`, `0x40a090`), or a bare `use "<item>"` for one that is used; the bar goes
+  away five seconds after its last change. OpenFAKK2 does the same in `cl_inv.c`,
+  drawing the slot buttons and item frames from the script's shaders; not done: the
+  turning item models in the frames, the ammo bars, the arrow and wheel navigation
+  inside the bar, and the full `inventory` screen (here `inventory` toggles the bar).
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for
