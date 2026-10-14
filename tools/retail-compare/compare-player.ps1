@@ -59,7 +59,7 @@ $homeMaps = Join-Path $Sandbox 'home\fakk\maps'
 New-Item -ItemType Directory -Force $homeMaps | Out-Null
 Copy-Item $probeFile "$homeMaps\$Probe.scr" -Force
 Remove-Item "$ourLog.stdout", "$ourLog.stderr" -ErrorAction SilentlyContinue
-$arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$(Join-Path $Sandbox 'home')`" +set developer 1 +set sv_testplayer 1 $Extra +map $Map $after"
+$arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$(Join-Path $Sandbox 'home')`" +set com_abnormalExitDialog 0 +set developer 1 +set sv_testplayer 1 $Extra +map $Map $after"
 $p = Start-Process -FilePath "$EngineBin\openfakk2ded.exe" -WorkingDirectory $EngineBin -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput "$ourLog.stdout" -RedirectStandardError "$ourLog.stderr"
 $done = Wait-ForMarker $p @("$ourLog.stdout", "$ourLog.stderr") $Secs
 $exited = $p.HasExited

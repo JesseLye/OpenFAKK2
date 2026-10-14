@@ -263,6 +263,13 @@ void Sys_InitPIDFile( const char *gamedir ) {
 		char message[1024];
 		char modName[MAX_OSPATH];
 
+		// a harness that stops the game at a timeout leaves the pid file
+		// behind, and the next start would wait on this dialog for ever:
+		// +set com_abnormalExitDialog 0 starts as normal instead
+		if( !Cvar_VariableIntegerValue( "com_abnormalExitDialog" ) ) {
+			return;
+		}
+
 		FS_GetModDescription( gamedir, modName, sizeof ( modName ) );
 		Q_CleanStr( modName );
 

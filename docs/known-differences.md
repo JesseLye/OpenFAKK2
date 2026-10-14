@@ -288,6 +288,10 @@ Not read, done another way:
   it is drawn on a dark translucent sheet rather than the default shader's black.
 - **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets
   it does not leave the next normal run without a mouse.
+- **`com_abnormalExitDialog 0`** (a startup cvar, default 1) skips ioquake3's "didn't
+  exit properly, start in safe mode?" dialog that a stale pid file brings up after the
+  game was stopped rather than quit; the harness and debugging launches pass it, since
+  the dialog blocked those runs before any output.
 - **Filled rectangles.** FAKK2's `white` shader (`scripts/sprites.shader`) is additive,
   so Quake III's `SCR_FillRect` with it could never darken anything: the console sheet,
   a menu's `bgfill`, the fade to black. Fills go through the renderer's own

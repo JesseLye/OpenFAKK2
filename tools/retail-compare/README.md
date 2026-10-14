@@ -53,6 +53,10 @@ A probe must end with `pendingevents`; that is how the script knows it has finis
 runs the OpenFAKK2 client in a window against the retail data, copies its console log
 to `build\compare\client.log` (`-Name` changes the name) and stops it after `-Secs`
 seconds if it has not quit. Screenshots land in `build\sandbox\home\fakk\screenshots`.
+A run stopped that way leaves ioquake3's pid file behind, which would make the next
+start wait on the "didn't exit properly, start in safe mode?" dialog; the script passes
+`+set com_abnormalExitDialog 0`, which skips the dialog and starts as normal. Use the
+same when launching the game by hand from a sandbox a harness run has used.
 
 `-Run "+map zoo +wait 900 +screenshotJPEG +wait 10 +quit"` joins a local game instead:
 the client game module draws the level from the game's camera. The module is looked for
