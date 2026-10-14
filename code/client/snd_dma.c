@@ -695,6 +695,21 @@ void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum ) {
 
 /*
 ==================
+S_SetReverb
+
+FAKK2: the environment the player is in (snd_reverb.c).
+==================
+*/
+void S_Base_SetReverb( int type, float level ) {
+	if ( !s_soundStarted ) {
+		return;
+	}
+	S_ReverbInit( dma.speed );
+	S_ReverbSet( type, level );
+}
+
+/*
+==================
 S_StopSound
 
 FAKK2: stops what an entity plays on a channel; CHAN_AUTO stops all of
@@ -1593,6 +1608,7 @@ void S_Base_Shutdown( void ) {
 
 	SNDDMA_Shutdown();
 	SND_shutdown();
+	S_ReverbShutdown();
 
 	s_soundStarted = 0;
 	s_numSfx = 0;
@@ -1638,6 +1654,7 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 	si->StartSound = S_Base_StartSound;
 	si->StartLocalSound = S_Base_StartLocalSound;
 	si->StopSound = S_Base_StopSound;
+	si->SetReverb = S_Base_SetReverb;
 	si->StartBackgroundTrack = S_Base_StartBackgroundTrack;
 	si->StopBackgroundTrack = S_Base_StopBackgroundTrack;
 	si->RawSamples = S_Base_RawSamples;

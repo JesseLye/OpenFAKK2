@@ -70,6 +70,16 @@ void				S_SoundInfo_f( void );
 const soundInfo_t	*S_SoundInfoForName( const char *name );
 float				S_SoundGain( float minDist, float dist );
 
+// FAKK2's reverb for the software mixer (snd_reverb.c)
+void		S_ReverbInit( int rate );
+void		S_ReverbShutdown( void );
+void		S_ReverbSet( int type, float level );
+qboolean	S_ReverbActive( void );
+void		S_ReverbProcess( portable_samplepair_t *paint, const portable_samplepair_t *send, int count );
+const char	*S_ReverbName( int type );
+void		S_SetReverb_f( void );
+extern cvar_t	*s_reverb;
+
 typedef struct sfx_s {
 	sndBuffer		*soundData;
 	qboolean		defaultSound;			// couldn't be loaded, so use buzz
@@ -157,6 +167,7 @@ typedef struct
 	void (*StartSound)( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float minDist );
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
 	void (*StopSound)( int entnum, int entchannel );
+	void (*SetReverb)( int type, float level );		// FAKK2: an EAX environment and how much of it
 	void (*StartBackgroundTrack)( const char *intro, const char *loop );
 	void (*StopBackgroundTrack)( void );
 	void (*RawSamples)(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);

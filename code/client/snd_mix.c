@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 
 static portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
+static portable_samplepair_t sendbuffer[PAINTBUFFER_SIZE];	// FAKK2: the world sounds alone, for the reverb
 static int snd_vol;
 
 int*     snd_p;  
@@ -516,6 +517,8 @@ void S_PaintChannels( int endtime ) {
 	sfx_t	*sc;
 	int		ltime, count;
 	int		sampleOffset;
+	int		pass;
+	qboolean	reverb = s_reverb->integer && S_ReverbActive();
 
 	if(s_muted->integer)
 		snd_vol = 0;
@@ -531,26 +534,40 @@ void S_PaintChannels( int endtime ) {
 			end = s_paintedtime + PAINTBUFFER_SIZE;
 		}
 
-		// clear the paint buffer and mix any raw samples...
+		// clear the paint buffer
 		Com_Memset(paintbuffer, 0, sizeof (paintbuffer));
-		for (stream = 0; stream < MAX_RAW_STREAMS; stream++) {
-			if ( s_rawend[stream] >= s_paintedtime ) {
-				// copy from the streaming sound source
-				const portable_samplepair_t *rawsamples = s_rawsamples[stream];
-				const int stop = (end < s_rawend[stream]) ? end : s_rawend[stream];
-				for ( i = s_paintedtime ; i < stop ; i++ ) {
-					const int s = i&(MAX_RAW_SAMPLES-1);
-					paintbuffer[i-s_paintedtime].left += rawsamples[s].left;
-					paintbuffer[i-s_paintedtime].right += rawsamples[s].right;
+
+		// FAKK2: the world's sounds go in first, so that what is in the
+		// buffer after them can feed the reverb; local sounds and the raw
+		// streams (music, cinematics, voice) come after and stay dry
+		for ( pass = 0 ; pass < 2 ; pass++ ) {
+		if ( pass == 1 ) {
+			if ( reverb ) {
+				Com_Memcpy( sendbuffer, paintbuffer, ( end - s_paintedtime ) * sizeof( paintbuffer[0] ) );
+			}
+			// mix any raw samples...
+			for (stream = 0; stream < MAX_RAW_STREAMS; stream++) {
+				if ( s_rawend[stream] >= s_paintedtime ) {
+					// copy from the streaming sound source
+					const portable_samplepair_t *rawsamples = s_rawsamples[stream];
+					const int stop = (end < s_rawend[stream]) ? end : s_rawend[stream];
+					for ( i = s_paintedtime ; i < stop ; i++ ) {
+						const int s = i&(MAX_RAW_SAMPLES-1);
+						paintbuffer[i-s_paintedtime].left += rawsamples[s].left;
+						paintbuffer[i-s_paintedtime].right += rawsamples[s].right;
+					}
 				}
 			}
 		}
 
 		// paint in the channels.
 		ch = s_channels;
-		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) {		
+		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) {
 			if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 )) {
 				continue;
+			}
+			if ( ( pass == 0 ) == ( ch->fullVolume != qfalse ) ) {
+				continue;		// world sounds in the first pass, local ones in the second
 			}
 
 			ltime = s_paintedtime;
@@ -566,7 +583,7 @@ void S_PaintChannels( int endtime ) {
 				count = sc->soundLength - sampleOffset;
 			}
 
-			if ( count > 0 ) {	
+			if ( count > 0 ) {
 				if( sc->soundCompressionMethod == 1) {
 					S_PaintChannelFromADPCM		(ch, sc, count, sampleOffset, ltime - s_paintedtime);
 				} else if( sc->soundCompressionMethod == 2) {
@@ -578,8 +595,11 @@ void S_PaintChannels( int endtime ) {
 				}
 			}
 		}
+		if ( pass == 1 ) {
+			break;
+		}
 
-		// paint in the looped channels.
+		// paint in the looped channels (world sounds, all of them)
 		ch = loop_channels;
 		for ( i = 0; i < numLoopChannels ; i++, ch++ ) {		
 			if ( !ch->thesfx || (!ch->leftvol && !ch->rightvol )) {
@@ -616,6 +636,11 @@ void S_PaintChannels( int endtime ) {
 					ltime += count;
 				}
 			} while ( ltime < end);
+		}
+		}	// pass
+
+		if ( reverb ) {
+			S_ReverbProcess( paintbuffer, sendbuffer, end - s_paintedtime );
 		}
 
 		// transfer out according to DMA format

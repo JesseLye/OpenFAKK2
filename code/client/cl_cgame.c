@@ -594,6 +594,7 @@ static void CL_CG_S_UpdateEntity( int entityNum, const vec3_t origin, const vec3
 }
 
 static void CL_CG_S_SetReverb( int reverb_type, float reverb_level ) {
+	S_SetReverb( reverb_type, reverb_level );
 }
 
 static void CL_CG_S_SetGlobalAmbientVolumeLevel( float volume ) {

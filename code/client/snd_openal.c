@@ -1315,6 +1315,18 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 
 /*
 =================
+S_AL_SetReverb
+
+FAKK2: not done for OpenAL yet (it would be an EFX auxiliary slot with the
+same presets the software mixer uses); the software mixer has it.
+=================
+*/
+static void S_AL_SetReverb( int type, float level )
+{
+}
+
+/*
+=================
 S_AL_StopSound
 
 FAKK2: stops what an entity plays on a channel; CHAN_AUTO stops all of
@@ -2761,6 +2773,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 	si->StartSound = S_AL_StartSound;
 	si->StartLocalSound = S_AL_StartLocalSound;
 	si->StopSound = S_AL_StopSound;
+	si->SetReverb = S_AL_SetReverb;
 	si->StartBackgroundTrack = S_AL_StartBackgroundTrack;
 	si->StopBackgroundTrack = S_AL_StopBackgroundTrack;
 	si->RawSamples = S_AL_RawSamples;

@@ -211,9 +211,29 @@ Not read, done another way:
   (the retail rule has not been read); the OpenAL backend mutes a sound beyond 64 minimum
   distances rather than holding 1/64; the `.mp3` dialog files (1015 of them) are decoded
   whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
-  through Miles (`0x45bf00` sends them down a separate path); reverb and ambient-volume
+  through Miles (`0x45bf00` sends them down a separate path); ambient-volume
   calls are ignored; looping sounds are keyed by their
   order in the frame. `s_soundinfo [name]` prints the table's size or a name's entry.
+- **Reverb.** The game's `trigger_reverb` entities (placed by the level's `maps/<map>.snd`
+  sound-manager file; 28 levels have them, `swamp1` and `training` do not) put an EAX
+  environment number (`eax_generic` 0 to `eax_psychotic` 25) and a level in the player
+  state, and the client game module passes them to `S_SetReverb` when they change. The
+  retail engine (`0x45d3d0`) hands the number to Miles as the EAX room type and the
+  level as the EAX effect volume, only when `s_reverb` is 1 (its default was 0) and the
+  sound provider is EAX, so most players never heard it. OpenFAKK2 renders it itself in
+  the software mixer (`snd_reverb.c`): the 26 environments are OpenAL Soft's EFX presets
+  for them (`efx-presets.h`), played through a Freeverb-style late reverb (eight comb
+  filters and four allpasses per channel, Jezar's tunings scaled to the output rate),
+  with the combs' feedback set for the preset's decay time, their damping from its
+  high-frequency decay ratio, a pre-delay of its reflection and late-reverb delays, and a
+  wet level of its gain times its late-reverb gain times the trigger's level (times
+  Freeverb's output scale, capped so `underwater` and `psychotic` do not clip). Only the
+  world's sounds feed it; local sounds, music, cinematics and dialog streams stay dry.
+  `s_reverb` defaults to 1 here. `s_setreverb [<type|name> [level]]` sets or lists the
+  environments by hand (until the next trigger). Checked by trace on `fog` and by an
+  offline simulation of the filter's arithmetic (decay times within 20% of the presets',
+  no clipping at full level); not by ear. The OpenAL backend ignores reverb (an EFX
+  auxiliary slot with the same presets is the obvious implementation).
 - **Music** follows the retail engine's mood system, read from `fakk2.exe`. The
   soundtrack the game names in its configstring is a `.mus` file
   (`MUSIC_LoadSoundtrackFile`, `0x440be0`): `path <dir>` prefixes the files after it, a

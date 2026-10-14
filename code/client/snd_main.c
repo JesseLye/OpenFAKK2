@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 cvar_t *s_volume;
 cvar_t *s_muted;
 cvar_t *s_musicVolume;
+cvar_t *s_reverb;		// FAKK2
 cvar_t *s_doppler;
 cvar_t *s_backend;
 cvar_t *s_muteWhenMinimized;
@@ -97,6 +98,18 @@ void S_StopSound( int entnum, int entchannel )
 {
 	if( si.StopSound ) {
 		si.StopSound( entnum, entchannel );
+	}
+}
+
+/*
+=================
+S_SetReverb
+=================
+*/
+void S_SetReverb( int type, float level )
+{
+	if( si.SetReverb ) {
+		si.SetReverb( type, level );
 	}
 }
 
@@ -493,6 +506,7 @@ void S_Init( void )
 
 	s_volume = Cvar_Get( "s_volume", "0.8", CVAR_ARCHIVE );
 	s_musicVolume = Cvar_Get( "s_musicvolume", "0.60", CVAR_ARCHIVE );	// FAKK2's default
+	s_reverb = Cvar_Get( "s_reverb", "1", CVAR_ARCHIVE );	// FAKK2: retail defaulted to 0, needing an EAX card
 	s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 	s_doppler = Cvar_Get( "s_doppler", "1", CVAR_ARCHIVE );
 	s_backend = Cvar_Get( "s_backend", "", CVAR_ROM );
@@ -514,6 +528,7 @@ void S_Init( void )
 		Cmd_AddCommand( "s_stop", S_StopAllSounds );
 		Cmd_AddCommand( "s_info", S_SoundInfo );
 		Cmd_AddCommand( "s_soundinfo", S_SoundInfo_f );	// FAKK2
+		Cmd_AddCommand( "s_setreverb", S_SetReverb_f );	// FAKK2
 		MUSIC_Init( );
 
 		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH );
@@ -563,6 +578,8 @@ void S_Shutdown( void )
 	Cmd_RemoveCommand( "s_list" );
 	Cmd_RemoveCommand( "s_stop" );
 	Cmd_RemoveCommand( "s_info" );
+	Cmd_RemoveCommand( "s_soundinfo" );
+	Cmd_RemoveCommand( "s_setreverb" );
 
 	S_CodecShutdown( );
 }
