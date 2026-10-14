@@ -47,6 +47,10 @@ the game's volume starts from 1 rather than the current value.
 #define MUSIC_FIRST_STREAM	( MAX_RAW_STREAMS - MUSIC_HANDLES )	// raw streams the handles use
 #define MUSIC_LEAD_MS		250		// how far ahead of real time a handle is fed
 #define MUSIC_RESYNC_MS		500		// further behind than this, a handle skips ahead
+#define MUSIC_CHUNK_MS		50		// fed in pieces at least this long: the OpenAL
+									// backend queues each piece as a buffer and holds
+									// 20, so a piece a frame at a high frame rate
+									// overflowed it and dropped samples
 #define MUSIC_FEED_BYTES	16384
 
 #define SONG_LOOP			1
@@ -528,7 +532,7 @@ static void MUSIC_FeedHandle( int h, float gain ) {
 		target = handle->playedFrames + info->rate * MUSIC_LEAD_MS / 1000;
 	}
 
-	while ( handle->playedFrames < target ) {
+	while ( target - handle->playedFrames >= info->rate * MUSIC_CHUNK_MS / 1000 ) {
 		want = target - handle->playedFrames;
 		if ( want > (int)( sizeof( buf ) / frameBytes ) ) {
 			want = sizeof( buf ) / frameBytes;
