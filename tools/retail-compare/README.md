@@ -44,6 +44,14 @@ retail game again. Choose the probe with `-Probe`:
   `probe-sling-down` does the same after holding `+lookdown`; the test player cannot
   pitch, so that one is for the real client (`run-client.ps1 -Run "+map zoo +script
   thread probe-sling-down.scr::probe"`).
+- `probe-gaspod-down` gives the gas sling and its ammo (`$player ammo "Gas Pod" 5`, since
+  the sling starts empty), fires it after 0.6 s of `+lookdown`, and reads the pod's slot
+  every 0.05 s because it explodes where it lands. Real client only; it is the regression
+  probe for the trace owner rule (the pod parked in Julie's chest before the fix).
+- `probe-walk-jump` walks two seconds, jumps, lands and stops, reading the player every
+  0.1 s through each slow-down. On the headless test player the final position reads 4 to
+  6 units short of retail (see `docs/known-differences.md`, "With scripted input");
+  `-Extra "+set sv_fps 40"` closes it.
 
 `-RetailTwice` runs the retail game a second time in place of OpenFAKK2. The game seeds
 its random numbers from the clock, so retail differs from itself on some maps; this shows

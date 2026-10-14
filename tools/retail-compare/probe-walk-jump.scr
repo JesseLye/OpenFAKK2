@@ -1,0 +1,52 @@
+probe:
+waitforplayer
+// Walk forward for two seconds, jump, land still walking, then let go and stop. The player
+// is read every 0.1 s through the jump wind-up, the landing and the stop, where ground
+// friction acts: on the headless test player (one command per 50 ms server frame) each
+// slow-down reads a unit or two short of retail, see docs/known-differences.md.
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "+forward"
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "+moveup"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "-moveup"
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.7
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+stuffcmd "-forward"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

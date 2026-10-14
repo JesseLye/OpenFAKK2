@@ -492,7 +492,22 @@ On `zoo`:
 - Before walking, all 18 fields `whatis` prints for the player match retail.
 - After walking, 17 match. The position differs by 2.0 units after 275 travelled
   (retail x = -2077.05, OpenFAKK2 x = -2079.06), under half a server frame of movement.
-  Probably the key press landing in a different part of the frame; not investigated.
+
+That gap is the harness, not the game. `probe-walk-jump.scr` (walk two seconds, jump,
+land, stop, player read every 0.1 s) shows every speed agreeing with retail: 91 u/s
+walking, a 400 u/s jump carrying 160 u/s forward, gravity 800, the same animations at
+the same times. The shortfall appears only while she slows down on the ground: 1 to 2
+units at each of the jump wind-up, the landing and the stop, 4 to 6 in all (retail ends
+at x = -1954.84 to -1956.16 over three runs, ours at -1960.45). Ground friction is
+integrated per movement command (`PM_Friction` in `bg_pmove.c`, `drop = control *
+pm_friction * frametime`), and the headless test player builds one command per server
+frame (`SV_TestPlayer_Frame`, `sv_fps` 20, 50 ms) where the retail client builds one per
+rendered frame. The stopping distances back this up: retail covers 9.08 units from 91 u/s
+to a stop, which the per-command model gives for 30 to 40 fps; ours at 20 Hz covers 7.54,
+the model's 7.63. At `sv_fps 40` ours stops at -1954.26 and through the real client at
+-1957.14, both inside retail's spread. What remains open is the real client's `cl_run`:
+ours defaults it to 1 (`cl_main.c`) and runs with `+forward` alone where retail walks;
+whether `fakk2.exe` defaults it to 0 has not been read from the binary.
 
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
