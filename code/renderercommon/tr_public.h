@@ -76,6 +76,8 @@ typedef struct {
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
+	// FAKK2: the size of a shader's first image, for the UI's tiled pictures
+	void	(*ShaderImageSize)( qhandle_t hShader, int *width, int *height );
 	void	(*LoadWorld)( const char *name );
 
 	// the vis data is a large enough block of data that we go to the trouble

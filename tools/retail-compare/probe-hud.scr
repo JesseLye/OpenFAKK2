@@ -1,0 +1,34 @@
+// Sets Julie's health and water to a run of values and screenshots the HUD at
+// each, for comparing the health and water gauges with OpenFAKK2's.
+// Retail: run-retail-client.ps1 -Map training -Secs 55 -After "+script thread probe-hud.scr::probe"
+// Ours (after a +wait that lets the map load) drop the waitforplayer.
+probe:
+waitforplayer
+wait 25
+$player health 100
+$player waterpower 100
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+$player health 75
+$player waterpower 75
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+$player health 50
+$player waterpower 50
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+$player health 25
+$player waterpower 25
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+$player health 5
+$player waterpower 5
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

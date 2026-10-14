@@ -1417,6 +1417,8 @@ LIGHTS
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent, const vec3_t origin );
 
+void RE_ShaderImageSize( qhandle_t hShader, int *width, int *height );
+
 // tr_entlight.c
 void R_LoadEntLights( world_t *w, const byte *fileBase, lump_t *l );
 void R_LoadEntLightsVis( world_t *w, const byte *fileBase, lump_t *l );

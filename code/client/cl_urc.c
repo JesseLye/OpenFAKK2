@@ -764,6 +764,25 @@ static void URC_FillRect( float x, float y, float w, float h, const vec4_t color
 	SCR_FillRect( x, y, w, h, color );
 }
 
+/*
+=================
+URC_TileST
+
+The texture coordinates that lay a shader's image over a w x h widget at
+the image's own size, from the top left: FAKK2's UI tiles its "tileshader"
+pictures rather than stretching them.
+=================
+*/
+static void URC_TileST( qhandle_t shader, float w, float h, float *s, float *t ) {
+	int		iw = 0, ih = 0;
+
+	if ( re.ShaderImageSize ) {
+		re.ShaderImageSize( shader, &iw, &ih );
+	}
+	*s = iw > 0 ? w / iw : 1;
+	*t = ih > 0 ? h / ih : 1;
+}
+
 static void URC_DrawPicST( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t shader, const vec4_t color ) {
 	re.SetColor( color );
 	SCR_AdjustFrom640( &x, &y, &w, &h );
@@ -1316,7 +1335,10 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 	Vector4Copy( w->fgcolor, color );
 	color[3] *= alpha;
 	if ( w->tileShader ) {
-		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, w->tileShader, color );
+		float	s1, t1;
+
+		URC_TileST( w->tileShader, wd, ht, &s1, &t1 );
+		URC_DrawPicST( x, y, wd, ht, 0, 0, s1, t1, w->tileShader, color );
 	}
 	shader = w->shader;
 	if ( onTop && w->hoverShader && ( w - urc_widgets ) == urc_hoverWidget ) {
@@ -1387,12 +1409,21 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 		barShader = ( w->statFlash && cls.realtime - w->statChangeTime < 500 ) ? w->statFlash :
 			( w->statTile ? w->statTile : w->statShader );
 		if ( barShader && frac > 0 ) {
+			// a "statbar_tileshader" is laid over the widget at the image's own
+			// size from the top left (the health and water gauges are 64x128
+			// images whose arcs fill the top 72 rows of a 64x72 widget) and the
+			// drained part is cut off; a "statbar_shader" is stretched over it
+			float	s1 = 1, t1 = 1;
+
+			if ( barShader != w->statShader ) {
+				URC_TileST( barShader, wd, ht, &s1, &t1 );
+			}
 			if ( w->statbar == 1 ) {
 				float	fh = ht * frac;
 
-				URC_DrawPicST( x, y + ht - fh, wd, fh, 0, 1 - frac, 1, 1, barShader, color );
+				URC_DrawPicST( x, y + ht - fh, wd, fh, 0, t1 * ( 1 - frac ), s1, t1, barShader, color );
 			} else {
-				URC_DrawPicST( x, y, wd * frac, ht, 0, 0, frac, 1, barShader, color );
+				URC_DrawPicST( x, y, wd * frac, ht, 0, 0, s1 * frac, t1, barShader, color );
 			}
 		}
 	}

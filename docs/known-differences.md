@@ -288,6 +288,15 @@ Not read, done another way:
   it is drawn on a dark translucent sheet rather than the default shader's black.
 - **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets
   it does not leave the next normal run without a mouse.
+- **The health and water gauges** (`ui/healthhud.urc`): a `statbar_tileshader` is laid
+  over its widget at the image's own size from the top left and the drained part is cut
+  off, where this port had stretched the image over the widget. The gauges are 64x128
+  images whose arcs fill the top 72 rows, in 64x72 widgets, so stretched they came out
+  half-height and drained from the middle. A plain `tileshader` is tiled the same way
+  (the menus' images are the size of their widgets, so nothing changes there), and a
+  `statbar_shader` (the boss bar) is still stretched. The renderer's new
+  `ShaderImageSize` tells the UI an image's size. Captured at 100, 75, 50, 25 and 5
+  health and water (`probe-hud.scr`), the gauges match the retail captures.
 - **`com_abnormalExitDialog 0`** (a startup cvar, default 1) skips ioquake3's "didn't
   exit properly, start in safe mode?" dialog that a stale pid file brings up after the
   game was stopped rather than quit; the harness and debugging launches pass it, since

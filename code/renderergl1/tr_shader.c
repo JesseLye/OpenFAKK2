@@ -3147,6 +3147,31 @@ When a handle is passed in by another module, this range checks
 it and returns a valid (possibly default) shader_t to be used internally.
 ====================
 */
+/*
+====================
+RE_ShaderImageSize
+
+The size of the first image a shader draws with, or 0 x 0: FAKK2's UI
+tiles a "tileshader" and a stat bar's "statbar_tileshader" at the image's
+own size instead of stretching it over the widget.
+====================
+*/
+void RE_ShaderImageSize( qhandle_t hShader, int *width, int *height ) {
+	shader_t	*sh = R_GetShaderByHandle( hShader );
+	int			i;
+
+	*width = *height = 0;
+	for ( i = 0 ; i < MAX_SHADER_STAGES && sh->stages[i] ; i++ ) {
+		image_t	*image = sh->stages[i]->bundle[0].image[0];
+
+		if ( image ) {
+			*width = image->width;
+			*height = image->height;
+			return;
+		}
+	}
+}
+
 shader_t *R_GetShaderByHandle( qhandle_t hShader ) {
 	if ( hShader < 0 ) {
 	  ri.Printf( PRINT_WARNING, "R_GetShaderByHandle: out of range hShader '%d'\n", hShader );
