@@ -590,10 +590,17 @@ What is implemented, and on what basis:
   the player state's ammo arrays) with the count beside it. The HUD's `invmodelrender
   <n>` widgets (`weaphud.urc`, `dualweaphud.urc`) show the wielded weapons the same way,
   the item being the one `activeItems[n]` names (2 the left hand, 3 the right, 4 the
-  two-handed one). Not read from retail: how its windows place a model. The script's
-  `offset`, `angles` and `rotateoffset` are for the retail camera, whose placing was
-  not read, so here a model is framed by its bounds, its longest extent across the
-  window, seen from a little above and aside, and only the script's motion is kept.
+  two-handed one). The bar's layout and its model windows are the retail client's
+  (`0x409950`, its helper `0x407dd0`, and captures of the bar on `training`): the slot
+  buttons run down the right edge from `inv_vert_offset`, and beside them, from the same
+  top, a column holds a frame for every item of the current slot, with the model only in
+  the ones the player carries; a window looks down +x with a 30 degree field of view
+  each way, the model sits 1.8657 times its largest extent ahead (so it fills the window
+  and crops at the edges), centred by its bounds, then moved by the script's `offset` and
+  by `rotateoffset` turned with it, and turned by its `angles`; only the highlighted
+  item moves, a `spin` adding the deltas times the time in 333 ms units, a `bob` the
+  deltas times a sine of that. The HUD's windows use the item's `hud` values the same
+  way, which puts the sword upright with its handle close up as retail does.
   `inventory` (the `i` key) is retail's full-screen inventory, which switches the
   video mode (`0x40ab60`, `ui_newvidmode`) and draws a screen of its own; here it opens
   a screen of this client's own layout, a row per slot with the items the player

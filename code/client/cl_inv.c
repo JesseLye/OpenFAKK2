@@ -54,6 +54,8 @@ typedef struct {
 	invMove_t	move;
 	vec3_t		angles;
 	vec3_t		angleDeltas;
+	vec3_t		offset;			// added to the model's place
+	vec3_t		rotateOffset;	// added turned with the model
 	vec4_t		window;			// x y w h, shares of the frame
 } invView_t;
 
@@ -249,6 +251,14 @@ static void INV_Load( void ) {
 			INV_ParseVector( &p, item->view.angleDeltas );
 		} else if ( !Q_stricmp( tok, "hudangledeltas" ) ) {
 			INV_ParseVector( &p, item->hud.angleDeltas );
+		} else if ( !Q_stricmp( tok, "offset" ) ) {
+			INV_ParseVector( &p, item->view.offset );
+		} else if ( !Q_stricmp( tok, "hudoffset" ) ) {
+			INV_ParseVector( &p, item->hud.offset );
+		} else if ( !Q_stricmp( tok, "rotateoffset" ) ) {
+			INV_ParseVector( &p, item->view.rotateOffset );
+		} else if ( !Q_stricmp( tok, "hudrotateoffset" ) ) {
+			INV_ParseVector( &p, item->hud.rotateOffset );
 		} else if ( !Q_stricmp( tok, "modelwindow" ) ) {
 			int		i;
 
@@ -256,8 +266,6 @@ static void INV_Load( void ) {
 				item->view.window[i] = atof( COM_ParseExt( &p, qfalse ) );
 			}
 		} else {
-			// offset, rotateoffset and their hud forms: the retail bar's own
-			// placing, not used; the model is framed by its bounds here
 			SkipRestOfLine( &p );
 		}
 	}
@@ -585,17 +593,23 @@ static void INV_Inventory_f( void ) {
 =================
 INV_DrawModel
 
-The item's model in a window of the frame, framed by its bounds, turned
-by the script's angles and moved as it asks.
+The item's model in a window of the frame, as the retail bar draws it
+(0x409950 and its helper 0x407dd0): the camera looks down +x with a 30
+degree field of view each way, the model sits 1.8657 times its largest
+extent ahead (so it fills the window and crops at the edges), centred by
+its bounds, moved by the script's offset and by its rotateoffset turned
+with it, and turned by its angles. Only a moving one (the highlighted
+item, or a HUD window) spins or bobs: a spin adds the deltas times the
+time in 333 ms units, a bob the deltas times a sine of that.
 =================
 */
-static void INV_DrawModel( const invView_t *v, float x, float y, float w, float h, float alpha ) {
+static void INV_DrawModel( const invView_t *v, float x, float y, float w, float h, float alpha, qboolean moving ) {
 	refdef_t	rd;
 	refEntity_t	ent;
 	tiki_t		*tiki = NULL;
 	qhandle_t	handle;
-	vec3_t		mins, maxs, center, angles, target;
-	float		radius, dist, fx, fy, fw, fh, t;
+	vec3_t		mins, maxs, size, angles;
+	float		extent, fx, fy, fw, fh, t;
 	int			i, anim = 0;
 
 	if ( !v->model[0] ) {
@@ -610,21 +624,16 @@ static void INV_DrawModel( const invView_t *v, float x, float y, float w, float 
 		if ( anim < 0 ) {
 			anim = 0;
 		}
+	}
+	if ( tiki ) {
 		TIKI_CalculateBounds( tiki, 1.0f, mins, maxs );
 	} else {
 		re.ModelBounds( handle, mins, maxs );
 	}
-	VectorAdd( mins, maxs, center );
-	VectorScale( center, 0.5f, center );
-	VectorSubtract( maxs, mins, target );
-	// the longest extent fills the window
-	radius = target[0];
-	if ( target[1] > radius ) radius = target[1];
-	if ( target[2] > radius ) radius = target[2];
-	radius *= 0.5f;
-	if ( radius < 1 ) {
-		radius = 1;
-	}
+	VectorSubtract( maxs, mins, size );
+	extent = size[0];
+	if ( size[1] > extent ) extent = size[1];
+	if ( size[2] > extent ) extent = size[2];
 
 	fx = x + v->window[0] * w;
 	fy = y + v->window[1] * h;
@@ -641,35 +650,19 @@ static void INV_DrawModel( const invView_t *v, float x, float y, float w, float 
 	rd.width = fw;
 	rd.height = fh;
 	rd.fov_x = INV_MODEL_FOV;
-	rd.fov_y = atan2( fh, fw / tan( rd.fov_x / 360 * M_PI ) ) * 360 / M_PI;
+	rd.fov_y = INV_MODEL_FOV;
 	rd.time = cls.realtime;
 	rd.rdflags = RDF_NOWORLDMODEL;
-	// the script places its models at negative x, so the retail window
-	// looks down -x; the same here, so its angles read the same way
-	VectorSet( angles, 0, 180, 0 );
-	AnglesToAxis( angles, rd.viewaxis );
+	AxisClear( rd.viewaxis );
 
-	// the model fills the narrower of the window's angles
-	dist = radius / tan( DEG2RAD( ( rd.fov_y < rd.fov_x ? rd.fov_y : rd.fov_x ) * 0.5f ) ) * 1.15f;
-
-	// the model's thinnest side faces the window (a sword's flat, a
-	// shield's face); the script's angles are for the retail camera, whose
-	// placing is not known, so only its motion is kept: a spin turns about
-	// the vertical, a bob rocks by the deltas
-	t = cls.realtime * 0.001f;
-	// the longest extent lies across the window (a sword's blade, a gun's
-	// barrel), seen from a little above and aside so no side is edge-on
-	if ( target[0] >= target[1] && target[0] >= target[2] ) {
-		VectorSet( angles, 20, 90 + 30, 0 );	// x across
-	} else if ( target[1] >= target[2] ) {
-		VectorSet( angles, 20, 30, 0 );			// y across
-	} else {
-		VectorSet( angles, 20, 30, 90 );		// z across
-	}
-	if ( v->move == INV_MOVE_SPIN ) {
-		angles[YAW] += t * ( v->angleDeltas[YAW] ? v->angleDeltas[YAW] : 30 );
-	} else if ( v->move == INV_MOVE_BOB ) {
-		VectorMA( angles, sin( t * 2 ), v->angleDeltas, angles );
+	t = cls.realtime * 0.003003003f;
+	VectorCopy( v->angles, angles );
+	if ( moving ) {
+		if ( v->move == INV_MOVE_SPIN ) {
+			VectorMA( angles, t, v->angleDeltas, angles );
+		} else if ( v->move == INV_MOVE_BOB ) {
+			VectorMA( angles, sin( t ), v->angleDeltas, angles );
+		}
 	}
 
 	Com_Memset( &ent, 0, sizeof( ent ) );
@@ -677,10 +670,11 @@ static void INV_DrawModel( const invView_t *v, float x, float y, float w, float 
 	ent.hModel = handle;
 	ent.anim = ent.oldanim = anim;
 	AnglesToAxis( angles, ent.axis );
-	VectorSet( target, -dist, 0, 0 );
-	VectorCopy( target, ent.origin );
+	ent.origin[0] = extent * 1.8656716f + v->offset[0];
+	ent.origin[1] = -( mins[1] + maxs[1] ) * 0.5f + v->offset[1];
+	ent.origin[2] = -( mins[2] + maxs[2] ) * 0.5f + v->offset[2];
 	for ( i = 0 ; i < 3 ; i++ ) {
-		VectorMA( ent.origin, -center[i], ent.axis[i], ent.origin );
+		VectorMA( ent.origin, v->rotateOffset[i], ent.axis[i], ent.origin );
 	}
 	VectorCopy( ent.origin, ent.oldorigin );
 	VectorCopy( ent.origin, ent.lightingOrigin );
@@ -730,15 +724,19 @@ INV_DrawFrame
 One item's frame: its background, its model, its ammo, the highlight.
 =================
 */
-static void INV_DrawFrame( const invItem_t *item, float x, float y, float w, float h, qboolean selected ) {
+static void INV_DrawFrame( const invItem_t *item, float x, float y, float w, float h, qboolean selected, qboolean owned ) {
 	vec4_t	white = { 1, 1, 1, 1 };
 
+	if ( owned ) {
+		INV_DrawAmmoBar( item, x, y, w, h );
+	}
+	URC_DrawPic( x, y, w, h, item->bgShader, white );
 	if ( selected && item->selShader && !item->selOnTop ) {
 		URC_DrawPic( x, y, w, h, item->selShader, white );
 	}
-	URC_DrawPic( x, y, w, h, item->bgShader, white );
-	INV_DrawModel( &item->view, x, y, w, h, 1 );
-	INV_DrawAmmoBar( item, x, y, w, h );
+	if ( owned ) {
+		INV_DrawModel( &item->view, x, y, w, h, 1, selected );
+	}
 	if ( selected && item->selShader && item->selOnTop ) {
 		URC_DrawPic( x, y, w, h, item->selShader, white );
 	}
@@ -768,7 +766,7 @@ void INV_DrawHudModel( int slot, float x, float y, float w, float h, float alpha
 	if ( !item ) {
 		return;
 	}
-	INV_DrawModel( &item->hud, x, y, w, h, alpha );
+	INV_DrawModel( &item->hud, x, y, w, h, alpha, qtrue );
 }
 
 /*
@@ -810,7 +808,7 @@ static void INV_DrawScreen( void ) {
 			if ( !INV_Owned( item ) ) {
 				continue;
 			}
-			INV_DrawFrame( item, x, y, fw, fh, t == inv_curType && i == inv_curItem );
+			INV_DrawFrame( item, x, y, fw, fh, t == inv_curType && i == inv_curItem, qtrue );
 			if ( t == inv_curType && i == inv_curItem ) {
 				URC_DrawText( INV_FONT, x, y + fh + 1, item->name, white );
 			}
@@ -823,16 +821,18 @@ static void INV_DrawScreen( void ) {
 =================
 INV_Draw
 
-The slot's buttons down the right edge, the slot's owned items cascading
-left from the current one, the highlighted item's name beneath.
+As the retail bar (0x409950 and its captures): the slot buttons down the
+right edge from inv_vert_offset, and beside them, from the same top, a
+column with a frame for every item of the current slot, the ones the
+player carries showing their model, the highlighted one its selitem
+shader.
 =================
 */
 void INV_Draw( void ) {
 	const invType_t	*type;
 	float			x, y, bx, w, h;
-	int				t, i, n;
+	int				t, i;
 	vec4_t			white = { 1, 1, 1, 1 };
-	vec4_t			dim = { 1, 1, 1, 0.6f };
 
 	if ( !INV_Open() || !inv_numTypes ) {
 		return;
@@ -849,28 +849,16 @@ void INV_Draw( void ) {
 	// the slots
 	for ( t = 0 ; t < inv_numTypes ; t++ ) {
 		type = &inv_types[t];
-		URC_DrawPic( bx, y + t * h, w, h, t == inv_curType ? type->selShader : type->buttonShader, t == inv_curType ? white : dim );
+		URC_DrawPic( bx, y + t * h, w, h, t == inv_curType ? type->selShader : type->buttonShader, white );
 	}
 
 	// the current slot's items
 	type = &inv_types[inv_curType];
-	x = bx;
-	y = inv.vertOffset + inv_curType * h;
-	for ( i = 0, n = 0 ; i < type->numItems ; i++ ) {
+	x = inv.cascadeLeft ? bx - type->width : bx + w;
+	for ( i = 0 ; i < type->numItems ; i++ ) {
 		const invItem_t	*item = &type->items[i];
-		float			ix;
 
-		if ( !INV_Owned( item ) ) {
-			continue;
-		}
-		n++;
-		ix = inv.cascadeLeft ? x - n * type->width : x + n * type->width;
-		INV_DrawFrame( item, ix, y, type->width, type->height, i == inv_curItem );
-		if ( i == inv_curItem ) {
-			float	tw = URC_TextWidth( INV_FONT, item->name );
-
-			URC_DrawText( INV_FONT, ix + ( type->width - tw ) * 0.5f, y + type->height + 2, item->name, white );
-		}
+		INV_DrawFrame( item, x, y + i * type->height, type->width, type->height, i == inv_curItem, INV_Owned( item ) );
 	}
 }
 
