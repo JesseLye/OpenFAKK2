@@ -1086,6 +1086,7 @@ CL_ShutdownUI
 ====================
 */
 void CL_ShutdownUI( void ) {
+	URC_Shutdown();		// FAKK2's own user interface
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_UI );
 	cls.uiStarted = qfalse;
 	if ( !uivm ) {

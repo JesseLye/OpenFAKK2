@@ -203,6 +203,12 @@ typedef struct client_s {
 	int				numPendingSounds;
 	server_sound_t	pendingSounds[MAX_SERVER_SOUNDS];
 
+	// FAKK2: the game's prints, sent with the next snapshot (the retail
+	// server keeps 256 bytes of each in its client; 0x4450f0)
+	char			centerprint[256];
+	char			locprint[256];
+	int				locprintX, locprintY;
+
 #ifdef LEGACY_PROTOCOL
 	qboolean		compat;
 #endif

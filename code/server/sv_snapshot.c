@@ -716,6 +716,20 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// and the playerState_t
 	SV_WriteSnapshotToClient( client, &msg );
 
+	// FAKK2: the game's prints since the last message
+	if ( client->centerprint[0] ) {
+		MSG_WriteByte( &msg, svc_centerprint );
+		MSG_WriteString( &msg, client->centerprint );
+		client->centerprint[0] = 0;
+	}
+	if ( client->locprint[0] ) {
+		MSG_WriteByte( &msg, svc_locprint );
+		MSG_WriteShort( &msg, client->locprintX );
+		MSG_WriteShort( &msg, client->locprintY );
+		MSG_WriteString( &msg, client->locprint );
+		client->locprint[0] = 0;
+	}
+
 #ifdef USE_VOIP
 	SV_WriteVoipToClient( client, &msg );
 #endif

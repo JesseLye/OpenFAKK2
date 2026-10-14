@@ -795,8 +795,60 @@ Sound playback and client prints that are not implemented yet.
 */
 
 
-static void QDECL SV_Stub_CenterPrintf( gentity_t *ent, const char *fmt, ... ) { (void)ent; (void)fmt; }
-static void QDECL SV_Stub_LocationPrintf( gentity_t *ent, int x, int y, const char *fmt, ... ) { (void)ent; (void)x; (void)y; (void)fmt; }
+/*
+=================
+SV_CenterPrintf, SV_LocationPrintf
+
+FAKK2: the retail server (0x4450f0, 0x445190) formats the text, drops it
+when it is over 256 characters ("Centerprint text exceeds buffer size")
+and keeps it in the client's record for the next message to carry
+(svc_centerprint, svc_locprint); SV_SendClientSnapshot writes it.
+=================
+*/
+static client_t *SV_PrintClient( gentity_t *ent ) {
+	int		num = ((sharedEntity_t *)ent)->s.number;
+
+	if ( num < 0 || num >= sv_maxclients->integer ) {
+		return NULL;
+	}
+	return &svs.clients[num];
+}
+
+static void QDECL SV_CenterPrintf( gentity_t *ent, const char *fmt, ... ) {
+	client_t	*cl = SV_PrintClient( ent );
+	char		text[1024];
+	va_list		argptr;
+
+	if ( !cl ) {
+		return;
+	}
+	va_start( argptr, fmt );
+	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
+	va_end( argptr );
+	if ( strlen( text ) >= sizeof( cl->centerprint ) ) {
+		Com_Error( ERR_DROP, "Centerprint text exceeds buffer size\n" );
+	}
+	Q_strncpyz( cl->centerprint, text, sizeof( cl->centerprint ) );
+}
+
+static void QDECL SV_LocationPrintf( gentity_t *ent, int x, int y, const char *fmt, ... ) {
+	client_t	*cl = SV_PrintClient( ent );
+	char		text[1024];
+	va_list		argptr;
+
+	if ( !cl ) {
+		return;
+	}
+	va_start( argptr, fmt );
+	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
+	va_end( argptr );
+	if ( strlen( text ) >= sizeof( cl->locprint ) ) {
+		Com_Error( ERR_DROP, "Locationprint text exceeds buffer size\n" );
+	}
+	Q_strncpyz( cl->locprint, text, sizeof( cl->locprint ) );
+	cl->locprintX = x;
+	cl->locprintY = y;
+}
 /*
 ===========================================================================
 
@@ -1077,8 +1129,8 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->GlobalAlias_Dump = Alias_Dump;
 	import->GlobalAlias_Clear = Alias_Clear;
 
-	import->centerprintf = SV_Stub_CenterPrintf;
-	import->locationprintf = SV_Stub_LocationPrintf;
+	import->centerprintf = SV_CenterPrintf;
+	import->locationprintf = SV_LocationPrintf;
 	import->Sound = SV_GameSound;
 	import->StopSound = SV_GameStopSound;
 	import->SoundLength = SV_SoundLength;

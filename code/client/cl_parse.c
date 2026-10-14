@@ -36,6 +36,8 @@ char *svc_strings[256] = {
 	"svc_EOF",
 	"svc_voipSpeex",
 	"svc_voipOpus",
+	"svc_centerprint",
+	"svc_locprint",
 };
 
 void SHOWNET( msg_t *msg, char *s) {
@@ -949,6 +951,18 @@ void CL_ParseServerMessage( msg_t *msg ) {
 #ifdef USE_VOIP
 			CL_ParseVoip( msg, !clc.voipEnabled );
 #endif
+			break;
+		// FAKK2: the game's prints, drawn by the user interface (cl_urc.c)
+		case svc_centerprint:
+			URC_CenterPrint( MSG_ReadString( msg ), 1.0f );
+			break;
+		case svc_locprint:
+			{
+				int		x = MSG_ReadShort( msg );
+				int		y = MSG_ReadShort( msg );
+
+				URC_LocationPrint( x, y, MSG_ReadString( msg ), 1.0f );
+			}
 			break;
 		}
 	}

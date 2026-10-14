@@ -477,7 +477,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	re.BeginFrame( stereoFrame );
 
-	uiFullscreen = (uivm && VM_Call( uivm, UI_IS_FULLSCREEN ));
+	uiFullscreen = (uivm && VM_Call( uivm, UI_IS_FULLSCREEN )) || URC_IsFullscreen();
 
 	// wide aspect ratio screens need to have the sides cleared
 	// unless they are displaying game renderings
@@ -544,6 +544,9 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	// a map being viewed without a game
 	CL_Viewer_Draw();
+
+	// FAKK2's HUD, menus and prints
+	URC_Draw();
 
 	// the menu draws next
 	if ( Key_GetCatcher( ) & KEYCATCH_UI && uivm ) {

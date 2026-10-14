@@ -298,6 +298,10 @@ enum svc_ops_e {
 // new commands, supported only by ioquake3 protocol but not legacy
 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
 	svc_voipOpus,      //
+
+// FAKK2: the game's prints (the retail engine numbers them 8 and 9)
+	svc_centerprint,   // [string] centred on the screen
+	svc_locprint,      // [short x] [short y] [string] centred on x at y
 };
 
 

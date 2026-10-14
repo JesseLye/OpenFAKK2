@@ -3234,6 +3234,7 @@ void CL_StartHunkUsers( qboolean rendererOnly ) {
 	if ( !cls.uiStarted ) {
 		cls.uiStarted = qtrue;
 		CL_InitUI();
+		URC_Init();		// FAKK2's own user interface
 	}
 }
 

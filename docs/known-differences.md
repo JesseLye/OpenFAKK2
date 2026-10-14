@@ -271,6 +271,28 @@ Not read, done another way:
   sound, `sound/feedback/hit.wav`, is not in FAKK2; a sound that cannot be loaded is
   silence on both backends.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.
+- **User interface** (`cl_urc.c`). The retail engine draws its menus, HUD and prints
+  itself from `ui/*.urc`; `UI_Init` (`0x40e9d0`) loads every file, registers the
+  commands, and keeps the four HUD menus by the name in the file (note `ui/weaphud.urc`
+  holds `dualweaphud` and vice versa); its update (`0x40af50`) hides them all unless
+  `ui_hud` is on, a map is active, no menu is up and the cinematic flag is clear, then
+  shows `healthhud`, `weaphud` when `activeItems[4]` (the dual weapon slot) is below 0
+  and `dualweaphud` otherwise, and `bosshud` while `stats[13]` is at least 1. Centre and
+  location prints are their own messages (`svc_centerprint`: string; `svc_locprint`:
+  short x, short y, string), stored per client on the server (`0x4450f0`, 256 bytes,
+  "Centerprint text exceeds buffer size" beyond) and drawn with `facfont-20` for
+  4 seconds (`0x418cc0`); a text starting with `@` names a shader. OpenFAKK2 does the
+  same, as a fresh implementation of the file grammar the 31 shipped files use. Not
+  read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
+  tests a field of its print object), the print's screen position (y 160 here), its
+  fade (the last second), the `@shader` size (256x128), the stat-bar flash (half a
+  second after a change), and `ui_hud`, a command in retail, is a cvar here. Not done:
+  mouse and keyboard in menus (Escape closes one), Button/CheckBox/Field/Slider/List
+  behaviour, borders, `invmodelrender`, `tileshader` tiling (drawn stretched),
+  `linkstring`, `aliascache` sounds. The menu shaders use `rgbGen global` /
+  `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
+  to the vertex colour. A stage written with `nextbundle` is now one multitexture
+  stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
   `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks

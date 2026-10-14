@@ -27,7 +27,8 @@ static char *s_shaderText;
 
 // the shader is parsed into these global variables, then copied into
 // dynamically allocated memory if it is valid.
-static	shaderStage_t	stages[MAX_SHADER_STAGES];		
+static	shaderStage_t	stages[MAX_SHADER_STAGES];
+static	qboolean		stageIsSecondBundle[MAX_SHADER_STAGES];	// FAKK2: parsed after a "nextbundle"
 static	shader_t		shader;
 static	texModInfo_t	texMods[MAX_SHADER_STAGES][TR_MAX_TEXMODS];
 
@@ -953,7 +954,9 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			}
 			else if ( !Q_stricmp( token, "global" ) )
 			{
-				stage->rgbGen = CGEN_IDENTITY;
+				// FAKK2: the colour the user interface sets for the widget it
+				// draws (its fgcolor); for a 2D pic that is the SetColor colour
+				stage->rgbGen = CGEN_VERTEX;
 			}
 			else
 			{
@@ -1034,7 +1037,12 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			{
 				stage->alphaGen = AGEN_ONE_MINUS_SKY_ALPHA;
 			}
-			else if ( !Q_stricmp( token, "global" ) || !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" ) )
+			else if ( !Q_stricmp( token, "global" ) )
+			{
+				// FAKK2: the user interface's colour, as rgbGen global
+				stage->alphaGen = AGEN_VERTEX;
+			}
+			else if ( !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" ) )
 			{
 				// view dependent alpha is not implemented; drawn opaque
 				stage->alphaGen = AGEN_IDENTITY;
@@ -1600,6 +1608,7 @@ static qboolean ParseShader( char **text )
 					return qfalse;
 				}
 				stages[s].active = qtrue;
+				stageIsSecondBundle[s] = secondBundle;
 				s++;
 				secondBundle = qtrue;
 			} while ( nextBundle );
@@ -1963,6 +1972,41 @@ static collapse_t	collapse[] = {
 #endif
 	{ -1 }
 };
+
+/*
+=================
+CollapseNextBundles
+
+FAKK2: a stage written as "map a ... nextbundle map b" is one stage whose
+two textures are multiplied in the texture units before the stage's own
+blend with the frame buffer. The parser reads the part after nextbundle
+as a stage of its own (ParseStage), which Quake III's collapse below only
+merges in first position and only for the blends it knows; every such
+pair is merged here, keeping the first part's blend. Without multitexture
+the second texture is dropped (the scripts put these under "if mtex").
+Returns the number of stages removed.
+=================
+*/
+static int CollapseNextBundles( void ) {
+	int		i, removed = 0;
+
+	for ( i = 0 ; i + 1 < MAX_SHADER_STAGES ; i++ ) {
+		if ( !stages[i].active || !stageIsSecondBundle[i + 1] ) {
+			continue;
+		}
+		if ( qglActiveTextureARB && !stages[i].bundle[1].image[0] ) {
+			stages[i].bundle[1] = stages[i + 1].bundle[0];
+			shader.multitextureEnv = GL_MODULATE;
+		}
+		memmove( &stages[i + 1], &stages[i + 2], sizeof( stages[0] ) * ( MAX_SHADER_STAGES - i - 2 ) );
+		Com_Memset( &stages[MAX_SHADER_STAGES - 1], 0, sizeof( stages[0] ) );
+		memmove( &stageIsSecondBundle[i + 1], &stageIsSecondBundle[i + 2], sizeof( stageIsSecondBundle[0] ) * ( MAX_SHADER_STAGES - i - 2 ) );
+		stageIsSecondBundle[MAX_SHADER_STAGES - 1] = qfalse;
+		removed++;
+		i--;		// the slot may hold another bundle of the same stage
+	}
+	return removed;
+}
 
 /*
 ================
@@ -2348,6 +2392,7 @@ static void InitShader( const char *name, int lightmapIndex ) {
 	// clear the global shader
 	Com_Memset( &shader, 0, sizeof( shader ) );
 	Com_Memset( &stages, 0, sizeof( stages ) );
+	Com_Memset( &stageIsSecondBundle, 0, sizeof( stageIsSecondBundle ) );
 
 	Q_strncpyz( shader.name, name, sizeof( shader.name ) );
 	shader.lightmapIndex = lightmapIndex;
@@ -2516,9 +2561,14 @@ static shader_t *FinishShader( void ) {
 	}
 
 	//
+	// FAKK2: stages written with two bundles
+	//
+	stage -= CollapseNextBundles();
+
+	//
 	// look for multitexture potential
 	//
-	if ( stage > 1 && CollapseMultitexture() ) {
+	if ( stage > 1 && !shader.multitextureEnv && CollapseMultitexture() ) {
 		stage--;
 	}
 

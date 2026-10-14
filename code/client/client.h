@@ -510,6 +510,21 @@ void CL_Viewer_Stop( void );
 qboolean CL_Viewer_Active( void );
 void CL_Viewer_Frame( void );
 void CL_Viewer_Draw( void );
+
+//
+// cl_urc.c: FAKK2's menus, HUD and prints from ui/*.urc
+//
+void URC_Init( void );
+void URC_Shutdown( void );
+void URC_Draw( void );
+void URC_KeyEvent( int key, qboolean down );
+qboolean URC_HasMenus( void );
+qboolean URC_IsFullscreen( void );
+void URC_PushMenu( const char *name );
+void URC_PopMenu( void );
+void URC_ClearMenus( void );
+void URC_CenterPrint( const char *text, float alpha );
+void URC_LocationPrint( int x, int y, const char *text, float alpha );
 void CL_ShutdownInput(void);
 void CL_SendCmd (void);
 void CL_ClearState (void);

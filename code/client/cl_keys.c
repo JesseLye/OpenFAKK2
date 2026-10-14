@@ -1291,6 +1291,13 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !uivm ) {
+			// FAKK2's own menus (cl_urc.c): escape closes the one up, or
+			// brings the main menu up over the game, as the retail client does
+			if ( URC_HasMenus() ) {
+				URC_KeyEvent( key, qtrue );
+			} else if ( clc.state == CA_ACTIVE && !clc.demoplaying ) {
+				URC_PushMenu( "main" );
+			}
 			return;
 		}
 
@@ -1319,7 +1326,9 @@ void CL_KeyDownEvent( int key, unsigned time )
 	} else if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
 		if ( uivm ) {
 			VM_Call( uivm, UI_KEY_EVENT, key, qtrue );
-		} 
+		} else {
+			URC_KeyEvent( key, qtrue );
+		}
 	} else if ( Key_GetCatcher( ) & KEYCATCH_CGAME ) {
 		// FAKK2's client game module takes no key events
 	} else if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE ) {
