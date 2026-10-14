@@ -39,6 +39,11 @@ retail game again. Choose the probe with `-Probe`:
   prints it again.
 - `probe-entities` runs `whatis` on entities 0 to 299 after ten seconds.
 - `probe-entry` prints the player six times in the first five seconds after entry.
+- `probe-sling` gives the player the sling, charges and fires it standing still, and runs
+  `whatis` on entities 0 to 299 a third of a second later, so the rock is among them.
+  `probe-sling-down` does the same after holding `+lookdown`; the test player cannot
+  pitch, so that one is for the real client (`run-client.ps1 -Run "+map zoo +script
+  thread probe-sling-down.scr::probe"`).
 
 `-RetailTwice` runs the retail game a second time in place of OpenFAKK2. The game seeds
 its random numbers from the clock, so retail differs from itself on some maps; this shows

@@ -100,7 +100,9 @@ corresponding retail code has not been examined.
 
 - **Traces skip entities whose solid type is `SOLID_NOT` or `SOLID_TRIGGER`.** Inferred
   from an actor seated in a non-solid chair (`homes1`) and items inside brush entities
-  (`towncenter_evil`).
+  (`towncenter_evil`); since read in `SV_ClipMoveToEntities` (`0x448fe0`), which also
+  showed which entities a trace skips for its pass entity (see "Firing a projectile"
+  below).
 - **A temporary box model takes its entity's contents.** First inferred from solid pods
   that solid-only traces must hit (`otto`, `oracle`); since read in `SV_ClipHandleForEntity`
   (`0x448660`), which also showed that a brush entity the game has made `SOLID_BBOX` clips
@@ -495,6 +497,29 @@ On `zoo`:
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
 127, and a turn rate of 140 degrees per second for `+left` / `+right`.
+
+### Firing a projectile
+
+`probe-sling.scr` gives the player the sling (`give weapon_sling.tik`, `use Sling dual`),
+charges it for 1.5 seconds with `+attackright`, releases, and dumps every entity 0.3
+seconds later. On `zoo` the rock (`fx_slingshot.tik`, entity 134) lands 864 units ahead on
+both engines, within 0.02 units of retail's position.
+
+This found one engine difference, fixed by following `fakk2.exe`. **Which entities a
+trace skips** (`SV_ClipMoveToEntities` at `0x448fe0`): besides the pass entity, its own
+missiles, and other missiles with the same owner, as in Quake III, retail also skips the
+*owner* of the pass entity, as Quake II did. The game moves a projectile with the
+projectile itself as the pass entity, and a fresh rock starts inside the player's box
+(it is launched from the sling's `tag_barrel` in Julie's hand, about 19 units ahead of
+her origin, and its 16-unit box overlaps her 30-unit one). Quake III's rule left the rock
+colliding with Julie whenever its first frame of movement did not
+carry it clear of her box: standing still and aiming steeply down, the rock stayed
+bouncing at her chest instead of flying past (`probe-sling-down.scr`, run through the
+real client because the test player cannot pitch; moving added her velocity to the rock
+and hid the problem). The same function confirmed the inferred `SOLID_NOT` /
+`SOLID_TRIGGER` rule above, and showed that when a trace starts inside an entity retail
+also records that entity's number in the accumulated trace, which Quake III did not.
+`SV_PointContents` has not been compared.
 
 ## The renderer and the map viewer
 
