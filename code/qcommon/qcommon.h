@@ -806,6 +806,7 @@ typedef enum {
 	SE_CHAR,		// evValue is an ascii char
 	SE_MOUSE,		// evValue and evValue2 are relative signed x / y moves
 	SE_JOYSTICK_AXIS,	// evValue is an axis number and evValue2 is the current state (-127 to 127)
+	SE_MOUSE_ABS,	// FAKK2: evValue and evValue2 are the cursor's window position, for the menus
 	SE_CONSOLE		// evPtr is a char*
 } sysEventType_t;
 
@@ -997,6 +998,7 @@ void CL_CharEvent( int key );
 // char events are for field typing, not game control
 
 void CL_MouseEvent( int dx, int dy, int time );
+void CL_MouseAbsEvent( int x, int y );	// FAKK2: the window cursor, for the menus
 
 void CL_JoystickEvent( int axis, int value, int time );
 

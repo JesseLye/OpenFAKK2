@@ -1119,6 +1119,11 @@ static void IN_ProcessEvents( void )
 						break;
 					Com_QueueEvent( in_eventTime, SE_MOUSE, e.motion.xrel, e.motion.yrel, 0, NULL );
 				}
+				else if( URC_HasMenus( ) )
+				{
+					// FAKK2's menus use the system cursor, as the retail client did
+					Com_QueueEvent( in_eventTime, SE_MOUSE_ABS, e.motion.x, e.motion.y, 0, NULL );
+				}
 				break;
 
 			case SDL_MOUSEBUTTONDOWN:
@@ -1252,6 +1257,12 @@ void IN_Frame( void )
 	{
 		// Console is down in windowed mode
 		IN_DeactivateMouse( cls.glconfig.isFullscreen );
+	}
+	else if( URC_HasMenus( ) )
+	{
+		// FAKK2: a menu is up; it takes the system cursor (ShowCursor in the
+		// retail client), even in fullscreen
+		IN_DeactivateMouse( qfalse );
 	}
 	else if( !cls.glconfig.isFullscreen && loading )
 	{

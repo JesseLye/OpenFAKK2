@@ -76,8 +76,12 @@ typedef struct {
 	char		statShaderName[MAX_QPATH];
 	char		statTileName[MAX_QPATH];
 	char		statFlashName[MAX_QPATH];
-	qhandle_t	shader, tileShader, hoverShader, statShader, statTile, statFlash;
+	char		checkedName[MAX_QPATH];
+	char		uncheckedName[MAX_QPATH];
+	qhandle_t	shader, tileShader, hoverShader, statShader, statTile, statFlash, checkedShader, uncheckedShader;
 	qboolean	shadersLoaded;
+	char		clickSound[MAX_QPATH];
+	char		hoverSound[MAX_QPATH];
 	char		linkcvar[64];
 	char		stuffcommand[256];
 	int			playerstat;			// -1 none
@@ -113,6 +117,16 @@ typedef struct {
 	int			showTime;
 } urcMenu_t;
 
+// "aliascache <name> <file> [weight <w>]": a sound a widget names by alias;
+// "hoversound menu_newgame" picks among menu_newgame1.. by weight
+typedef struct {
+	char		name[64];
+	char		path[MAX_QPATH];
+	float		weight;
+} urcAlias_t;
+
+#define URC_MAX_ALIASES		256
+
 typedef struct {
 	qboolean	active;
 	qboolean	located;
@@ -135,6 +149,10 @@ static urcPrint_t	urc_centerprint;
 static urcPrint_t	urc_locprint;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
+static urcAlias_t	urc_aliases[URC_MAX_ALIASES];
+static int			urc_numAliases;
+static float		urc_cursorX = 320, urc_cursorY = 240;	// 640x480 units
+static int			urc_hoverWidget = -1;
 
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
@@ -371,8 +389,8 @@ static void URC_ParseAlign( urcMenu_t *menu, char args[][MAX_QPATH], int n ) {
 
 // keys the shipped files use that this implementation reads and ignores
 static const char *urc_ignoredKeys[] = {
-	"aliascache", "hoversound", "clicksound", "linkstring", "additem", "addpopup",
-	"setrange", "slidertype", "stepsize", "initdata", "checked_shader", "unchecked_shader",
+	"linkstring", "additem", "addpopup",
+	"setrange", "slidertype", "stepsize", "initdata",
 	"menushader", "selmenushader", "updatecvar", "filename", "edit", "checked_command",
 	"unchecked_command", "bordercolor", "noparentclip", "noparentadjust", "hidecommand",
 	"showcommand", "stretchdir", "vidmode", "alpha", "soundname", NULL
@@ -471,6 +489,22 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 			Q_strncpyz( w->statTileName, args[0], sizeof( w->statTileName ) );
 		} else if ( !Q_stricmp( tok, "statbar_tileshader_flash" ) && n ) {
 			Q_strncpyz( w->statFlashName, args[0], sizeof( w->statFlashName ) );
+		} else if ( !Q_stricmp( tok, "checked_shader" ) && n ) {
+			Q_strncpyz( w->checkedName, args[0], sizeof( w->checkedName ) );
+		} else if ( !Q_stricmp( tok, "unchecked_shader" ) && n ) {
+			Q_strncpyz( w->uncheckedName, args[0], sizeof( w->uncheckedName ) );
+		} else if ( !Q_stricmp( tok, "clicksound" ) && n ) {
+			Q_strncpyz( w->clickSound, args[0], sizeof( w->clickSound ) );
+		} else if ( !Q_stricmp( tok, "hoversound" ) && n ) {
+			Q_strncpyz( w->hoverSound, args[0], sizeof( w->hoverSound ) );
+		} else if ( !Q_stricmp( tok, "aliascache" ) && n >= 2 ) {
+			if ( urc_numAliases < URC_MAX_ALIASES ) {
+				urcAlias_t	*a = &urc_aliases[urc_numAliases++];
+
+				Q_strncpyz( a->name, args[0], sizeof( a->name ) );
+				Q_strncpyz( a->path, args[1], sizeof( a->path ) );
+				a->weight = ( n >= 4 && !Q_stricmp( args[2], "weight" ) ) ? atof( args[3] ) : 1.0f;
+			}
 		} else if ( !Q_stricmp( tok, "linkcvar" ) && n ) {
 			Q_strncpyz( w->linkcvar, args[0], sizeof( w->linkcvar ) );
 		} else if ( !Q_stricmp( tok, "stuffcommand" ) && n ) {
@@ -655,6 +689,130 @@ static void URC_LoadWidgetShaders( urcWidget_t *w ) {
 	if ( w->statShaderName[0] ) w->statShader = re.RegisterShaderNoMip( w->statShaderName );
 	if ( w->statTileName[0] ) w->statTile = re.RegisterShaderNoMip( w->statTileName );
 	if ( w->statFlashName[0] ) w->statFlash = re.RegisterShaderNoMip( w->statFlashName );
+	if ( w->checkedName[0] ) w->checkedShader = re.RegisterShaderNoMip( w->checkedName );
+	if ( w->uncheckedName[0] ) w->uncheckedShader = re.RegisterShaderNoMip( w->uncheckedName );
+}
+
+/*
+=================
+URC_PlaySound
+
+A file, or an alias: the weighted pick among the aliases whose names are
+the given one followed by a number.
+=================
+*/
+static void URC_PlaySound( const char *name ) {
+	const char	*path = NULL;
+	float		total = 0, r;
+	int			i, len;
+
+	if ( !name[0] ) {
+		return;
+	}
+	if ( strchr( name, '/' ) ) {
+		path = name;
+	} else {
+		len = strlen( name );
+		for ( i = 0 ; i < urc_numAliases ; i++ ) {
+			if ( !Q_stricmpn( urc_aliases[i].name, name, len ) ) {
+				total += urc_aliases[i].weight;
+			}
+		}
+		if ( total <= 0 ) {
+			return;
+		}
+		r = random() * total;
+		for ( i = 0 ; i < urc_numAliases ; i++ ) {
+			if ( !Q_stricmpn( urc_aliases[i].name, name, len ) ) {
+				path = urc_aliases[i].path;
+				r -= urc_aliases[i].weight;
+				if ( r <= 0 ) {
+					break;
+				}
+			}
+		}
+	}
+	if ( path ) {
+		sfxHandle_t	sfx = S_RegisterSound( path, qfalse );
+
+		if ( sfx ) {
+			S_StartLocalSound( sfx, CHAN_MENU );
+		}
+	}
+}
+
+static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, float parentW, float parentH, float *dx, float *dy );
+
+/*
+=================
+URC_MenuOrigin, URC_WidgetRect
+
+Where a menu and its widgets are this frame, in 640x480 units.
+=================
+*/
+static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float *oy ) {
+	float	dx, dy;
+
+	switch ( menu->alignH ) {
+	case 1: *ox = ( 640 - menu->width ) * 0.5f; break;
+	case 2: *ox = 640 - menu->width; break;
+	default: *ox = 0; break;
+	}
+	switch ( menu->alignV ) {
+	case 1: *oy = ( 480 - menu->height ) * 0.5f; break;
+	case 2: *oy = 480 - menu->height; break;
+	default: *oy = 0; break;
+	}
+	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, 640, 480, &dx, &dy );
+	*ox += dx;
+	*oy += dy;
+}
+
+static void URC_WidgetRect( const urcWidget_t *w, const urcMenu_t *menu, float ox, float oy, int elapsed, float rect[4] ) {
+	float	dx, dy;
+
+	URC_MotionOffset( w->dir, w->dirTime, elapsed, menu->width, menu->height, &dx, &dy );
+	rect[0] = ox + w->rect[0] + dx;
+	rect[1] = oy + w->rect[1] + dy;
+	rect[2] = w->rect[2];
+	rect[3] = w->rect[3];
+}
+
+static qboolean URC_CursorIn( const float rect[4] ) {
+	return urc_cursorX >= rect[0] && urc_cursorX < rect[0] + rect[2] &&
+		urc_cursorY >= rect[1] && urc_cursorY < rect[1] + rect[3];
+}
+
+/*
+=================
+URC_WidgetUnderCursor
+
+In the menu on top of the stack; the last drawn wins.
+=================
+*/
+static int URC_WidgetUnderCursor( void ) {
+	urcMenu_t	*menu;
+	float		ox, oy, rect[4];
+	int			elapsed, i;
+
+	if ( !urc_stackDepth ) {
+		return -1;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	elapsed = cls.realtime - menu->showTime;
+	URC_MenuOrigin( menu, elapsed, &ox, &oy );
+	for ( i = menu->numWidgets - 1 ; i >= 0 ; i-- ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+
+		if ( w->cls != WC_BUTTON && w->cls != WC_CHECKBOX ) {
+			continue;
+		}
+		URC_WidgetRect( w, menu, ox, oy, elapsed, rect );
+		if ( URC_CursorIn( rect ) ) {
+			return menu->firstWidget + i;
+		}
+	}
+	return -1;
 }
 
 /*
@@ -707,17 +865,18 @@ static int URC_PlayerStat( int stat ) {
 URC_DrawWidget
 =================
 */
-static void URC_DrawWidget( urcWidget_t *w, float ox, float oy, float menuW, float menuH, int menuElapsed, float menuAlpha ) {
-	float	x, y, wd, ht, dx, dy, alpha;
-	vec4_t	color;
+static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, float oy, int menuElapsed, float menuAlpha, qboolean onTop ) {
+	float		x, y, wd, ht, alpha, rect[4];
+	vec4_t		color;
+	qhandle_t	shader;
 
 	URC_LoadWidgetShaders( w );
-	URC_MotionOffset( w->dir, w->dirTime, menuElapsed, menuW, menuH, &dx, &dy );
+	URC_WidgetRect( w, menu, ox, oy, menuElapsed, rect );
 	alpha = menuAlpha * URC_FadeAlpha( w->fadein, menuElapsed );
-	x = ox + w->rect[0] + dx;
-	y = oy + w->rect[1] + dy;
-	wd = w->rect[2];
-	ht = w->rect[3];
+	x = rect[0];
+	y = rect[1];
+	wd = rect[2];
+	ht = rect[3];
 
 	Vector4Copy( w->bgcolor, color );
 	color[3] *= alpha;
@@ -730,8 +889,15 @@ static void URC_DrawWidget( urcWidget_t *w, float ox, float oy, float menuW, flo
 	if ( w->tileShader ) {
 		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, w->tileShader, color );
 	}
-	if ( w->shader ) {
-		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, w->shader, color );
+	shader = w->shader;
+	if ( w->cls == WC_CHECKBOX && w->linkcvar[0] ) {
+		shader = Cvar_VariableValue( w->linkcvar ) ? w->checkedShader : w->uncheckedShader;
+	}
+	if ( onTop && w->hoverShader && ( w - urc_widgets ) == urc_hoverWidget ) {
+		shader = w->hoverShader;
+	}
+	if ( shader ) {
+		URC_DrawPicST( x, y, wd, ht, 0, 0, 1, 1, shader, color );
 	}
 
 	// a stat bar fills from the bottom or the left with the stat's share
@@ -740,7 +906,7 @@ static void URC_DrawWidget( urcWidget_t *w, float ox, float oy, float menuW, flo
 		int			stat = URC_PlayerStat( w->playerstat );
 		float		max = w->maxplayerstat >= 0 ? URC_PlayerStat( w->maxplayerstat ) : w->statMax;
 		float		frac;
-		qhandle_t	shader;
+		qhandle_t	barShader;
 
 		if ( stat != w->lastStat ) {
 			if ( w->lastStat != -99999 ) {
@@ -751,15 +917,15 @@ static void URC_DrawWidget( urcWidget_t *w, float ox, float oy, float menuW, flo
 		frac = max > w->statMin ? ( stat - w->statMin ) / ( max - w->statMin ) : 0;
 		if ( frac < 0 ) frac = 0;
 		if ( frac > 1 ) frac = 1;
-		shader = ( w->statFlash && cls.realtime - w->statChangeTime < 500 ) ? w->statFlash :
+		barShader = ( w->statFlash && cls.realtime - w->statChangeTime < 500 ) ? w->statFlash :
 			( w->statTile ? w->statTile : w->statShader );
-		if ( shader && frac > 0 ) {
+		if ( barShader && frac > 0 ) {
 			if ( w->statbar == 1 ) {
 				float	fh = ht * frac;
 
-				URC_DrawPicST( x, y + ht - fh, wd, fh, 0, 1 - frac, 1, 1, shader, color );
+				URC_DrawPicST( x, y + ht - fh, wd, fh, 0, 1 - frac, 1, 1, barShader, color );
 			} else {
-				URC_DrawPicST( x, y, wd * frac, ht, 0, 0, frac, 1, shader, color );
+				URC_DrawPicST( x, y, wd * frac, ht, 0, 0, frac, 1, barShader, color );
 			}
 		}
 	}
@@ -790,8 +956,8 @@ static void URC_DrawWidget( urcWidget_t *w, float ox, float oy, float menuW, flo
 URC_DrawMenu
 =================
 */
-static void URC_DrawMenu( urcMenu_t *menu ) {
-	float	ox, oy, dx, dy, alpha;
+static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop ) {
+	float	ox, oy, alpha;
 	int		elapsed, i;
 	vec4_t	color;
 
@@ -799,19 +965,7 @@ static void URC_DrawMenu( urcMenu_t *menu ) {
 	if ( menu->hasBgfill ) {
 		URC_FillRect( 0, 0, 640, 480, menu->bgfill );
 	}
-	switch ( menu->alignH ) {
-	case 1: ox = ( 640 - menu->width ) * 0.5f; break;
-	case 2: ox = 640 - menu->width; break;
-	default: ox = 0; break;
-	}
-	switch ( menu->alignV ) {
-	case 1: oy = ( 480 - menu->height ) * 0.5f; break;
-	case 2: oy = 480 - menu->height; break;
-	default: oy = 0; break;
-	}
-	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, 640, 480, &dx, &dy );
-	ox += dx;
-	oy += dy;
+	URC_MenuOrigin( menu, elapsed, &ox, &oy );
 	alpha = URC_FadeAlpha( menu->fadein, elapsed );
 
 	Vector4Copy( menu->bgcolor, color );
@@ -819,7 +973,7 @@ static void URC_DrawMenu( urcMenu_t *menu ) {
 	URC_FillRect( ox, oy, menu->width, menu->height, color );
 
 	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
-		URC_DrawWidget( &urc_widgets[menu->firstWidget + i], ox, oy, menu->width, menu->height, elapsed, alpha );
+		URC_DrawWidget( &urc_widgets[menu->firstWidget + i], menu, ox, oy, elapsed, alpha, onTop );
 	}
 }
 
@@ -1056,6 +1210,18 @@ void URC_Draw( void ) {
 
 	URC_UpdateHud();
 
+	// the widget under the cursor, and its hover sound on arrival
+	{
+		int		hover = URC_WidgetUnderCursor();
+
+		if ( hover != urc_hoverWidget ) {
+			urc_hoverWidget = hover;
+			if ( hover >= 0 ) {
+				URC_PlaySound( urc_widgets[hover].hoverSound );
+			}
+		}
+	}
+
 	for ( i = 0 ; i < urc_numMenus ; i++ ) {
 		urcMenu_t	*menu = &urc_menus[i];
 		int			k;
@@ -1067,11 +1233,11 @@ void URC_Draw( void ) {
 			}
 		}
 		if ( menu->visible && !stacked ) {
-			URC_DrawMenu( menu );
+			URC_DrawMenu( menu, qfalse );
 		}
 	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
-		URC_DrawMenu( &urc_menus[urc_stack[i]] );
+		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1 );
 	}
 
 	if ( clc.state == CA_ACTIVE ) {
@@ -1084,8 +1250,8 @@ void URC_Draw( void ) {
 =================
 URC_KeyEvent
 
-Only while a menu is up: escape pops it. Mouse and the other keys are
-not handled yet.
+Only while a menu is up: escape pops it, the left button works the
+button or check box under the cursor. The other keys do nothing yet.
 =================
 */
 void URC_KeyEvent( int key, qboolean down ) {
@@ -1094,6 +1260,36 @@ void URC_KeyEvent( int key, qboolean down ) {
 	}
 	if ( key == K_ESCAPE ) {
 		URC_PopMenu();
+		return;
+	}
+	if ( key == K_MOUSE1 ) {
+		int		i = URC_WidgetUnderCursor();
+
+		if ( i >= 0 ) {
+			urcWidget_t	*w = &urc_widgets[i];
+
+			URC_PlaySound( w->clickSound );
+			if ( w->cls == WC_CHECKBOX && w->linkcvar[0] ) {
+				Cvar_Set( w->linkcvar, Cvar_VariableValue( w->linkcvar ) ? "0" : "1" );
+			}
+			if ( w->stuffcommand[0] ) {
+				Cbuf_AddText( va( "%s\n", w->stuffcommand ) );
+			}
+		}
+	}
+}
+
+/*
+=================
+CL_MouseAbsEvent
+
+The system cursor, in window pixels, while a menu is up.
+=================
+*/
+void CL_MouseAbsEvent( int x, int y ) {
+	if ( cls.glconfig.vidWidth > 0 && cls.glconfig.vidHeight > 0 ) {
+		urc_cursorX = x * 640.0f / cls.glconfig.vidWidth;
+		urc_cursorY = y * 480.0f / cls.glconfig.vidHeight;
 	}
 }
 
@@ -1201,7 +1397,8 @@ static void URC_LoadAllMenus( void ) {
 	char	**files;
 	int		numFiles, i;
 
-	urc_numMenus = urc_numWidgets = 0;
+	urc_numMenus = urc_numWidgets = urc_numAliases = 0;
+	urc_hoverWidget = -1;
 	files = FS_ListFiles( "ui", ".urc", &numFiles );
 	for ( i = 0 ; i < numFiles ; i++ ) {
 		URC_LoadMenuFile( va( "ui/%s", files[i] ) );

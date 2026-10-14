@@ -286,10 +286,15 @@ Not read, done another way:
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
   tests a field of its print object), the print's screen position (y 160 here), its
   fade (the last second), the `@shader` size (256x128), the stat-bar flash (half a
-  second after a change), and `ui_hud`, a command in retail, is a cvar here. Not done:
-  mouse and keyboard in menus (Escape closes one), Button/CheckBox/Field/Slider/List
-  behaviour, borders, `invmodelrender`, `tileshader` tiling (drawn stretched),
-  `linkstring`, `aliascache` sounds. The menu shaders use `rgbGen global` /
+  second after a change), and `ui_hud`, a command in retail, is a cvar here. The retail
+  client shows the system cursor over a menu (`ShowCursor`); so does this one: the
+  mouse is released while a menu is up and its window position reaches the menu, whose
+  topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)
+  and takes the left button (`clicksound`, `stuffcommand`; a check box toggles its
+  `linkcvar`). `aliascache` names are picked by weight among the aliases sharing the
+  prefix. Not done: keyboard in menus beyond Escape, Field/Slider/List/Pulldown
+  behaviour (drawn only), borders, `invmodelrender`, `tileshader` tiling (drawn
+  stretched), `linkstring`, `ordernumber`. The menu shaders use `rgbGen global` /
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
