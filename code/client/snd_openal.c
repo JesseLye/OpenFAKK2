@@ -670,20 +670,20 @@ static void S_AL_Gain(ALuint source, float gainval)
 /*
 =================
 S_AL_ScaleGain
-Adapt the gain if necessary to get a quicker fadeout when the source is too far away.
+
+FAKK2: OpenAL attenuates the source itself (the clamped inverse-distance
+model set up in S_AL_SrcSetup), and beyond SOUND_MAX_DIST_FACTOR minimum
+distances the clamp holds the gain at SOUND_MIN_GAIN, as Miles did for the
+retail engine. Quake III muted a source out there so that a far loop could
+be paused and its source reused; that is not done, so a far loop plays on
+at 1/64 like the retail one. The gain is zero only when the sound's own
+volume is.
 =================
 */
 
 static void S_AL_ScaleGain(src_t *chksrc, vec3_t origin)
 {
 	float scaleFactor = chksrc->curGain;
-
-	// FAKK2: OpenAL attenuates the source itself, out to SOUND_MAX_DIST_FACTOR
-	// times its minimum distance. Beyond that the retail engine's sample
-	// stays at SOUND_MIN_GAIN; here it is muted instead, which lets a loop
-	// out of range be paused and its source reused.
-	if(!chksrc->local && Distance(origin, lastListenerOrigin) > chksrc->minDist * SOUND_MAX_DIST_FACTOR)
-		scaleFactor = 0.0f;
 
 	if(chksrc->scaleGain != scaleFactor)
 	{
