@@ -1270,7 +1270,8 @@ What is implemented, and on what basis:
   registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
   `+attackleft` 1, `+sneak` 2, `+run` 3, `+holster` 4, `+use` 5) and `+cameralook`
   as a client flag. `+togglemouse` (`0x41d960`; retail registers no `-togglemouse`),
-  `ui_showmouse` (`0x41d9b0`) and `ui_hidemouse` (`0x41da00`) put up and take down a
+  `ui_showmouse` and `ui_hidemouse` (which push and pop the interface's mouse window, `0x40d900`,
+  `0x40d920`, raising and clearing the same flag, `0x41d9b0`, `0x41da00`) put up and take down a
   cursor in the game, after letting go of any mouse button held: while it is up the
   mouse moves it instead of the view (`0x41e100`) and the mouse buttons skip their
   bindings (`0x41fad1`). Here it is the system cursor, as for the menus. As retail's

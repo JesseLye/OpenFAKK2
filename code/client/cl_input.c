@@ -97,7 +97,9 @@ static void IN_ReleaseMouseButtons( void ) {
 	}
 }
 
-// +togglemouse (0x41d960), ui_showmouse (0x41d9b0), ui_hidemouse (0x41da00)
+// +togglemouse (0x41d960); ui_showmouse and ui_hidemouse push and pop the
+// interface's mouse window (0x40d900, 0x40d920), which raises and clears the
+// same flag (0x41d9b0, 0x41da00)
 static void IN_ToggleMouse_f( void ) {
 	IN_ReleaseMouseButtons();
 	cl_mouseShown = !cl_mouseShown;
