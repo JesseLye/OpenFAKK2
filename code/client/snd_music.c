@@ -32,7 +32,10 @@ MUSIC_UpdateVolume. Read from fakk2.exe:
   s_volume. The retail default for s_musicvolume is 0.60.
 
 Here the two handles are two raw streams fed from the codec streams a
-little ahead of real time, on either sound backend. Not followed: the
+little ahead of real time, on either sound backend. Their clock is
+Sys_Milliseconds rather than cls.realtime, which timescale scales and a
+hitch clamps, and which stands still while the window is dragged: the
+input code runs S_Update then (IN_ModalLoopWatch). Not followed: the
 retail engine truncates fade times to whole seconds, and its fade-down of
 the game's volume starts from 1 rather than the current value.
 ===========================================================================
@@ -103,12 +106,12 @@ typedef struct {
 	snd_stream_t		*stream;
 	int					song;
 	musicHandleState_t	state;
-	int					fadeStart;		// cls.realtime
+	int					fadeStart;		// Sys_Milliseconds
 	float				fadeTime;
 	qboolean			watchEnd;		// still counted for "song ended"
 	qboolean			looping;
 	qboolean			ended;			// the file ran out
-	int					startTime;		// cls.realtime when feeding began
+	int					startTime;		// Sys_Milliseconds when feeding began
 	int					playedFrames;	// fed since startTime
 	int					posFrame;		// position in the song
 } musicHandle_t;
@@ -401,7 +404,7 @@ void MUSIC_UpdateVolume( float volume, float fadeTime ) {
 	}
 	music_startVolume = music_volume;
 	music_targetVolume = volume;
-	music_fadeStart = cls.realtime;
+	music_fadeStart = Sys_Milliseconds();
 	music_fadeTime = fadeTime;
 	if ( volume > music_volume ) {
 		music_fadeDown = qfalse;
@@ -438,7 +441,7 @@ static void MUSIC_PlaySong( const char *moodName ) {
 		if ( !( song->flags & SONG_INTERRUPT ) ) {
 			// the song playing fades out over the new song's fade time
 			music_handles[old].state = HANDLE_FADE_OUT;
-			music_handles[old].fadeStart = cls.realtime;
+			music_handles[old].fadeStart = Sys_Milliseconds();
 			music_handles[old].fadeTime = song->fadeTime;
 			useOther = qtrue;
 		} else {
@@ -459,7 +462,7 @@ static void MUSIC_PlaySong( const char *moodName ) {
 	handle->song = idx;
 	handle->watchEnd = qtrue;
 	handle->ended = qfalse;
-	handle->startTime = cls.realtime;
+	handle->startTime = Sys_Milliseconds();
 	handle->playedFrames = 0;
 	handle->posFrame = 0;
 	if ( song->resumeFrame > 0 && S_CodecSeekStream( handle->stream, song->resumeFrame ) ) {
@@ -471,7 +474,7 @@ static void MUSIC_PlaySong( const char *moodName ) {
 	} else {
 		handle->looping = qfalse;
 		handle->state = HANDLE_FADE_IN;
-		handle->fadeStart = cls.realtime;
+		handle->fadeStart = Sys_Milliseconds();
 		handle->fadeTime = song->fadeTime;
 	}
 	Com_DPrintf( "MUSIC: playing %s (%s) on handle %i%s%s\n", song->path, song->name, h,
@@ -525,10 +528,10 @@ static void MUSIC_FeedHandle( int h, float gain ) {
 	if ( handle->ended || frameBytes <= 0 ) {
 		return;
 	}
-	target = (int)( ( cls.realtime - handle->startTime ) * (double)info->rate / 1000.0 ) + info->rate * MUSIC_LEAD_MS / 1000;
+	target = (int)( ( Sys_Milliseconds() - handle->startTime ) * (double)info->rate / 1000.0 ) + info->rate * MUSIC_LEAD_MS / 1000;
 	if ( target - handle->playedFrames > info->rate * MUSIC_RESYNC_MS / 1000 ) {
 		// too far behind (a load, a stall): skip ahead rather than flood the stream
-		handle->startTime = cls.realtime - (int)( handle->playedFrames * 1000.0 / info->rate );
+		handle->startTime = Sys_Milliseconds() - (int)( handle->playedFrames * 1000.0 / info->rate );
 		target = handle->playedFrames + info->rate * MUSIC_LEAD_MS / 1000;
 	}
 
@@ -576,7 +579,7 @@ static void MUSIC_UpdateHandles( void ) {
 
 		f = 1;
 		if ( handle->state != HANDLE_STEADY && handle->fadeTime > 0 ) {
-			f = ( cls.realtime - handle->fadeStart ) / ( handle->fadeTime * 1000.0f );
+			f = ( Sys_Milliseconds() - handle->fadeStart ) / ( handle->fadeTime * 1000.0f );
 		}
 		switch ( handle->state ) {
 		case HANDLE_FADE_IN:
@@ -641,7 +644,7 @@ void MUSIC_Update( void ) {
 		if ( music_fadeTime <= 0 ) {
 			music_volume = music_targetVolume;
 		} else {
-			float	f = ( cls.realtime - music_fadeStart ) / ( music_fadeTime * 1000.0f );
+			float	f = ( Sys_Milliseconds() - music_fadeStart ) / ( music_fadeTime * 1000.0f );
 
 			music_volume = music_startVolume + ( music_targetVolume - music_startVolume ) * f;
 			if ( ( !music_fadeDown && music_volume > music_targetVolume ) || ( music_fadeDown && music_volume < music_targetVolume ) ) {

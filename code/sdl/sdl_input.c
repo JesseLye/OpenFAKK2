@@ -59,6 +59,9 @@ static int in_eventTime = 0;
 
 static SDL_Window *SDL_window = NULL;
 
+// Sys_Milliseconds when IN_Frame started reading events, -1 outside it
+static int in_frameStart = -1;
+
 #define CTRL(a) ((a)-'a'+1)
 
 /*
@@ -1238,12 +1241,39 @@ static void IN_ProcessEvents( void )
 
 /*
 ===============
+IN_ModalLoopWatch
+
+Dragging or resizing the window holds IN_Frame inside SDL_PumpEvents for as
+long as the mouse button is down: Windows runs its own move loop there, and
+no frame runs. The music is fed from S_Update a quarter second ahead, so it
+ran dry and came back on release. SDL sends an expose event every 10 ms of
+that loop; keep the sound going from it. Events are only read at the top of
+the frame, so nothing is halfway through when S_Update runs here.
+===============
+*/
+static int SDLCALL IN_ModalLoopWatch( void *userdata, SDL_Event *e )
+{
+	if( e->type != SDL_WINDOWEVENT || e->window.event != SDL_WINDOWEVENT_EXPOSED )
+		return 0;
+
+	// an expose read in the normal course of a frame is not a stall
+	if( in_frameStart < 0 || Sys_Milliseconds( ) - in_frameStart < 20 )
+		return 0;
+
+	S_Update( );
+	return 0;
+}
+
+/*
+===============
 IN_Frame
 ===============
 */
 void IN_Frame( void )
 {
 	qboolean loading;
+
+	in_frameStart = Sys_Milliseconds( );
 
 	IN_JoyMove( );
 
@@ -1278,6 +1308,8 @@ void IN_Frame( void )
 		IN_ActivateMouse( cls.glconfig.isFullscreen );
 
 	IN_ProcessEvents( );
+
+	in_frameStart = -1;
 
 	// Set event time for next frame to earliest possible time an event could happen
 	in_eventTime = Sys_Milliseconds( );
@@ -1332,6 +1364,10 @@ void IN_Init( void *windowData )
 
 	SDL_StartTextInput( );
 
+	// IN_Restart comes back through here
+	SDL_DelEventWatch( IN_ModalLoopWatch, NULL );
+	SDL_AddEventWatch( IN_ModalLoopWatch, NULL );
+
 	mouseAvailable = ( in_mouse->value != 0 );
 	IN_DeactivateMouse( Cvar_VariableIntegerValue( "r_fullscreen" ) != 0 );
 
@@ -1350,6 +1386,7 @@ IN_Shutdown
 */
 void IN_Shutdown( void )
 {
+	SDL_DelEventWatch( IN_ModalLoopWatch, NULL );
 	SDL_StopTextInput( );
 
 	IN_DeactivateMouse( Cvar_VariableIntegerValue( "r_fullscreen" ) != 0 );
