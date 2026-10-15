@@ -1,4 +1,4 @@
-param([string]$Map = 'training', [string]$Probe = 'probe', [int]$Secs = 150, [int]$Show = 12, [double]$Tolerance = 0.01, [string]$Extra = '', [switch]$Refresh, [switch]$RetailTwice)
+param([string]$Map = 'training', [string]$Probe = 'probe', [int]$Secs = 150, [int]$Show = 12, [double]$Tolerance = 0.01, [string]$Extra = '', [switch]$Refresh, [switch]$RetailTwice, [switch]$NoRetail, [string]$Bin = '')
 # Compares game state with a player present: the retail game (real client, nobody at the
 # controls) against OpenFAKK2 with its headless test player. Both run the same probe
 # script (tools\retail-compare\<Probe>.scr), which waits for the player and then prints
@@ -10,6 +10,8 @@ param([string]$Map = 'training', [string]$Probe = 'probe', [int]$Secs = 150, [in
 # -RetailTwice runs the retail game a second time in place of OpenFAKK2, to show how much
 # retail differs from itself (the game seeds its random numbers from the clock). In that
 # output "ours" is the second retail run.
+# -NoRetail never starts the retail game: with no cached retail log it reports and stops
+# (the test suite's routine runs). -Bin runs another build's openfakk2ded.exe.
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $probeFile = Join-Path $PSScriptRoot "$Probe.scr"
@@ -35,37 +37,48 @@ $retailLog = Join-Path $LogDir "player-retail-$(Get-MapTag $Map)-$Probe.log"
 function Run-Retail($log) {
     $dir = Join-Path $Sandbox 'retail'
     if (-not (Test-Path "$dir\fakk2.exe")) { & (Join-Path $PSScriptRoot 'run-retail.ps1') -Name retail -Map $Map -Secs 5 | Out-Null }
-    Copy-Item "$GameInstall\fakk\default.cfg" "$dir\fakk\default.cfg" -Force
     $probeDir = Get-ProbeDir $dir $Map
     New-Item -ItemType Directory -Force $probeDir | Out-Null
     Copy-Item $probeFile "$probeDir\$Probe.scr" -Force
     $console = "$dir\fakk\qconsole.log"
     Remove-Item $console -ErrorAction SilentlyContinue
     $arguments = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 +map $Map $after"
-    $p = Start-Process -FilePath "$dir\fakk2.exe" -WorkingDirectory $dir -ArgumentList $arguments -PassThru -WindowStyle Minimized
-    $done = Wait-ForMarker $p @($console) $Secs
-    if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
+    $p = $null; $done = $false
+    try {
+        $p = Start-HarnessGame -Side retail -Exe "$dir\fakk2.exe" -WorkDir $dir -Arguments $arguments -WindowStyle Minimized -What "compare-player retail $Map $Probe"
+        $done = Wait-ForMarker $p @($console) $Secs
+    }
+    finally { Stop-HarnessGame $p }
     if (Test-Path $console) { Copy-Item $console $log -Force }
     if (-not $done) { "[$Map] retail: the probe did not finish within ${Secs}s" }
 }
-if ($Refresh -or -not (Test-Path $retailLog)) { Run-Retail $retailLog }
+if ($Refresh -or -not (Test-Path $retailLog)) {
+    if ($NoRetail) { "[$Map/$Probe] no retail reference at $retailLog (and -NoRetail)"; return }
+    Run-Retail $retailLog
+}
 
 # --- OpenFAKK2 ----------------------------------------------------------------------
 if ($RetailTwice) {
     $ourLog = Join-Path $LogDir "player-retail2-$(Get-MapTag $Map)-$Probe.log"
     Run-Retail $ourLog
 } else {
+if (-not $Bin) { $Bin = $EngineBin }
 $ourLog = Join-Path $LogDir "player-ours-$(Get-MapTag $Map)-$Probe.log"
-$homeMaps = Get-ProbeDir (Join-Path $Sandbox 'home') $Map
+$homeMaps = Get-ProbeDir $TestHome $Map
 New-Item -ItemType Directory -Force $homeMaps | Out-Null
 Copy-Item $probeFile "$homeMaps\$Probe.scr" -Force
 Remove-Item "$ourLog.stdout", "$ourLog.stderr" -ErrorAction SilentlyContinue
-$arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$(Join-Path $Sandbox 'home')`" +set com_abnormalExitDialog 0 +set developer 1 +set sv_testplayer 1 $Extra +map $Map $after"
-$p = Start-Process -FilePath "$EngineBin\openfakk2ded.exe" -WorkingDirectory $EngineBin -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput "$ourLog.stdout" -RedirectStandardError "$ourLog.stderr"
-$done = Wait-ForMarker $p @("$ourLog.stdout", "$ourLog.stderr") $Secs
-$exited = $p.HasExited
-if (-not $exited) { $p.Kill(); $p.WaitForExit() }
-Get-Content "$ourLog.stdout", "$ourLog.stderr" | Set-Content $ourLog
+$arguments = "$OursHomeArgs +set developer 1 +set sv_testplayer 1 $Extra +map $Map $after"
+$p = $null; $done = $false; $exited = $false
+try {
+    $p = Start-HarnessGame -Side ours -Exe "$Bin\openfakk2ded.exe" -Arguments $arguments -NoNewWindow -Stdout "$ourLog.stdout" -Stderr "$ourLog.stderr" -What "compare-player ours $Map $Probe"
+    $done = Wait-ForMarker $p @("$ourLog.stdout", "$ourLog.stderr") $Secs
+    $exited = $p.HasExited
+}
+finally {
+    Stop-HarnessGame $p
+    if (Test-Path "$ourLog.stdout") { Get-Content "$ourLog.stdout", "$ourLog.stderr" -ErrorAction SilentlyContinue | Set-Content $ourLog }
+}
 if ($exited) { "[$Map] ours: the server exited (code $($p.ExitCode))" } elseif (-not $done) { "[$Map] ours: the probe did not finish within ${Secs}s" }
 }
 

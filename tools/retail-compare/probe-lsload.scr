@@ -3,7 +3,7 @@
 // load/save button do. Before the fix the main menu's first frame crashed in the
 // renderer (FixRenderCommandList, tr_shader.c; docs/known-differences.md). It needs the
 // crashed session's save, config_fakkhouse0004.* (.sav, .ssv, .spv, .tga), in the
-// sandbox's save folder, build\sandbox\home\fakk\save; it crashed with the rebuilt and
+// harness's save folder, build\sandbox\test-home\fakk\save; it crashed with the rebuilt and
 // the retail gamex86.dll alike. A loaded game makes no autosave, so the menu is chained
 // behind frame waits; the screenshot shows the saved games listed.
 //   .claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse

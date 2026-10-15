@@ -133,9 +133,10 @@ tools\retail-compare\compare-player.ps1 -Map zoo -Probe probe-sling -Secs 120 [-
 
 Logs land in `build\compare`: `player-retail-<map>-<probe>.log`, `player-ours-<map>-<probe>.log`
 from the headless comparison, `client-<name>-<map>-<probe>.log` from the client runner
-(`client-retail-...` with `-Retail`). On retail, a cvar passed in `-Extra` that retail
-archives is saved in the sandbox's `config.cfg` and carries into later retail runs; set it
-back or check that file before trusting a "default" run.
+(`client-retail-...` with `-Retail`). Every run starts both games from an empty
+`config.cfg` (ours on the test home, `build\sandbox\test-home`, never the player's
+`build\sandbox\home`), so a cvar passed in `-Extra` lasts that run only. Runners take
+turns through the harness lock and refuse to start beside the player's own game.
 The client's log echoes every server print twice (once as the raw `serverCommand`, once
 as console output); `readings.ps1` drops the echo.
 

@@ -51,7 +51,7 @@ tools\retail-compare\install-example-maps.ps1
 
 It copies the `.bsp`, `.scr` and `.pth` files from `$RitualTools\fakk\maps\example`
 (`common.ps1`; `FAKK2_TOOLS` overrides it) into `build\sandbox\retail\fakk\maps\example`
-and `build\sandbox\home\fakk\maps\example`, and skips files already there. Ritual's licence
+and `build\sandbox\test-home\fakk\maps\example`, and skips files already there. Ritual's licence
 does not allow copying them, so they stay under `build\` and are never committed. Run it
 again in each new worktree: its sandboxes are its own.
 
@@ -187,10 +187,9 @@ wait 1                 // settle
 
 - Walking: 91 u/s; jump (`@hold moveup 0.2`): 400 u/s up with 160 u/s forward, gravity
   800, about a second in the air. `+forward` alone walks on both engines (`cl_run`
-  defaults to 0, as in retail). If the real client runs at 345 u/s, an old
-  `seta cl_run "1"` is sitting in `build\sandbox\home\fakk\config.cfg` (from an older
-  build, or taken from the install's `config.cfg` before `common.ps1` shadowed it; it
-  warns). Delete the line.
+  defaults to 0, as in retail). Harness runs start from an empty `config.cfg` on the
+  test home, so the player's own `cl_run 1` never reaches them; if the real client runs
+  at 345 u/s, something on the command line set it.
 - To fire while moving, press the movement key before the attack and release it after:
   `stuffcmd "+forward"`, `wait 1`, `@hold attackright 1.5`, `wait 0.3`,
   `stuffcmd "-forward"`. Moving adds the player's velocity to a projectile

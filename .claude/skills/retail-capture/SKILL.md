@@ -80,7 +80,7 @@ does not quit: end a picture probe with `stuffcmd "quit"` yourself.
 
 `tools\retail-compare\fx` holds test models (still sprites, the fade rules, overlapping
 sprites). `capture.ps1` does not install them: copy `fx\*.tik` into
-`build\sandbox\retail\fakk\models` and `build\sandbox\home\fakk\models` first.
+`build\sandbox\retail\fakk\models` and `build\sandbox\test-home\fakk\models` first.
 
 ```
 probe:
@@ -175,11 +175,15 @@ its waits are long.
 
 ## Traps
 
-- **Retail keeps archived cvars.** Retail saves its archived cvars in
-  `build\sandbox\retail\fakk\config.cfg` on exit, and the sandbox is reused. A
-  `-RetailExtra "+set r_lightcoronasize 0"` run left the corona off in the next "default"
-  retail capture. Set such a cvar back explicitly, or check that file, before trusting a
-  default capture.
+- **Every run starts from defaults.** Both games archive cvars a run sets (a
+  `-RetailExtra "+set r_lightcoronasize 0"` run once left the corona off in the next
+  "default" retail capture). The harness now empties `config.cfg` before every game it
+  starts (`Reset-TestHome`, `Reset-RetailConfig` in `common.ps1`), so a setting lasts one
+  run: pass it on every run that needs it.
+- **One game at a time.** Every runner takes the harness lock (`build\harness.lock` in
+  the main checkout) and waits while another session's game runs ("harness: waiting
+  for..."); it refuses to start beside the player's own game. A run cut short takes its
+  game with it.
 - **Cheat cvars do nothing on ours** under `+map` (cheats are off): a `CVAR_CHEAT` cvar
   stays at its default and the "experiment" shows no change. Cheat *commands* (`give`,
   `whatis`) do work on both. Read a cvar's value back in the log before trusting a result
@@ -188,7 +192,7 @@ its waits are long.
   passes `+set com_abnormalExitDialog 0`, so something else launched the game.
 - **The loading screen** cannot be shot from a probe (the renderer is down until the
   gamestate's `R_Init`). Run the client with `+set sv_fps 1 +set com_maxfps 20 +map <m>
-  +exec <cfg>`, the cfg in `build\sandbox\home\fakk` holding `wait 1` / `screenshot` pairs
+  +exec <cfg>`, the cfg in `build\sandbox\test-home\fakk` holding `wait 1` / `screenshot` pairs
   (the startup command line is capped at 32 lines); the shots before `CS_PRIMED to
   CS_ACTIVE` in the log are the load.
 - **Keep probe names short.** The retail client silently drops the end of a long command

@@ -20,9 +20,38 @@ text in `build\ritual-docs`.
     tools\retail-compare\compare.ps1 -Map zoo -Tag '-dump' -After '+levelvars +gamevars +pendingevents'
 
 Retail output is cached per map and tag in `build\compare`; delete `ded-retail-*.log` to
-refresh it. OpenFAKK2 looks for the game module in `build\sandbox\home\fakk` first, so put
-the retail `gamex86.dll` there to compare engines with the same game code, or remove it to
-test the rebuilt module.
+refresh it. OpenFAKK2 looks for the game module in its home's `fakk` folder first and then
+beside the executable. Harness runs take it from beside the executable (the rebuilt one);
+set `FAKK2_TEST_MODULES=retail` to run Ritual's `gamex86.dll` and `cgamex86.dll` instead
+and compare engines with the same game code.
+
+## How the runners start the games
+
+- **The test home.** OpenFAKK2 runs with the install as `fs_basepath` and
+  `build\sandbox\test-home` as `fs_homepath`. `build\sandbox\home` in the main checkout is
+  the player's (`run.cmd` plays from it): its `config.cfg`, saves and crash logs are theirs,
+  and no runner uses it. Before every game it starts, the harness empties the test home's
+  `config.cfg`, `autoexec.cfg` and `config_server.cfg` and takes out any game module
+  (`Reset-TestHome`), and empties the retail sandbox's `config.cfg`
+  (`Reset-RetailConfig`). So a cvar a run sets lasts that run only, and nothing from the
+  install's or the player's settings (such as `cl_run 1`) reaches a probe. Screenshots,
+  saves and probes for ours are under `build\sandbox\test-home\fakk`.
+- **No networking.** Ours runs with `+set net_enabled 0` and retail with
+  `+set net_noudp 1 +set net_noipx 1` (`$OursNoNet`, `$RetailNoNet`), so Windows never
+  asks to let a new executable through its firewall. The loopback a local game and the
+  test player use still works.
+- **One game at a time.** Every runner starts its game through `Start-HarnessGame`, which
+  takes the harness lock, `build\harness.lock` in the main checkout (shared by all
+  worktrees), and `Stop-HarnessGame` in a `finally` lets it go. Another runner waits
+  ("harness: waiting for the harness lock, held by ..."; up to `FAKK2_HARNESS_WAIT`
+  seconds, an hour by default). While the player's own game runs (one not started by a
+  harness: `run.cmd`, the installed game) the runner refuses with a message. A harness
+  game whose runner has gone is stopped.
+- **Safe to cut short.** Each game is tied to the PowerShell process that started it (a
+  job object that kills it when the process ends) and the lock is a file held open, so a
+  Ctrl+C, a killed shell or a pipeline stopped early (`| Select-Object -First 1`) leaves
+  neither a game nor a held lock behind. Still, do not pipe a run into
+  `Select-Object -First`: it drops the output after the cut. Capture it, then trim.
 
 - `bsp_entities.py <pak> <map> <regex>` prints matching entities from a map's entity lump.
 - `check_tiki_against_cik.py <pak0> <pak1>` checks the model bounds and radius rules
@@ -110,7 +139,7 @@ retail game again. Choose the probe with `-Probe`:
   load/save menu over it, taking a screenshot of the list. It is the regression probe for
   the renderer's crash on the main menu's first frame (`FixRenderCommandList`, see
   `docs/known-differences.md`), which only that save showed: copy the crashed session's
-  `config_fakkhouse0004.*` into `build\sandbox\home\fakk\save` first. Real clients only:
+  `config_fakkhouse0004.*` into `build\sandbox\test-home\fakk\save` first. Real clients only:
   `.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse`.
   It finishes ("loadsave menu up") or the client exits with code 2.
 - `probe-doors` (`training`) and `probe-h2e` (`homes2evil`) open every door on the map in
@@ -190,19 +219,17 @@ at fixed times. `probe-load` takes one shot after entry and quits: does a map lo
 `probe-ambient` spawns a box and a statue on `zoo`, lit from the light grid, before a
 script camera (`r_ambientScale`). `probe-wgroup` saves the green sword as weapon group 3
 on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`). `probe-fps`
-frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`
-and remove the archived `fps` from both sandboxes' `config.cfg` afterwards.
+frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`.
 `probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
-on `zoo`; copy that tik into both sandboxes' `fakk\models` first.
+on `zoo`; copy that tik into `build\sandbox\retail\fakk\models` and
+`build\sandbox\test-home\fakk\models` first.
 `probe-hay` frames the hay (`tcMod macro`) and the slime pool (`rgbGen colorwave`) on
 `creeperpens` from two script cameras.
 `probe-dot` frames the suck juice pool on `swamp2` (`alphaGen oneMinusDot`, an `rgbGen`
 after `nextBundle`).
 `probe-dlines` draws the `csys_draw` axes (game debug lines) from inside a box on `zoo`,
-depth tested and then with `r_debuglines_depthmask 1`; remove that archived cvar from both
-sandboxes' `config.cfg` afterwards. `probe-llines` frames Julie (lit from a light cube) on
-`zoo` with `r_light_lines 1` and `r_light_sun_line 1`, then `r_light_nolight 1`; check
-both sandboxes' `config.cfg` for them afterwards.
+depth tested and then with `r_debuglines_depthmask 1`. `probe-llines` frames Julie (lit from a light cube) on
+`zoo` with `r_light_lines 1` and `r_light_sun_line 1`, then `r_light_nolight 1`.
 `probe-skel` draws Julie's skeleton on `zoo` (`r_showskel 1`), then sets `r_place_sunflare 1`
 and prints `r_sunflare`, the point it wrote, to the log.
 `probe-lod` frames Julie and a spawned statue on `zoo` with `r_showlod 1` (each model's
@@ -218,12 +245,11 @@ cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
 with the HUD and after `ui_hud 0`. `probe-dialog` brings up a `dialog` on `zoo`; retail
 crashes on quitting with it open, which the capture survives. `probe-tlist` does the same
 with `ui_testlist`; retail shows only the first floating window of a run. `probe-vidmode`
-runs `vidmode 4` on `zoo` and shoots at 800x600; remove `r_mode` from both sandboxes'
-`config.cfg` afterwards. `probe-resetcv` prints two of the GameCamera menu's cvars before and
+runs `vidmode 4` on `zoo` and shoots at 800x600. `probe-resetcv` prints two of the GameCamera menu's cvars before and
 after `ui_resetcvars`; compare the logs (it takes no screenshot).
 `probe-restart` and `probe-rsnd` latch `r_picmip` and `s_loadas8bit` under their menus and run
 `ui_checkrestart`; compare the logs from the `==== check` marker (retail's script stops after
-the restart, so pass `-Secs 60`), then remove both cvars from both sandboxes' `config.cfg`.
+the restart, so pass `-Secs 60`).
 `probe-popmenu` prints `cg_cameradist` after `popmenu 1` and `popmenu 0` under GameCamera.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
@@ -237,13 +263,10 @@ opens its console window at startup while it is set, dimming the menus). For the
 save menu, copy the install's `save\*.ssv` and `*.tga` into
 `build\sandbox\retail\fakk\save` first, so retail lists the games ours finds in the install.
 
-OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
-`fs_homepath`; the retail runs use a clean copy of the install. So that ours does not
-read the player's own `autoexec.cfg` or `config.cfg` from the install (the player's
-`config.cfg` set `cl_run 1`, so the client ran where retail walks), `common.ps1` puts an
-empty one of each in a new sandbox home, and warns when the home's `config.cfg` has
-`cl_run 1`. Archived cvars persist in the sandbox's `config.cfg` between runs: if a
-client-side default changes (as `cl_run` did), delete the old `seta` line there.
+The retail runs use a clean copy of the install. Ours runs on the test home (see "How the
+runners start the games"), which shadows the install's `autoexec.cfg` and `config.cfg`
+with empty ones: the player's `config.cfg` there set `cl_run 1`, and the client ran where
+retail walks.
 
 ## Sound
 
@@ -294,17 +317,17 @@ runs as `compare-player.ps1` compares retail with ours. See "Saved games" in
 
 runs the OpenFAKK2 client in a window against the retail data, copies its console log
 to `build\compare\client.log` (`-Name` changes the name) and stops it after `-Secs`
-seconds if it has not quit. Screenshots land in `build\sandbox\home\fakk\screenshots`.
+seconds if it has not quit. Screenshots land in `build\sandbox\test-home\fakk\screenshots`.
 A run stopped that way leaves ioquake3's pid file behind, which would make the next
 start wait on the "didn't exit properly, start in safe mode?" dialog; the script passes
 `+set com_abnormalExitDialog 0`, which skips the dialog and starts as normal. Use the
-same when launching the game by hand from a sandbox a harness run has used.
+same when launching the game by hand from a home a killed game has used.
 
 `-Run "+map zoo +wait 900 +screenshotJPEG +wait 10 +quit"` joins a local game instead:
 the client game module draws the level from the game's camera. The module is looked for
-in `build\sandbox\home\fakk` first, then beside the executable, so copying the retail
-`cgamex86.dll` into the sandbox home tests the engine against Ritual's own build; remove
-it again to go back to the rebuilt module.
+in the home's `fakk` folder first, then beside the executable; `FAKK2_TEST_MODULES=retail`
+puts Ritual's modules in the test home for a run, to test the engine against Ritual's own
+build.
 `viewpos <x> <y> <z> [yaw] [pitch]` places the camera before a screenshot. `viewsky` prints the sky
 portal camera's position, `viewsky <x> <y> <z>` moves it and `viewsky off` turns it off, which
 also shows the sky's models as ordinary scenery. With `developer 1` the log names each

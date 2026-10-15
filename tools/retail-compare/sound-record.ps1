@@ -1,6 +1,6 @@
 param([ValidateSet('retail', 'openal', 'dma')][string]$Engine = 'openal', [string]$Probe = 'probe-sound-pan',
       [string]$Map = 'zoo', [double]$Volume = 0.25, [double]$Music = 0, [int]$Secs = 55, [string]$Tag = '',
-      [string]$Extra = '', [string]$Python = 'python')
+      [string]$Extra = '', [string]$Python = 'python', [string]$Bin = '')
 # Runs a sound probe on the retail game or on OpenFAKK2 (its OpenAL or its software-mixer
 # backend) while recording what the speakers play, to build\compare\sound-<engine>-<probe><tag>.npy;
 # read the recordings with sound_levels.py. The sound plays out loud, and anything else
@@ -15,7 +15,7 @@ param([ValidateSet('retail', 'openal', 'dma')][string]$Engine = 'openal', [strin
 $name = "sound-$Engine-$Probe$Tag"
 $out = Join-Path $LogDir "$name.npy"
 $retailDir = Join-Path $Sandbox 'retail-snd'
-$homeFakk = Join-Path $Sandbox 'home\fakk'
+$homeFakk = $TestFakk
 
 if ($Engine -eq 'retail' -and -not (Test-Path "$retailDir\fakk2.exe")) {
     New-Item -ItemType Directory -Force "$retailDir\fakk", "$retailDir\snddrivers" | Out-Null
@@ -31,24 +31,37 @@ Copy-Item (Join-Path $PSScriptRoot "$Probe.scr") "$gameDir\maps" -Force
 & $Python (Join-Path $PSScriptRoot 'sound_tone.py') "$gameDir\sound\test\tone.wav"
 
 $run = "+set s_volume $Volume +set s_musicvolume $Music $Extra +map $Map +script thread $Probe.scr::probe"
-$capture = Start-Process -FilePath $Python -ArgumentList "`"$(Join-Path $PSScriptRoot 'sound_capture.py')`" `"$out`" $Secs" -PassThru -WindowStyle Hidden -RedirectStandardOutput "$out.txt"
-if ($Engine -eq 'retail') {
-    Copy-Item "$GameInstall\fakk\default.cfg" "$retailDir\fakk\default.cfg" -Force
-    Remove-Item "$retailDir\fakk\qconsole.log" -ErrorAction SilentlyContinue
-    $p = Start-Process -FilePath "$retailDir\fakk2.exe" -WorkingDirectory $retailDir -PassThru -ArgumentList "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set logfile 2 +set developer 1 +set s_milesdriver eax2 +set s_khz 44 $run"
-    # a window that comes up in front of it (another game run, a dialog) silences it, so
-    # keep bringing it back for as long as the recording lasts
-    Add-Type -Namespace RetailCompare -Name User32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);'
-    while (-not $capture.WaitForExit(1000)) {
-        $p.Refresh()
-        if (-not $p.HasExited -and $p.MainWindowHandle -ne [IntPtr]::Zero) { [RetailCompare.User32]::SetForegroundWindow($p.MainWindowHandle) | Out-Null }
+# the lock is taken before the recording starts, so the game it records is not left
+# waiting on another session's run while the recorder runs
+Enter-HarnessLock "sound-record $Engine $Probe"
+$capture = $null
+try {
+    $capture = Start-Process -FilePath $Python -ArgumentList "`"$(Join-Path $PSScriptRoot 'sound_capture.py')`" `"$out`" $Secs" -PassThru -WindowStyle Hidden -RedirectStandardOutput "$out.txt"
+    if ($Engine -eq 'retail') {
+        Remove-Item "$retailDir\fakk\qconsole.log" -ErrorAction SilentlyContinue
+        $p = $null
+        try {
+            $p = Start-HarnessGame -Side retail -Exe "$retailDir\fakk2.exe" -WorkDir $retailDir -What "sound-record retail $Probe" `
+                -Arguments "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set logfile 2 +set developer 1 +set s_milesdriver eax2 +set s_khz 44 $run"
+            # a window that comes up in front of it (another game run, a dialog) silences it, so
+            # keep bringing it back for as long as the recording lasts
+            Add-Type -Namespace RetailCompare -Name User32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);'
+            while (-not $capture.WaitForExit(1000)) {
+                $p.Refresh()
+                if (-not $p.HasExited -and $p.MainWindowHandle -ne [IntPtr]::Zero) { [RetailCompare.User32]::SetForegroundWindow($p.MainWindowHandle) | Out-Null }
+            }
+        }
+        finally { Stop-HarnessGame $p }
+        Copy-Item "$retailDir\fakk\qconsole.log" (Join-Path $LogDir "$name.log") -ErrorAction SilentlyContinue
+    } else {
+        $backend = if ($Engine -eq 'openal') { 1 } else { 0 }
+        & (Join-Path $PSScriptRoot 'run-client.ps1') -Run "+set s_initsound 1 +set s_useOpenAL $backend $run" -Secs ($Secs - 2) -Name $name -Bin $Bin | Out-Null
+        $capture.WaitForExit()
     }
-    if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
-    Copy-Item "$retailDir\fakk\qconsole.log" (Join-Path $LogDir "$name.log") -ErrorAction SilentlyContinue
-} else {
-    $backend = if ($Engine -eq 'openal') { 1 } else { 0 }
-    & (Join-Path $PSScriptRoot 'run-client.ps1') -Run "+set s_initsound 1 +set s_useOpenAL $backend $run" -Secs ($Secs - 2) -Name $name | Out-Null
-    $capture.WaitForExit()
+}
+finally {
+    if ($capture -and -not $capture.HasExited) { $capture.Kill() }
+    Exit-HarnessLock
 }
 Get-Content "$out.txt"
 Select-String -Path (Join-Path $LogDir "$name.log") -Pattern 'provider opened|OpenAL output mode|dma buffer' | Select-Object -First 2 | ForEach-Object Line

@@ -17,8 +17,9 @@ param(
 # reference. The client joins a local game on $Map and the probe is started with
 # "+script thread" before the player spawns, so its waitforplayer returns on both engines.
 # The mouse is off (in_mouse 0): with it on, input reaching the window turned the player
-# mid-probe. The engine archives in_mouse, so the run takes it out of the home's
-# config.cfg afterwards (Clear-HarnessMouse), or the next game played there has no mouse. The run ends when the probe prints "pending events as of" (so a probe must end
+# mid-probe. Ours runs on the harness's test home (build\sandbox\test-home), which starts
+# every run with an empty config.cfg, so nothing a run sets carries into the next or into
+# the player's home. The run ends when the probe prints "pending events as of" (so a probe must end
 # with pendingevents), when the client exits, or after $Secs seconds. The console log is
 # copied to build\compare\client-<Name>-<Map>-<Probe>.log and the selected readings are
 # printed.
@@ -30,8 +31,8 @@ param(
 #   -Name       label in the log name: "before", "fixed", ...; default "ours", or "retail"
 #   -Classname  whatis blocks to print, by classname (default Projectile)
 #   -Entity     whatis blocks to print, by entity number (default 0, the player)
-#   -Extra      more engine command line, before +map. On retail, an archived cvar set here
-#               is saved in the sandbox's config.cfg and carries into later runs.
+#   -Extra      more engine command line, before +map. Both games start every run from an
+#               empty config.cfg, so what is set here lasts this run only.
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 . (Join-Path $RepoRoot 'tools\retail-compare\common.ps1')   # $GameInstall, $Sandbox, $LogDir
@@ -47,7 +48,6 @@ if ($Retail) {
         # first use: copies fakk2.exe and the game modules, hard-links the paks
         & (Join-Path $RepoRoot 'tools\retail-compare\run-retail.ps1') -Name retail -Map $Map -Secs 5 | Out-Null
     }
-    Copy-Item "$GameInstall\fakk\default.cfg" "$gameDir\fakk\default.cfg" -Force
     $exe = Join-Path $gameDir 'fakk2.exe'
     $workDir = $gameDir
     $maps = Get-ProbeDir $gameDir $Map
@@ -59,11 +59,10 @@ else {
     if (-not $Bin) { $Bin = Join-Path $RepoRoot 'build\x86-Release\Release' }
     $exe = Join-Path $Bin 'openfakk2.exe'
     if (-not (Test-Path $exe)) { throw "no client at $exe (build it, or pass -Bin)" }
-    $homeDir = Join-Path $Sandbox 'home'
     $workDir = $Bin
-    $maps = Get-ProbeDir $homeDir $Map
-    $console = Join-Path $homeDir 'fakk\qconsole.log'
-    $arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$homeDir`" +set com_abnormalExitDialog 0 " +
+    $maps = Get-ProbeDir $TestHome $Map
+    $console = Join-Path $TestFakk 'qconsole.log'
+    $arguments = "$OursHomeArgs " +
         "+set r_fullscreen 0 +set r_mode 4 +set in_nograb 1 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra +map $Map +script thread $probeName.scr::probe"
 }
@@ -73,15 +72,15 @@ Copy-Item $probeFile (Join-Path $maps "$probeName.scr") -Force
 Remove-Item $console -ErrorAction SilentlyContinue
 $log = Join-Path $LogDir "client-$Name-$(Get-MapTag $Map)-$probeName.log"
 
-$p = Start-Process -FilePath $exe -WorkingDirectory $workDir -ArgumentList $arguments -PassThru
-
 $marker = 'pending events as of'
 $deadline = (Get-Date).AddSeconds($Secs)
 $done = $false
 $exited = $false
-# in a try/finally: a Ctrl+C during the wait would otherwise leave the game running, to
-# write in_mouse 0 into the player's config whenever it is closed
+$p = $null
+# in a try/finally: a Ctrl+C during the wait would otherwise leave the game running
 try {
+    $p = Start-HarnessGame -Side $(if ($Retail) { 'retail' } else { 'ours' }) -Exe $exe -WorkDir $workDir -Arguments $arguments -What "probe-client $Name $Map $probeName"
+    $deadline = (Get-Date).AddSeconds($Secs)
     while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $done) {
         Start-Sleep -Seconds 1
         if (Test-Path $console) {
@@ -92,10 +91,7 @@ try {
     }
     $exited = $p.HasExited
 }
-finally {
-    if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
-    if (-not $Retail) { Clear-HarnessMouse }
-}
+finally { Stop-HarnessGame $p }
 
 if (Test-Path $console) { Copy-Item $console $log -Force } else { "no console log was written (did the client start?)"; return }
 $status = if ($done) { 'probe finished' } elseif ($exited) { "client exited early (code $($p.ExitCode))" } else { "probe did not finish within ${Secs}s" }

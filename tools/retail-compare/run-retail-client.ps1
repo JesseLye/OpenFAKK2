@@ -9,15 +9,18 @@ $dir = Join-Path $Sandbox 'retail'
 if (-not (Test-Path "$dir\fakk2.exe")) {
     & (Join-Path $PSScriptRoot 'run-retail.ps1') -Name retail -Map $Map -Secs 5 | Out-Null
 }
-Copy-Item "$GameInstall\fakk\default.cfg" "$dir\fakk\default.cfg" -Force
 $log = "$dir\fakk\qconsole.log"
 Remove-Item $log -ErrorAction SilentlyContinue
 
 $arguments = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 $Extra +map $Map $After"
-$p = Start-Process -FilePath "$dir\fakk2.exe" -WorkingDirectory $dir -ArgumentList $arguments -PassThru -WindowStyle Minimized
-$deadline = (Get-Date).AddSeconds($Secs)
-while ((Get-Date) -lt $deadline -and -not $p.HasExited) { Start-Sleep -Milliseconds 500 }
-if ($p.HasExited) { $state = "exited with code $($p.ExitCode)" } else { $p.Kill(); $p.WaitForExit(); $state = "stopped after ${Secs}s" }
+$p = $null
+try {
+    $p = Start-HarnessGame -Side retail -Exe "$dir\fakk2.exe" -WorkDir $dir -Arguments $arguments -WindowStyle Minimized -What "run-retail-client $Map"
+    $deadline = (Get-Date).AddSeconds($Secs)
+    while ((Get-Date) -lt $deadline -and -not $p.HasExited) { Start-Sleep -Milliseconds 500 }
+    if ($p.HasExited) { $state = "exited with code $($p.ExitCode)" } else { $state = "stopped after ${Secs}s" }
+}
+finally { Stop-HarnessGame $p }
 
 $out = Join-Path $LogDir "client-retail-$(Get-MapTag $Map)$Tag.log"
 if (Test-Path $log) { Copy-Item $log $out -Force; "[$Map] $state, $((Get-Content $out).Count) lines -> $out" }
