@@ -90,7 +90,7 @@ here; the client's are under "Commands and cvars the retail engine has" below.
 
 | Cvar | Retail | OpenFAKK2 | Note |
 | --- | --- | --- | --- |
-| `cheats` | 1 after `map` | 0 | The game reads `cheats`. Quake III enables cheats only for `devmap` |
+| `cheats` | 1 after `map` | 1 after `map` | Now the same. Retail's engine names Quake III's `sv_cheats` `cheats` (`Cvar_Init` `0x42fb36`: "1", `ROM`, `SYSTEMINFO`), the name the game reads. Its `SV_Map_f` (`0x4420d0`) sets it before the spawn, only without `developer`: 1 for `devmap`, 0 for `map`; but the client's disconnect during the load (`0x420990`) sets it back to 1, so a local game always has cheats, with `developer` 0 too (a retail run of `+set developer 0 +map zoo` prints 1). OpenFAKK2 had kept Quake III's name and set 0 after the spawn |
 | `protocol` | 1 | 71 | ioquake3's value; the wire format is OpenFAKK2's own for now |
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |

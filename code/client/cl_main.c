@@ -1470,7 +1470,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 	clc.state = CA_DISCONNECTED;
 
 	// allow cheats locally
-	Cvar_Set( "sv_cheats", "1" );
+	Cvar_Set( "cheats", "1" );
 
 	// not connected to a pure server anymore
 	cl_connectedToPureServer = qfalse;

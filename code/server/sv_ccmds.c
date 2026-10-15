@@ -175,25 +175,23 @@ static void SV_Map_f( void ) {
 	}
 
 	cmd = Cmd_Argv(0);
-	cheat = !Q_stricmp( cmd, "devmap" );
+	cheat = !Q_stricmp( cmd, "devmap" ) || !Q_stricmp( cmd, "spdevmap" );
 	killBots = qfalse;
 
 	// save the map name here cause on a map restart we reload the q3config.cfg
 	// and thus nuke the arguments of the map command
 	Q_strncpyz(mapname, map, sizeof(mapname));
 
+	// FAKK2 (SV_Map_f, fakk2.exe 0x4420d0): without developer, "map" turns cheats
+	// off and "devmap" on; with developer they stay as they are, so a developer
+	// keeps the engine's default of on. The value is set before the level spawns,
+	// so the game sees it while spawning. "gamemap" (0x441eb0) leaves it alone.
+	if ( !com_developer->integer && Q_stricmp( cmd, "gamemap" ) ) {
+		Cvar_Set( "cheats", cheat ? "1" : "0" );
+	}
+
 	// start up the map
 	SV_SpawnServer( mapname, killBots );
-
-	// set the cheat value
-	// if the level was started with "map <levelname>", then
-	// cheats will not be allowed.  If started with "devmap <levelname>"
-	// then cheats will be allowed
-	if ( cheat ) {
-		Cvar_Set( "sv_cheats", "1" );
-	} else {
-		Cvar_Set( "sv_cheats", "0" );
-	}
 }
 
 /*
