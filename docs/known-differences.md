@@ -127,9 +127,6 @@ generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
 
 Missing from OpenFAKK2, to be done:
 
-- Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
-  game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
-  its buttons go to the interface, not their bindings, `0x41fad1`).
 - Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
   it waits on level of detail itself, below). Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
@@ -141,7 +138,7 @@ Missing from OpenFAKK2, to be done:
   calls it.)
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
-  `ui_loadconsolepos`), `ui_drawcoords`, `ui_showmouse`, `ui_hidemouse`, `ui_hud`,
+  `ui_loadconsolepos`), `ui_drawcoords`, `ui_hud`,
   `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `inv_restart`, `vidmode`, `dialog`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
@@ -1264,7 +1261,12 @@ What is implemented, and on what basis:
   the keys fired nothing (an unknown command goes to the server as chat). The client
   registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
   `+attackleft` 1, `+sneak` 2, `+run` 3, `+holster` 4, `+use` 5) and `+cameralook`
-  as a client flag. As retail's `CL_MouseMove` does (`0x41e3fc`), the mouse always adds
+  as a client flag. `+togglemouse` (`0x41d960`; retail registers no `-togglemouse`),
+  `ui_showmouse` (`0x41d9b0`) and `ui_hidemouse` (`0x41da00`) put up and take down a
+  cursor in the game, after letting go of any mouse button held: while it is up the
+  mouse moves it instead of the view (`0x41e100`) and the mouse buttons skip their
+  bindings (`0x41fad1`). Here it is the system cursor, as for the menus. As retail's
+  `CL_MouseMove` does (`0x41e3fc`), the mouse always adds
   its pitch (`m_pitch`) and yaw (`-m_yaw`) to a camera offset, and while `+cameralook` is
   held it turns nothing else; the client game module reads the offset, the flag and
   `centerview`'s reset (`0x41de76`) through `get_camera_offset` (`0x41ff70`) and turns

@@ -77,6 +77,41 @@ qboolean	in_cameraLook;
 vec3_t		cl_cameraOffset;
 qboolean	cl_cameraResetView;
 
+// FAKK2: the cursor in the game (fakk2.exe 0xc9f2d8). While it is up the
+// mouse moves it rather than the view and its buttons skip their bindings
+// (CL_MouseEvent 0x41e100, CL_KeyEvent 0x41fad1); here it is the system
+// cursor, as for the menus.
+qboolean	cl_mouseShown;
+
+// the mouse buttons held when the cursor comes up are let go first
+static void IN_ReleaseMouseButtons( void ) {
+	int		k;
+
+	if ( cl_mouseShown ) {
+		return;
+	}
+	for ( k = K_MOUSE1 ; k <= K_MOUSE5 ; k++ ) {
+		if ( keys[k].down ) {
+			CL_KeyEvent( k, qfalse, 0 );
+		}
+	}
+}
+
+// +togglemouse (0x41d960), ui_showmouse (0x41d9b0), ui_hidemouse (0x41da00)
+static void IN_ToggleMouse_f( void ) {
+	IN_ReleaseMouseButtons();
+	cl_mouseShown = !cl_mouseShown;
+}
+
+static void IN_ShowMouse_f( void ) {
+	IN_ReleaseMouseButtons();
+	cl_mouseShown = qtrue;
+}
+
+static void IN_HideMouse_f( void ) {
+	cl_mouseShown = qfalse;
+}
+
 void IN_CameraLookDown( void ) {
 	in_cameraLook = qtrue;
 }
@@ -1031,9 +1066,13 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("+use", IN_Button5Down);
 	Cmd_AddCommand ("-use", IN_Button5Up);
 	// the retail client's camera look (TAB): the mouse turns the camera about
-	// the player; not done here, the key must not reach the server as chat
+	// the player
 	Cmd_AddCommand ("+cameralook", IN_CameraLookDown);
 	Cmd_AddCommand ("-cameralook", IN_CameraLookUp);
+	// the cursor in the game; retail registers no -togglemouse
+	Cmd_AddCommand ("+togglemouse", IN_ToggleMouse_f);
+	Cmd_AddCommand ("ui_showmouse", IN_ShowMouse_f);
+	Cmd_AddCommand ("ui_hidemouse", IN_HideMouse_f);
 	Cmd_AddCommand ("+button0", IN_Button0Down);
 	Cmd_AddCommand ("-button0", IN_Button0Up);
 	Cmd_AddCommand ("+button1", IN_Button1Down);
@@ -1125,6 +1164,9 @@ void CL_ShutdownInput(void)
 	Cmd_RemoveCommand("-use");
 	Cmd_RemoveCommand("+cameralook");
 	Cmd_RemoveCommand("-cameralook");
+	Cmd_RemoveCommand("+togglemouse");
+	Cmd_RemoveCommand("ui_showmouse");
+	Cmd_RemoveCommand("ui_hidemouse");
 	Cmd_RemoveCommand("+button0");
 	Cmd_RemoveCommand("-button0");
 	Cmd_RemoveCommand("+button1");

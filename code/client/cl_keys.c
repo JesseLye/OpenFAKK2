@@ -1432,6 +1432,15 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
+	// skip their bindings; a menu up still takes them
+	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
+		if ( Key_GetCatcher( ) & KEYCATCH_UI && !uivm ) {
+			URC_KeyEvent( key, qtrue );
+		}
+		return;
+	}
+
 
 	// keys can still be used for bound actions
 	if ( ( key < 128 || key == K_MOUSE1 ) &&
@@ -1531,6 +1540,15 @@ void CL_KeyUpEvent( int key, unsigned time )
 	// don't process key-up events for the console key
 	if ( key == K_CONSOLE || ( key == K_ESCAPE && keys[K_SHIFT].down ) )
 		return;
+
+	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
+	// skip their bindings
+	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
+		if ( Key_GetCatcher( ) & KEYCATCH_UI && !uivm ) {
+			URC_KeyEvent( key, qfalse );
+		}
+		return;
+	}
 
 	//
 	// key up events only perform actions if the game key binding is

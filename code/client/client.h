@@ -555,6 +555,7 @@ void IN_CenterView (void);
 extern qboolean	in_cameraLook;
 extern vec3_t	cl_cameraOffset;
 extern qboolean	cl_cameraResetView;
+extern qboolean	cl_mouseShown;		// FAKK2: the cursor in the game (+togglemouse)
 
 void CL_VerifyCode( void );
 
