@@ -638,9 +638,15 @@ vm_t *VM_Create( const char *module, intptr_t (*systemCalls)(intptr_t *),
 			Q_strncpyz(vm->name, module, sizeof(vm->name));
 		}
 	} while(retval >= 0);
-	
+
 	if(retval < 0)
+	{
+		// FAKK2: give the slot back, or the next VM_Create of this module
+		// finds its name and returns the empty slot; FAKK2 has no ui
+		// module, and the vid_restart in a level crashed calling into it
+		Com_Memset(vm, 0, sizeof(*vm));
 		return NULL;
+	}
 
 	vm->systemCall = systemCalls;
 
