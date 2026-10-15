@@ -129,11 +129,8 @@ Missing from OpenFAKK2, to be done:
 
 - Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
   it waits on level of detail itself, below).
-- `S_UpdateEntity`'s velocity, which retail keeps per entity (`0x43ec90`) and hands to its
-  3D sound interface with the position (`0x45cf26`); neither of OpenFAKK2's sound
-  backends moves a sound by it. (`S_SetGlobalAmbientVolumeLevel` stores a level that
-  scales the looping sounds, `0x43ed10` and `0x45c528`, but the client game module never
-  calls it.)
+- `S_SetGlobalAmbientVolumeLevel` stores a level that scales the looping sounds
+  (`0x43ed10` and `0x45c528`), but the client game module never calls it.
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_console`, `ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`), and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
@@ -163,6 +160,19 @@ Left out on purpose:
   `cl_updateInfoString`, `gamedll`, `cgamedll`, `viewlog`.
 - The demo loop's command strings (`cliff`, `fog`, `homes`, `pens`, `swamps`, `train`,
   `loadmaps*`), which name demos the game does not ship.
+- Doppler from `S_UpdateEntity`'s velocity. Retail keeps the velocity per entity
+  (`0x43ec90`; the client game module sends `trDelta`, 0 for brush models and for
+  anything attached to the player), and its sound update gives it to every sample on
+  that entity through `AIL_set_3D_velocity_vector` (`0x45cf26`, the pointer at
+  `0x9b3fe0` resolved at `0x45df7b`) as ( -x, z, -y ) times 0.0190512 / 500 and then
+  times 0.0190512 again, so it is scaled from units to metres twice; the listener's
+  velocity is always 0 (`0x45cc50`), and no Doppler factor is set. Miles documents its
+  velocities as distance per millisecond, so a sound moving at 1000 units a second is
+  given 0.73 m/s and shifts by 0.2% (4 cents) against a speed of sound of 343 m/s,
+  too little to hear; whether the "Fast 2D Positional Audio" provider applies it at all
+  was not checked. Neither of OpenFAKK2's backends moves a sound by it. Their own Doppler
+  (`s_doppler`, `s_alDopplerFactor`, `s_alDopplerSpeed`) only acts on looping sounds,
+  which the module always gives a velocity of 0.
 
 Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`,
 `sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
