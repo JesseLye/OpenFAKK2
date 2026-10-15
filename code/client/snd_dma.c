@@ -729,7 +729,8 @@ void S_Base_SetReverb( int type, float level ) {
 S_StopSound
 
 FAKK2: stops what an entity plays on a channel; CHAN_AUTO stops all of
-the entity's channels. (The retail engine's rule has not been read.)
+the entity's channels. Retail's Miles stop (fakk2.exe 0x45d710) ends only
+the first sample or stream with exactly that entity and channel.
 ==================
 */
 void S_Base_StopSound( int entityNum, int entchannel ) {
