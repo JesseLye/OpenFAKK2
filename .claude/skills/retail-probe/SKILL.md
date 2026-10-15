@@ -12,6 +12,17 @@ times, and prints entity state. The same probe runs on the retail game and on ou
 the dumps are compared field by field. This skill is the playbook for writing a probe,
 choosing how to run it, and reading what comes back.
 
+## Where to look first
+
+Before reading the binary for what a command, cvar, entity key or script event is meant
+to do, search Ritual's design documents. `tools\ritual-docs.ps1` converts them into
+`build\ritual-docs` (run it once per worktree; it needs the clone `$RitualTools` names in
+`tools\retail-compare\common.ps1`), one paragraph per line, so a `grep -i` hit shows the
+whole paragraph. `entities.def` there lists the entity classes with their keys and
+spawnflags, `commands.txt` the console commands. They say what Ritual intended, not what
+`fakk2.exe` does: treat a hit as a lead, and confirm it with a probe or the binary before
+relying on it. Never commit anything from them.
+
 ## Pick the runner
 
 | Need | Runner | Reference available |

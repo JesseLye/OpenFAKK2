@@ -8,6 +8,14 @@ How the comparison is done is described in `tools/retail-compare/README.md`. As 
 writing, the lines the game module prints during map spawn (`developer 1`) are identical
 on all 30 retail maps, with either the retail or the rebuilt `gamex86.dll`.
 
+Ritual's own design documents (the 22 Word files in the docs folder of their Tools 1.02
+release: shaders, cvars, TIKI, sound, the GUI, particles, client commands) and its
+`entities.def` are available as text: `tools\ritual-docs.ps1` converts them from the
+clone that `$RitualTools` names into `build\ritual-docs`. They describe what Ritual
+intended, often at an earlier stage than the shipped game, and rank below the binary:
+use them as leads for what to look for, never as evidence that retail does it. Nothing
+from them may be committed; Ritual's licence does not allow copying them.
+
 ## Unexplained
 
 ### Idle animation variants picked differently
