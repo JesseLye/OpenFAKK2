@@ -381,19 +381,50 @@ Not read, done another way:
   Miles' documented model, and recordings of the retail game agree (see "Panning and
   loudness" below). `S_StartLocalSound` (`0x43ed80`)
   resolves an alias, registers the name and plays it on the listener's entity on
-  `CHAN_MENU`; the channel numbers are FAKK2's. Not followed: `maxnumber` and
-  `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity stays), loop blocks,
-  the `s_show` print is retail's format only; `S_StopSound` stops every match where
-  retail's Miles stop (`0x45d710`) ends the first sample or `.mp3` stream with that
-  entity and channel, and `CHAN_AUTO` here stops all of the entity's channels; a new
-  sample on an entity's busy channel (not `CHAN_AUTO`) replaces the old one in retail
-  (Miles' picker `0x45bc70`, the software mixer's `S_PickChannel` `0x43f010`) and plays
-  beside it here, while `.mp3` streams never replace each other in retail either except
-  on `CHAN_MENU` (`0x45bd10`); the `.mp3` dialog files (1015 of them) are decoded
+  `CHAN_MENU`; the channel numbers are FAKK2's. A new sample on an entity's busy
+  channel (not `CHAN_AUTO`) replaces the old one, as in retail (Miles' picker
+  `0x45bc70`, the software mixer's `S_PickChannel` `0x43f010`); the `.mp3` files, Miles
+  streams in retail, neither replace nor are replaced. Loop blocks and sounds that
+  follow their entity: see "Loop blocks and the weapons' sounds" below. Not followed:
+  `maxnumber` and `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity
+  stays), the `s_show` print is retail's format only; `S_StopSound` stops every match
+  where retail's Miles stop (`0x45d710`) ends the first sample or `.mp3` stream with
+  that entity and channel, and `CHAN_AUTO` here stops all of the entity's channels;
+  `.mp3` streams never replace each other in retail except on `CHAN_MENU` (`0x45bd10`),
+  and here not even there; the `.mp3` dialog files (1015 of them) are decoded
   whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
   through Miles (`0x45bf00` sends them down a separate path); ambient-volume
   calls are ignored; looping sounds are keyed by their
   order in the frame. `s_soundinfo [name]` prints the table's size or a name's entry.
+- **Loop blocks and the weapons' sounds.** A sound whose entry in the sound information
+  has a loop block (`loopstart`, `loopend`: 25 sounds in `global/sound0.txt`, among them
+  the uzi's `start.wav`, the chaingun's, the flamethrower's and the chainsword's) plays
+  to the end of the block and then repeats the block until it is stopped, when it is
+  started as a one-shot: retail's Miles start (`0x45bf00`) gives the sample
+  `AIL_set_3D_sample_loop_block(start, end)` and a loop count of 0 (`0x45c1df`), and one
+  without a block a count of 1. The offsets are bytes into the file's data, as Miles takes
+  them: two 16-bit files end their blocks 2 bytes short of their data, past their sample
+  counts, and the retail uzi repeats every 92 ms (2019 samples, `loopend 4038`); they
+  count the file's own bytes, so a sound `s_loadas8bit` has cut to 8 bits keeps its
+  block (`snd_info_t::fileWidth`). The fire
+  animation starts `start.wav` on channel 1 and stops channel 1 when it ends, so the uzi
+  rattles for as long as the trigger is held; here it used to play its 0.35 s once and
+  fall silent, at the start of each burst only (the same with two uzis). The OpenAL backend
+  plays such a sound from a second buffer holding it up to the block's end, looping from
+  the block's start (`AL_SOFT_loop_points`, or the whole copy without it), so a looping
+  sound on an entity still loops the whole file; the software mixer wraps the channel at
+  the block's end. Retail's sound update (`0x45cdd1`) also moves every sample started on
+  an entity with the entity, from the entity's next update (`S_UpdateEntity`, `0x43ec90`,
+  keeps its time): to the listener for an entity the client game module sends with
+  `use_listener` (it does so for everything attached to the player, with an origin of
+  0 0 0), and the player's own origin, 90 units below the listener, counts as the
+  listener. The weapons Julie holds therefore sound at her ears, the same in both. A
+  looping sample whose entity was not updated in a frame is ended (`0x45ced8`). Both
+  backends do this now (`S_AL_SrcFollow`, `S_FollowEntities`, `S_FollowOrigin`); before,
+  a sound started at an origin stayed there, and one started on an entity alone followed
+  the origin the module sent, so a weapon's sound with no origin was placed at 0 0 0.
+  Checked by recording `tools/retail-compare/probe-uzi.scr` (one uzi, the other, both;
+  `-Volume 0.06`) on both engines.
 - **Stopping an actor's dialog.** Retail keeps the entity and channel of every sample and
   `.mp3` stream it starts, a `localsound` included (`0x45bf00`, `0x45bd10`), so its stop
   (`0x45d710`) finds them. The dialog `.mp3`s are `localsound`s in the sound information,
@@ -488,7 +519,12 @@ Not read, done another way:
   `code/thirdparty/libs/`) beside the executable and `s_useOpenAL` defaults to 1, so the
   OpenAL backend is what plays; `s_useOpenAL 0` selects Quake III's software mixer, which
   has everything the OpenAL one has (its reverb is the Freeverb above). The retail
-  engine's Miles Sound System had no counterpart to this choice. Quake III's default
+  engine's Miles Sound System had no counterpart to this choice. OpenAL Soft turns HRTF
+  on by itself for an output it takes for headphones, and the retail engine's Miles
+  provider had none: the uzis, which sound at the listener, came out 7.7 dB under the
+  software mixer and retail on a headphone output with it. The backend asks for no HRTF
+  (`ALC_HRTF_SOFT` false) unless `s_alHRTF 1`, and the output is then plain stereo,
+  panned as Miles did (`S_AL_SrcPlace`). Quake III's default
   sound, `sound/feedback/hit.wav`, is not in FAKK2; a sound that cannot be loaded is
   silence on both backends.
 - **Camera-look offsets** (`get_camera_offset`) are always zero.

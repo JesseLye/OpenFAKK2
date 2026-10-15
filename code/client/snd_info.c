@@ -369,3 +369,25 @@ void S_SoundPan( float right, float forward, float *leftGain, float *rightGain )
 	*leftGain = right > 0 ? far : near;
 	*rightGain = right > 0 ? near : far;
 }
+
+/*
+=================
+S_FollowOrigin
+
+FAKK2: where a sound playing on an entity is when the client game module has
+updated the entity, as the retail engine's sound update places it (fakk2.exe
+0x45cdd1): at the listener for an entity sent with use_listener (the weapons
+and other things attached to the player, sent with an origin of 0 0 0), and
+otherwise at the entity's origin, except that the player's own origin, 90
+units straight below the listener, counts as the listener.
+=================
+*/
+void S_FollowOrigin( int entityNum, const vec3_t origin, qboolean useListener,
+		int listenerNumber, const vec3_t listenerOrigin, vec3_t out ) {
+	if ( useListener || ( entityNum == listenerNumber && origin[0] == listenerOrigin[0] &&
+			origin[1] == listenerOrigin[1] && fabs( listenerOrigin[2] - origin[2] - 90 ) < 0.1f ) ) {
+		VectorCopy( listenerOrigin, out );
+	} else {
+		VectorCopy( origin, out );
+	}
+}

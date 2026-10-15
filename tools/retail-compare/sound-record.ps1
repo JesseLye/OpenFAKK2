@@ -7,8 +7,9 @@ param([ValidateSet('retail', 'openal', 'dma')][string]$Engine = 'openal', [strin
 # playing at the time is recorded too. The retail game runs from build\sandbox\retail-snd,
 # a copy that keeps the install's Miles drivers (snddrivers) but no DirectSound wrapper, so
 # with no EAX card it opens Miles' "Fast 2D Positional Audio" provider; it must be the
-# window in front or DirectSound silences it. Keep -Volume low: the Windows output path
-# here compresses anything above about -20 dBFS, and at 0.25 everything stays under it.
+# window in front or DirectSound silences it, and the script keeps it there. Keep -Volume
+# low: the Windows output path here compresses anything above about -20 dBFS, and at 0.25
+# everything stays under it.
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $name = "sound-$Engine-$Probe$Tag"
@@ -35,7 +36,13 @@ if ($Engine -eq 'retail') {
     Copy-Item "$GameInstall\fakk\default.cfg" "$retailDir\fakk\default.cfg" -Force
     Remove-Item "$retailDir\fakk\qconsole.log" -ErrorAction SilentlyContinue
     $p = Start-Process -FilePath "$retailDir\fakk2.exe" -WorkingDirectory $retailDir -PassThru -ArgumentList "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set logfile 2 +set developer 1 +set s_milesdriver eax2 +set s_khz 44 $run"
-    $capture.WaitForExit()
+    # a window that comes up in front of it (another game run, a dialog) silences it, so
+    # keep bringing it back for as long as the recording lasts
+    Add-Type -Namespace RetailCompare -Name User32 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);'
+    while (-not $capture.WaitForExit(1000)) {
+        $p.Refresh()
+        if (-not $p.HasExited -and $p.MainWindowHandle -ne [IntPtr]::Zero) { [RetailCompare.User32]::SetForegroundWindow($p.MainWindowHandle) | Out-Null }
+    }
     if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
     Copy-Item "$retailDir\fakk\qconsole.log" (Join-Path $LogDir "$name.log") -ErrorAction SilentlyContinue
 } else {

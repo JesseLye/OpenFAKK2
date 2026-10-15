@@ -266,6 +266,26 @@ qboolean S_LoadSound( sfx_t *sfx )
 	}
 
 	sfx->soundChannels = info.channels;
+
+	// FAKK2: the loop block, byte offsets into the file's data as Miles took
+	// them (see S_AL_BufferLoadLoop), in the mixer's samples
+	sfx->loopStart = sfx->loopEnd = 0;
+	{
+		const soundInfo_t	*sinfo = S_SoundInfoForName( sfx->soundName );
+		int					frame = info.fileWidth * info.channels;	// before s_loadas8bit
+		float				scale = (float)dma.speed / info.rate;
+
+		if ( sinfo->loopStart >= 0 && frame && info.samples > 0 && Q_stricmp( COM_GetExtension( sfx->soundName ), "mp3" ) ) {
+			int		start = sinfo->loopStart / frame;
+			int		end = sinfo->loopEnd < 0 ? info.samples : MIN( sinfo->loopEnd / frame, info.samples );
+
+			sfx->loopStart = start * scale;
+			sfx->loopEnd = MIN( (int)( end * scale ), sfx->soundLength );
+			if ( sfx->loopEnd <= sfx->loopStart ) {
+				sfx->loopStart = sfx->loopEnd = 0;
+			}
+		}
+	}
 	
 	Hunk_FreeTempMemory(samples);
 	Hunk_FreeTempMemory(data);

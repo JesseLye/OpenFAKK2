@@ -605,7 +605,7 @@ static void CL_CG_S_EndRegistration( void ) {
 }
 
 static void CL_CG_S_UpdateEntity( int entityNum, const vec3_t origin, const vec3_t velocity, qboolean use_listener ) {
-	S_UpdateEntityPosition( entityNum, origin );
+	S_UpdateEntityPosition( entityNum, origin, use_listener );
 }
 
 static void CL_CG_S_SetReverb( int reverb_type, float reverb_level ) {

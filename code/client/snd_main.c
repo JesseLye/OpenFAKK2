@@ -253,10 +253,10 @@ void S_Respatialize( int entityNum, const vec3_t origin,
 S_UpdateEntityPosition
 =================
 */
-void S_UpdateEntityPosition( int entityNum, const vec3_t origin )
+void S_UpdateEntityPosition( int entityNum, const vec3_t origin, qboolean useListener )
 {
 	if( si.UpdateEntityPosition ) {
-		si.UpdateEntityPosition( entityNum, origin );
+		si.UpdateEntityPosition( entityNum, origin, useListener );
 	}
 }
 

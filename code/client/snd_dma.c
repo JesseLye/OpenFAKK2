@@ -82,6 +82,7 @@ cvar_t		*s_mixahead;
 cvar_t		*s_mixPreStep;
 
 static loopSound_t		loopSounds[MAX_GENTITIES];
+static int				s_soundFrame = 1;	// FAKK2: counts S_Base_Update calls (S_FollowEntities)
 static	channel_t		*freelist = NULL;
 
 int						s_rawend[MAX_RAW_STREAMS];
@@ -184,6 +185,11 @@ void S_ChannelFree(channel_t *v) {
 	v->thesfx = NULL;
 	*(channel_t **)v = freelist;
 	freelist = (channel_t*)v;
+}
+
+// FAKK2: the .mp3 files were Miles streams in the retail engine, apart from the samples
+static qboolean S_IsMp3( const sfx_t *sfx ) {
+	return !Q_stricmp( COM_GetExtension( sfx->soundName ), "mp3" );
 }
 
 channel_t*	S_ChannelMalloc( void ) {
@@ -566,6 +572,19 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 
 	time = Com_Milliseconds();
 
+	// FAKK2: a new sound on an entity's channel other than CHAN_AUTO takes the
+	// place of the one playing there, as the retail engine's channel picker
+	// (0x43f010) hands it that channel; the .mp3 files were Miles streams,
+	// kept apart from the samples (see S_AL_SrcReplace)
+	if ( entchannel != CHAN_AUTO && !S_IsMp3( sfx ) ) {
+		ch = s_channels;
+		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) {
+			if ( ch->thesfx && ch->entnum == entityNum && ch->entchannel == entchannel && !S_IsMp3( ch->thesfx ) ) {
+				S_ChannelFree( ch );
+			}
+		}
+	}
+
 //	Com_Printf("playing %s\n", sfx->soundName);
 	// pick a channel to play on
 
@@ -639,12 +658,17 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 		ch->allocTime = sfx->lastTimeUsed;
 	}
 
+	// FAKK2: a sound on an entity follows it (S_FollowEntities): from this
+	// frame's update on for one started at an origin, from the entity's last
+	// update for one started on the entity alone (retail 0x45c143, 0x45c184)
 	if (origin) {
 		VectorCopy (origin, ch->origin);
-		ch->fixed_origin = qtrue;
 	} else {
-		ch->fixed_origin = qfalse;
+		VectorCopy (loopSounds[entityNum].origin, ch->origin);
 	}
+	ch->fixed_origin = ( entityNum < 0 || entityNum >= ENTITYNUM_NONE );
+	ch->entityFrame = origin ? s_soundFrame - 1 : 0;
+	ch->loopBlock = ( sfx->loopEnd > 0 );
 
 	ch->master_vol = 255 * volume;	// FAKK2: a sound at full volume as loud as the music
 	ch->minDist = minDist;
@@ -1176,11 +1200,13 @@ S_UpdateEntityPosition
 let the sound system know where an entity currently is
 ======================
 */
-void S_Base_UpdateEntityPosition( int entityNum, const vec3_t origin ) {
+void S_Base_UpdateEntityPosition( int entityNum, const vec3_t origin, qboolean useListener ) {
 	if ( entityNum < 0 || entityNum >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "S_UpdateEntityPosition: bad entitynum %i", entityNum );
 	}
 	VectorCopy( origin, loopSounds[entityNum].origin );
+	loopSounds[entityNum].useListener = useListener;	// FAKK2: S_FollowEntities
+	loopSounds[entityNum].updateFrame = s_soundFrame;
 }
 
 
@@ -1194,7 +1220,6 @@ Change the volumes of all the playing sounds for changes in their positions
 void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwater ) {
 	int			i;
 	channel_t	*ch;
-	vec3_t		origin;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
@@ -1217,13 +1242,8 @@ void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int 
 			ch->leftvol = ch->master_vol;
 			ch->rightvol = ch->master_vol;
 		} else {
-			if (ch->fixed_origin) {
-				VectorCopy( ch->origin, origin );
-			} else {
-				VectorCopy( loopSounds[ ch->entnum ].origin, origin );
-			}
-
-			S_SpatializeOrigin (origin, ch->master_vol, ch->minDist, &ch->leftvol, &ch->rightvol);
+			// FAKK2: where S_FollowEntities last put it
+			S_SpatializeOrigin (ch->origin, ch->master_vol, ch->minDist, &ch->leftvol, &ch->rightvol);
 		}
 	}
 
@@ -1264,8 +1284,9 @@ qboolean S_ScanChannelStarts( void ) {
 			continue;
 		}
 
-		// if it is completely finished by now, clear it
-		if ( ch->startSample + (ch->thesfx->soundLength) <= s_paintedtime ) {
+		// if it is completely finished by now, clear it; FAKK2: one repeating
+		// its loop block plays until it is stopped
+		if ( !ch->loopBlock && ch->startSample + (ch->thesfx->soundLength) <= s_paintedtime ) {
 			S_ChannelFree(ch);
 		}
 	}
@@ -1319,6 +1340,44 @@ static void S_ResumeChannels( void ) {
 
 /*
 ============
+S_FollowEntities
+
+FAKK2: a sound started on an entity follows it while the client game module
+keeps updating the entity, as in the retail engine's sound update (fakk2.exe
+0x45cdd1), to where S_FollowOrigin puts it: the weapons Julie holds sound at
+her ears, as loud in both. An entity that was not updated since the last
+frame leaves its sound where it was, but a sound repeating its loop block is
+stopped, as the retail engine ends it (0x45ced8), or a uzi put away while
+firing would go on for ever. A held channel is left alone.
+============
+*/
+static void S_FollowEntities( void ) {
+	channel_t	*ch;
+	loopSound_t	*ent;
+	int			i;
+
+	ch = s_channels;
+	for ( i = 0 ; i < MAX_CHANNELS ; i++, ch++ ) {
+		if ( !ch->thesfx || ch->paused || ch->fixed_origin ) {
+			continue;
+		}
+		ent = &loopSounds[ ch->entnum ];
+		if ( ent->updateFrame <= ch->entityFrame ) {
+			if ( ch->loopBlock ) {
+				S_ChannelFree( ch );
+			}
+			continue;
+		}
+		ch->entityFrame = ent->updateFrame;
+		S_FollowOrigin( ch->entnum, ent->origin, ent->useListener, listener_number, listener_origin, ch->origin );
+		if ( !ch->fullVolume ) {
+			S_SpatializeOrigin( ch->origin, ch->master_vol, ch->minDist, &ch->leftvol, &ch->rightvol );
+		}
+	}
+}
+
+/*
+============
 S_Update
 
 Called once each time through the main loop
@@ -1356,6 +1415,9 @@ void S_Base_Update( void ) {
 		
 		Com_Printf ("----(%i)---- painted: %i\n", total, s_paintedtime);
 	}
+
+	S_FollowEntities();
+	s_soundFrame++;
 
 	// add raw data from streamed samples
 	S_UpdateBackgroundTrack();

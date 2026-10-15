@@ -170,6 +170,10 @@ void *S_CodecLoad(const char *filename, snd_info_t *info)
 {
 	byte	*data = S_CodecGetSound(filename, info);
 
+	if ( data ) {
+		info->fileWidth = info->width;	// the loop blocks' offsets count the file's bytes
+	}
+
 	// FAKK2's s_loadas8bit (advanced options' "Force 8-bit Sound"): the retail
 	// software mixer keeps every sound it loads at 8 bits (fakk2.exe 0x440196),
 	// and its Miles path opens the output at 8 bits (0x45b5e6); here a sound is

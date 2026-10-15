@@ -118,7 +118,7 @@ extern LPALBUFFER3F qalBuffer3f;
 extern LPALBUFFERFV qalBufferfv;
 extern LPALBUFFERF qalBufferi;
 extern LPALBUFFER3F qalBuffer3i;
-extern LPALBUFFERFV qalBufferiv;
+extern LPALBUFFERIV qalBufferiv;
 extern LPALGETBUFFERF qalGetBufferf;
 extern LPALGETBUFFER3F qalGetBuffer3f;
 extern LPALGETBUFFERFV qalGetBufferfv;

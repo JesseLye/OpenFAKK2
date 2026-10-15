@@ -192,7 +192,9 @@ row per position; `rms <from> <to>` for music or a whole scene). The recorder ne
 out loud and anything else playing is recorded with it. The retail game runs from
 `build\sandbox\retail-snd`, which keeps the install's Miles drivers but no DirectSound
 wrapper, so it opens Miles' "Fast 2D Positional Audio" provider; its window has to be in
-front. `-Volume` (0.25) is kept low because the Windows output path can compress loud
+front, or DirectSound silences it, so the script keeps bringing it back there (another
+game started meanwhile, say by another worktree's harness run, would still be heard in
+the recording). `-Volume` (0.25) is kept low because the Windows output path can compress loud
 sound; play a tone of known level through it first if in doubt. The probes put
 `sound/test/tone.wav` (from `sound_tone.py`) in the game directory:
 
@@ -202,6 +204,10 @@ sound; play a tone of known level through it first if in doubt. The probes put
 - `probe-sound-turn`: the tone ahead, then the player turns left about 84 degrees; it
   should end up in the right ear.
 - `probe-music`: swamp1's soundtrack on `zoo`, which is otherwise silent (`-Music 0.6`).
+- `probe-uzi`: Julie dual wields the two uzis and fires the left one, the right one and
+  both, 3 s each with 3 s between; the game's own sounds, not the tone, so read it with
+  `rms` over each burst. Use `-Volume 0.06`: the uzis are loud enough at 0.25 to reach
+  the output path's compression.
 
 ## The client and the map viewer
 

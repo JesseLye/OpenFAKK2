@@ -71,6 +71,8 @@ const soundInfo_t	*S_SoundInfoForName( const char *name );
 float				S_SoundGain( float minDist, float dist );
 float				S_SoundInterp( const float *x, const float *y, int n, float v );
 void				S_SoundPan( float right, float forward, float *leftGain, float *rightGain );
+void				S_FollowOrigin( int entityNum, const vec3_t origin, qboolean useListener,
+						int listenerNumber, const vec3_t listenerOrigin, vec3_t out );
 
 // FAKK2's reverb for the software mixer (snd_reverb.c)
 void		S_ReverbInit( int rate );
@@ -96,6 +98,7 @@ typedef struct sfx_s {
 	float			infoMinDist;			// from the sound information table
 	float			infoVolume;
 	qboolean		infoLocal;
+	int				loopStart, loopEnd;		// FAKK2: the loop block in the mixer's samples, loopEnd 0 for none (S_LoadSound)
 } sfx_t;
 
 typedef struct {
@@ -128,6 +131,8 @@ typedef struct loopSound_s {
 	int			framenum;
 	float		volume;			// 0 to 1
 	float		minDist;		// full volume within this distance
+	int			updateFrame;	// FAKK2: s_soundFrame of the last S_UpdateEntityPosition
+	qboolean	useListener;	// FAKK2: its sounds are at the listener (S_FollowEntities)
 } loopSound_t;
 
 typedef struct
@@ -141,13 +146,15 @@ typedef struct
 	int			master_vol;		// 0-255 volume before spatialization
 	float		dopplerScale;
 	float		oldDopplerScale;
-	vec3_t		origin;			// only use if fixed_origin is set
-	qboolean	fixed_origin;	// use origin instead of fetching entnum's origin
+	vec3_t		origin;			// FAKK2: where it is (S_FollowEntities moves it)
+	qboolean	fixed_origin;	// FAKK2: on no entity, so it stays at origin
 	sfx_t		*thesfx;		// sfx structure
 	qboolean	doppler;
 	qboolean	fullVolume;
 	qboolean	paused;			// FAKK2: held while the game is paused
 	float		minDist;		// full volume within this distance
+	qboolean	loopBlock;		// FAKK2: repeats its sound's loop block until stopped
+	int			entityFrame;	// FAKK2: the entity's last update followed (S_FollowEntities)
 } channel_t;
 
 
@@ -181,7 +188,7 @@ typedef struct
 	void (*AddRealLoopingSound)( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist );
 	void (*StopLoopingSound)(int entityNum );
 	void (*Respatialize)( int entityNum, const vec3_t origin, vec3_t axis[3], int inwater );
-	void (*UpdateEntityPosition)( int entityNum, const vec3_t origin );
+	void (*UpdateEntityPosition)( int entityNum, const vec3_t origin, qboolean useListener );
 	void (*Update)( void );
 	void (*DisableSounds)( void );
 	void (*BeginRegistration)( void );
