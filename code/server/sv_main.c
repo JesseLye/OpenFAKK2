@@ -1074,6 +1074,9 @@ void SV_Frame( int msec ) {
 		return;
 	}
 
+	// FAKK2: the autosave that follows a level change (sv_save.c)
+	SV_AutoSaveFrame( msec );
+
 	// allow pause if only the local client is connected
 	if ( SV_CheckPaused() ) {
 		return;

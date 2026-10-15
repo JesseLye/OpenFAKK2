@@ -2724,6 +2724,42 @@ static void Com_Pause_f( void ) {
 
 /*
 =================
+Com_GetArchiveFileName
+
+FAKK2: the file of a saved game's part (the retail 0x42eba0, also the game's
+GetArchiveFileName): "save/<config>_<name>.<extension>", the config file's
+name without its extension first (the "config" cvar, see Com_ExecuteCfg),
+so each config keeps its own games.
+=================
+*/
+const char *Com_GetArchiveFileName( const char *filename, const char *extension ) {
+	static char	name[MAX_QPATH];
+	char		config[MAX_QPATH];
+
+	COM_StripExtension( Com_ConfigName(), config, sizeof( config ) );
+	Com_sprintf( name, sizeof( name ), "save/%s_%s.%s", config, filename, extension );
+	return name;
+}
+
+/*
+=================
+Com_WipeSaveGame
+
+The retail 0x42ec50: removes a saved game's files from the home directory.
+=================
+*/
+void Com_WipeSaveGame( const char *filename ) {
+	static const char	*extensions[] = { "sav", "ssv", "spv", "tga" };
+	int					i;
+
+	Com_DPrintf( "Com_WipeSaveGame(%s)\n", filename );
+	for ( i = 0 ; i < ARRAY_LEN( extensions ) ; i++ ) {
+		FS_Remove_HomeData( Com_GetArchiveFileName( filename, extensions[i] ) );
+	}
+}
+
+/*
+=================
 Com_Init
 =================
 */

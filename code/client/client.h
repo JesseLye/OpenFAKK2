@@ -535,6 +535,8 @@ float URC_TextWidth( const char *font, const char *text );
 float URC_DrawText( const char *font, float x, float y, const char *text, const vec4_t color );
 void URC_DrawPic( float x, float y, float w, float h, qhandle_t shader, const vec4_t color );
 void URC_PlayAliasSound( const char *name );
+void URC_SetSaveShot( qboolean on );
+void URC_SavesChanged( void );
 
 //
 // cl_inv.c: the inventory bar (global/inventory.scr)

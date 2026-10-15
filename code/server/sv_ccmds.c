@@ -192,16 +192,21 @@ static void SV_Map_f( void ) {
 	// and thus nuke the arguments of the map command
 	Q_strncpyz(mapname, map, sizeof(mapname));
 
+	// FAKK2: a new game, without the previous level's player (the retail
+	// map command removes the current save, 0x4422cf)
+	Com_WipeSaveGame( SAVE_CURRENT );
+
 	// FAKK2 (SV_Map_f, fakk2.exe 0x4420d0): without developer, "map" turns cheats
 	// off and "devmap" on; with developer they stay as they are, so a developer
 	// keeps the engine's default of on. The value is set before the level spawns,
-	// so the game sees it while spawning. "gamemap" (0x441eb0) leaves it alone.
-	if ( !com_developer->integer && Q_stricmp( cmd, "gamemap" ) ) {
+	// so the game sees it while spawning. "gamemap" (SV_GameMap_f, 0x441eb0)
+	// leaves it alone.
+	if ( !com_developer->integer ) {
 		Cvar_Set( "cheats", cheat ? "1" : "0" );
 	}
 
 	// start up the map
-	SV_SpawnServer( mapname, killBots );
+	SV_SpawnServer( mapname, killBots, qfalse );
 }
 
 /*
@@ -226,9 +231,10 @@ static void SV_MapRestart_f( void ) {
 		return;
 	}
 
-	// the game module has no in-place restart, so the level is spawned again
+	// the game module has no in-place restart, so the level is spawned again;
+	// the player gets back what she entered it with (sv_save.c)
 	Q_strncpyz( mapname, Cvar_VariableString( "mapname" ), sizeof( mapname ) );
-	SV_SpawnServer( mapname, qfalse );
+	SV_SpawnServer( mapname, qfalse, qfalse );
 }
 
 //===============================================================
@@ -1414,11 +1420,15 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("systeminfo", SV_Systeminfo_f);
 	Cmd_AddCommand ("dumpuser", SV_DumpUser_f);
 	Cmd_AddCommand ("map_restart", SV_MapRestart_f);
+	// FAKK2: the game restarts the level when the player dies (Level::PlayerRestart);
+	// retail's restart (0x441f50) respawns the map as map_restart does here
+	Cmd_AddCommand ("restart", SV_MapRestart_f);
 	Cmd_AddCommand ("sectorlist", SV_SectorList_f);
 	Cmd_AddCommand ("map", SV_Map_f);
 	Cmd_SetCommandCompletionFunc( "map", SV_CompleteMapName );
-	// FAKK2: the game module ends a level with "gamemap <next>" (G_ExitLevel)
-	Cmd_AddCommand ("gamemap", SV_Map_f);
+	// FAKK2: the game module ends a level with "gamemap <next>" (G_ExitLevel),
+	// which carries the player to the next; saved games (sv_save.c)
+	SV_AddSaveCommands();
 	Cmd_SetCommandCompletionFunc( "gamemap", SV_CompleteMapName );
 #ifndef PRE_RELEASE_DEMO
 	Cmd_AddCommand ("devmap", SV_Map_f);

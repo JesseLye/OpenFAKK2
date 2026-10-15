@@ -448,6 +448,32 @@ void SCR_DrawDebugGraph (void)
 
 //=============================================================================
 
+// the screenshot a saveshot takes at the end of the frame it draws
+static char		scr_saveShotCmd[MAX_STRING_CHARS];
+
+/*
+==================
+SCR_SaveShot_f
+
+FAKK2: "saveshot <file> <width> <height>", which the server runs when it saves
+a game (sv_save.c), as the retail client's (0x423130): the screen is drawn
+again without the menus or the console and the renderer's screenshot
+command takes it, scaled to the size given. Retail runs the screenshot after
+the frame; here it is queued inside it, ahead of the buffer swap.
+==================
+*/
+static void SCR_SaveShot_f( void ) {
+	if ( !cls.rendererStarted ) {
+		return;
+	}
+	Q_strncpyz( scr_saveShotCmd, va( "screenshot %s", Cmd_Args() ), sizeof( scr_saveShotCmd ) );
+	URC_SetSaveShot( qtrue );
+	SCR_UpdateScreen();
+	URC_SetSaveShot( qfalse );
+	scr_saveShotCmd[0] = 0;
+	URC_SavesChanged();
+}
+
 /*
 ==================
 SCR_Init
@@ -459,6 +485,8 @@ void SCR_Init( void ) {
 	cl_graphheight = Cvar_Get ("graphheight", "32", CVAR_CHEAT);
 	cl_graphscale = Cvar_Get ("graphscale", "1", CVAR_CHEAT);
 	cl_graphshift = Cvar_Get ("graphshift", "0", CVAR_CHEAT);
+
+	Cmd_AddCommand( "saveshot", SCR_SaveShot_f );
 
 	scr_initialized = qtrue;
 }
@@ -479,6 +507,10 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 	re.BeginFrame( stereoFrame );
 
 	uiFullscreen = (uivm && VM_Call( uivm, UI_IS_FULLSCREEN )) || URC_IsFullscreen();
+	// a saved game's picture is of the game under the load and save menu
+	if ( scr_saveShotCmd[0] ) {
+		uiFullscreen = qfalse;
+	}
 
 	// wide aspect ratio screens need to have the sides cleared
 	// unless they are displaying game renderings
@@ -554,8 +586,10 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 		VM_Call( uivm, UI_REFRESH, cls.realtime );
 	}
 
-	// console draws next
-	Con_DrawConsole ();
+	// console draws next, but not in a saved game's picture
+	if ( !scr_saveShotCmd[0] ) {
+		Con_DrawConsole ();
+	}
 
 	// debug graph can be drawn on top of anything
 	if ( cl_debuggraph->integer || cl_timegraph->integer || cl_debugMove->integer ) {
@@ -595,6 +629,11 @@ void SCR_UpdateScreen( void ) {
 			SCR_DrawScreenField( STEREO_RIGHT );
 		} else {
 			SCR_DrawScreenField( STEREO_CENTER );
+		}
+
+		// a saveshot's picture is read back once the frame is drawn
+		if ( scr_saveShotCmd[0] ) {
+			Cmd_ExecuteString( scr_saveShotCmd );
 		}
 
 		if ( com_speeds->integer ) {

@@ -890,6 +890,8 @@ extern	cvar_t	*cl_paused;		// FAKK2: the cvar is called paused
 extern	cvar_t	*sv_paused;
 extern	cvar_t	*com_deathmatch;
 void	Com_Pause( void );		// FAKK2: the pause command's toggle
+const char	*Com_GetArchiveFileName( const char *filename, const char *extension );	// FAKK2: save/<config>_<name>.<ext>
+void	Com_WipeSaveGame( const char *filename );
 
 extern	cvar_t	*cl_packetdelay;
 extern	cvar_t	*sv_packetdelay;

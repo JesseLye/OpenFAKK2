@@ -142,9 +142,9 @@ Missing from OpenFAKK2, to be done:
   `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
   `additem`.
 
-Being done elsewhere: saving and loading (`savegame`, `loadgame`, `autosavegame`,
-`loadbrokengame`, `saveshot`), carrying the player's state from level to level
-(`gamemap`), and the intro (`_intro`, `dointro`).
+Being done elsewhere: the intro (`_intro`, `dointro`). Saving and loading (`savegame`,
+`loadgame`, `autosavegame`, `loadbrokengame`, `saveshot`, `gamemap`, `restart`) are
+under "Saved games" below.
 
 Left out on purpose:
 
@@ -692,13 +692,14 @@ Not read, done another way:
   share of the track (at least 6). The load and save menu's `FakkLoadGameClass` is a
   `UIListCtrl` (`0x4ace40`): columns "Location", "Elapased Time" (sic) and "Date &
   Time", four, two and four tenths of its width (`0x414710`), headers a font height
-  plus four tall in 0.3 grey with white lines, a row per `save/*.ssv` (`0x4147d0`; its
-  header is the save time, the map time in milliseconds and the 64-character location)
-  newest first, the selected one white with black text, and its picture
-  (`save/<name>.tga`, or `textures/menu/no_saved_games.tga`) on the `LoadSaveShot`
-  label (`0x415390`). `widgetcommand LoadSaveList` takes `loadgame`, `savegame` and
-  `removegame` (which deletes the four files from the home directory); the engine has
-  no `loadgame` or `savegame` command yet, so the first two do nothing. The GFX info
+  plus four tall in 0.3 grey with white lines, a row per `save/config_*.ssv`
+  (`0x4147d0`; see "Saved games" for the header) newest first, the selected one white
+  with black text, and its picture (`save/config_<name>.tga`, or
+  `textures/menu/no_saved_games.tga`) on the `LoadSaveShot` label (`0x415390`).
+  `widgetcommand LoadSaveList` takes `loadgame`, `savegame` and `removegame` (which
+  deletes the four files from the home directory), going by the save name in the
+  header. The list also shows the retail install's saves, which `fs_basepath` makes
+  visible; they load, but only those in the home directory can be deleted. The GFX info
   menu's `MultiLineEdit` (`0x4b7530`) shows `r_gfxinfo`, which the renderer now fills
   as retail's does (`0x460790`): the `gfxinfo` text with each extension on its own
   `GL_EXTENSIONS:` line, cut at 4096 bytes. The font scripts say `rgbGen identity`, but
@@ -1072,6 +1073,97 @@ Still different:
 - **Moving while a weapon's fire animation plays** carried Julie much further on ours: a
   0.6-second `+moveleft` right after a shotgun blast moved her to the corridor wall on
   ours and a few units in retail. Seen in passing; not looked into.
+
+## Saved games
+
+`code/server/sv_save.c`, from the retail commands registered at `0x441fa0`. A game is
+saved as four files named by `Com_GetArchiveFileName` (`0x42eba0`, also the game's
+`GetArchiveFileName` import): `save/<config>_<name>.<extension>`, where `<config>` is the
+config file's name without `.cfg`, from the `config` cvar: `config` unless it is set,
+which is also what every save in the retail install's `save` folder is called. The
+dedicated build's config file is `config_server.cfg`, so its saves are
+`config_server_<name>`; it does not see the client's.
+
+- `.sav`: the level, written and read by the game module (`WriteLevel`, `ReadLevel`).
+- `.spv`: the player's persistent data, the game's `WritePersistant`.
+- `.ssv`: a 200-byte header, then the area portal state (`0x42acb0`): the number of areas
+  and their `numAreas * numAreas` reference counts. The header (`0x442a00`) is the
+  `time()` it was saved, the level clock in milliseconds, a 64-byte comment ("Starting
+  <level>" for an autosave, else the level's name, configstring 2), the map name without
+  its spawn point, and the save name, 64 bytes each.
+- `.tga`: the client's `saveshot <file> 256 256` (`0x423130`), the whole screen scaled
+  to 256 x 256 with the HUD but without the menus or the console (the UI's draw,
+  `0x4193f0`, checks the same flag). Retail's files are 196,626 bytes, as ours are.
+
+`current` is the save name of the level being played. `gamemap` (`0x441eb0`), which the
+game sends at the end of a level, has the game write the player's data to `current.spv`,
+spawns the next level, and the next level reads it back once its entities have spawned
+(`SV_SpawnServer`, `0x445e90`, calls `SV_ArchivePersistantFile` with loading set, retail's
+"SV_ArchivePersistantFile()" line at developer 1), which is how the player keeps her
+inventory between levels. `map` and `devmap` remove the current save first (`0x4422cf`).
+`savegame [name]` (`0x442ee0`) refuses outside a game, in deathmatch and when the
+player's `STAT_HEALTH` is 0; without a name it saves as the map name and the first free
+number from 0000 (`0x442e30`). It copies `current.spv` to the save (`0x442830`), has the
+game write the level, then writes the header and asks for the picture. `loadgame`
+(`0x442cb0`) checks the level with the game's `LevelArchiveValid`, reads the header,
+copies the save's `.spv` to `current.spv` and spawns its map with the load flag set:
+`SV_SpawnServer` then has the game read the level instead of spawning the map's
+entities, restores the area portals and the level clock, and runs no settling frames.
+A level the game cannot read falls back to spawning the map with the persistent data.
+When the game's `LevelArchiveValid` refuses a save, `loadgame` runs retail's dialog at
+once (`dialog "" "" "loadbrokengame <name>" 260 150 textures\menu\invalid
+textures\menu\okbutton textures\menu\cancelbutton`); its Ok runs `loadbrokengame`
+(`0x442bf0`), which loads the save without that check, so the spawn tries the level and
+falls back as above. A dedicated server, which has no dialog, prints the
+`loadbrokengame` line instead. On death the game opens the main
+and load menus (`Player::Respawn`); `restart` (`0x441f50`, from
+`Level::PlayerRestart`) spawns the level again, as `map_restart` does here.
+
+`tools/retail-compare/save-load.ps1` saves a game mid-probe and loads it in a second
+process, where the game's restored script thread takes the same readings again. On
+`zoo`, with the rebuilt or the retail `gamex86.dll`, the pending events (108 at 8.80 s)
+and all level variables but one match, and 132 of 133 `whatis` readings are identical.
+The two differences come from the game module and appear with both: a level variable
+the scripts rewrite after the load reads `50` rather than `50.000000`, and an attached
+model (the flamethrower's gas, bound to its weapon) is relinked by its re-attachment at
+its local offset, outside the world, so its area reads -1; attached entities are sent
+wherever their parent is, so nothing changes on screen. On `training`, 252 of 300
+readings are identical; the other 48 are triggers whose contents read -1 after the load
+instead of 0. The game sets a brush entity's model again as it reads it, and
+`SetBrushModel` turns contents of 0 into -1, as retail's does (`0x4445a0`); traces and
+point contents skip trigger entities, so this does not change play. Games saved by the retail engine
+load with either game module (`training0001` from the install: the player where she
+was, the level clock resuming at 577 s). A level change with `gamemap` carries the
+player's inventory; with `map` it does not.
+
+Where OpenFAKK2 differs:
+
+- **The autosave's delay.** Retail's `gamemap` queues `wait 1500; pause ; autosavegame
+  ; pause`. Retail's `wait` counts milliseconds: `Cbuf_Execute` (`0x42c590`) subtracts
+  the frame's time from it, and `wait 1` waits one frame. Its autosaves are made at
+  1.75 s of level time (every "Starting" save in the install says 1750 ms).
+  OpenFAKK2's `wait` counts frames, as Quake III's does, which put the save at 6.7 s and
+  held up everything the level stuffed into the console until then. The server counts
+  the 1.5 s down itself instead (`SV_AutoSaveFrame`, every server frame, paused or not)
+  and queues the rest: the save is made at 1.8 s, and nothing waits behind it. A new
+  level started before then cancels it. The `wait` command itself still counts frames;
+  the harness relies on that.
+- **`*` in front of a map name** for `gamemap` starts afresh (the current save is
+  removed). Retail removes it too but passes the name on with the `*`, which its spawn
+  would not find; OpenFAKK2 strips it, as Quake II did.
+- **A save without persistent data** (made after `map`) has no `.spv`. Retail's copy
+  (`0x42fe20`) leaves the destination alone when there is no source, so loading such a
+  save keeps whatever `current.spv` was there; OpenFAKK2 removes it.
+- **A bad save name** (`..`, `/` or `\`): retail's `loadgame` and `loadbrokengame` print
+  "Bad savedir." and carry on; OpenFAKK2 stops there.
+- **Retail's fast restart.** When the map is the one already loaded, retail's
+  `SV_SpawnServer` keeps the collision map and the game module loaded; OpenFAKK2
+  always reloads both, as it does for every map change.
+- **`CS_SOUNDTRACK`.** Retail sets it to `none` when it spawns a map other than by
+  loading a game. OpenFAKK2 leaves it empty: its music system would look for a
+  soundtrack called `none`, and every level sets its own.
+- **The picture** is read back inside the frame it is drawn in, ahead of the buffer
+  swap; retail runs the screenshot after the frame.
 
 ## The renderer and the map viewer
 
@@ -1588,4 +1680,6 @@ Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read
   it. The test player shows `print` text on the console as a client would and discards
   everything else; the real client draws the module's picture, which has not been
   compared with the retail game's.
-- Save and load.
+- A game saved by OpenFAKK2 loaded in the retail engine, and the save and load round
+  trip run on the retail engine to see whether its own attached models come back
+  unlinked as well.

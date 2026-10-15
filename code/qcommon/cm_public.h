@@ -60,6 +60,8 @@ int			CM_LeafArea (int leafnum);
 
 void		CM_AdjustAreaPortalState( int area1, int area2, qboolean open );
 qboolean	CM_AreasConnected( int area1, int area2 );
+void		CM_WritePortalState( fileHandle_t f );
+void		CM_ReadPortalState( fileHandle_t f );
 
 int			CM_WriteAreaBits( byte *buffer, int area );
 

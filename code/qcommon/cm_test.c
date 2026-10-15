@@ -411,6 +411,50 @@ void	CM_AdjustAreaPortalState( int area1, int area2, qboolean open ) {
 
 /*
 ====================
+CM_WritePortalState
+
+FAKK2: a saved game keeps which area portals are open, after its server
+file's header (the retail 0x42acb0): the number of areas, then the
+numAreas * numAreas reference counts.
+====================
+*/
+void	CM_WritePortalState( fileHandle_t f ) {
+	int		i, value;
+
+	value = LittleLong( cm.numAreas );
+	FS_Write( &value, sizeof( value ), f );
+	for ( i = 0 ; i < cm.numAreas * cm.numAreas ; i++ ) {
+		value = LittleLong( cm.areaPortals[i] );
+		FS_Write( &value, sizeof( value ), f );
+	}
+}
+
+/*
+====================
+CM_ReadPortalState
+
+The retail 0x42acf0: the map's areas must be the ones the game was saved with.
+====================
+*/
+void	CM_ReadPortalState( fileHandle_t f ) {
+	int		i, value;
+
+	value = 0;
+	FS_Read( &value, sizeof( value ), f );
+	if ( LittleLong( value ) != cm.numAreas ) {
+		Com_Error( ERR_DROP, "numareaportals differs from save game" );
+	}
+	for ( i = 0 ; i < cm.numAreas * cm.numAreas ; i++ ) {
+		value = 0;
+		FS_Read( &value, sizeof( value ), f );
+		cm.areaPortals[i] = LittleLong( value );
+	}
+
+	CM_FloodAreaConnections ();
+}
+
+/*
+====================
 CM_AreasConnected
 
 ====================
