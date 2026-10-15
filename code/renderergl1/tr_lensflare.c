@@ -22,11 +22,19 @@ when the light is in the portal sky). The set's full-screen blend is
 white at fullscale * t^4, fading over fullfade ms once the light is gone.
 
 The sun is the worldspawn's "sunflare" point, in the sky camera's world
-when "sunflare_inportalsky" is set. An entity with RF_LENSFLARE gets the
-entity set in its colour, plus a "corona" quad (textures/sprites/corona,
-r_lightcoronasize half-size) at the light whenever it is in front of and
-visible to the eye; a dynamic light with the lensflare or viewlensflare
-bit gets the same; an entity with RF_VIEWLENSFLARE gets the dlight set.
+when "sunflare_inportalsky" is set. The other two sets are used the other
+way round from their names: 0x48bf90 reads the file's "entity" section
+into the object that 0x48bb20 draws for RF_VIEWLENSFLARE, and its "dlight"
+section into the one it draws for RF_LENSFLARE and for lights. So an
+entity with RF_LENSFLARE gets the dlight set in its colour (the small
+ghost flares, no flare at the light itself), plus a "corona" quad
+(textures/sprites/corona, r_lightcoronasize half-size) at the light
+whenever it is in front of and visible to the eye; a dynamic light with
+the lensflare or viewlensflare bit gets the same; an entity with
+RF_VIEWLENSFLARE gets the entity set, with its big flare at the light.
+An entity's RF_SKYENTITY bit must match the view's isPortalSky, so the
+main view leaves sky entities out. Only the sun's set draws its
+full-screen blend.
 ===========================================================================
 */
 
@@ -434,10 +442,17 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		LF_DrawSet( &lf_sun, view );
 	}
 
+	// retail's sets for these are swapped against their names: RF_LENSFLARE
+	// and the lights draw the object 0x48bf90 fills from the "dlight" section
+	// (0x96d5e8), RF_VIEWLENSFLARE the one it fills from "entity" (0x96d790)
 	for ( i = 0 ; i < tr.refdef.num_entities ; i++ ) {
 		const refEntity_t	*e = &tr.refdef.entities[i].e;
+		qboolean			inSky = ( e->renderfx & LF_RF_SKYENTITY ) != 0;
 
 		if ( !( e->renderfx & ( LF_RF_LENSFLARE | LF_RF_VIEWLENSFLARE ) ) ) {
+			continue;
+		}
+		if ( !inSky != !view->isPortalSky ) {
 			continue;
 		}
 		color[0] = e->shaderRGBA[0] / 255.0f;
@@ -445,12 +460,12 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		color[2] = e->shaderRGBA[2] / 255.0f;
 		color[3] = e->shaderRGBA[3] / 255.0f;
 		if ( e->renderfx & LF_RF_LENSFLARE ) {
-			LF_SetLight( &lf_entity, view, e->origin, ( e->renderfx & LF_RF_SKYENTITY ) != 0, color );
-			LF_DrawLight( &lf_entity, view );
+			LF_SetLight( &lf_dlight, view, e->origin, inSky, color );
+			LF_DrawLight( &lf_dlight, view );
 		}
 		if ( e->renderfx & LF_RF_VIEWLENSFLARE ) {
-			LF_SetLight( &lf_dlight, view, e->origin, ( e->renderfx & LF_RF_SKYENTITY ) != 0, color );
-			LF_DrawSet( &lf_dlight, view );
+			LF_SetLight( &lf_entity, view, e->origin, inSky, color );
+			LF_DrawSet( &lf_entity, view );
 		}
 	}
 
@@ -462,12 +477,11 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		}
 		VectorCopy( dl->color, color );
 		color[3] = 1;
-		LF_SetLight( &lf_entity, view, dl->origin, qfalse, color );
-		LF_DrawLight( &lf_entity, view );
+		LF_SetLight( &lf_dlight, view, dl->origin, qfalse, color );
+		LF_DrawLight( &lf_dlight, view );
 	}
 
+	// retail fades only the sun's full-screen blend (0x48b5a0 on 0x96d448)
 	LF_DrawFullscreen( &lf_sun, view );
-	LF_DrawFullscreen( &lf_entity, view );
-	LF_DrawFullscreen( &lf_dlight, view );
 	RE_SetColor( NULL );
 }

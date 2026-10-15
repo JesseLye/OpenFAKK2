@@ -786,15 +786,27 @@ What is implemented, and on what basis:
   into the view's world). The set's full-screen blend (`0x48b5a0`) is white at
   fullscale * t^4, fading over `fullfade` ms once the light has gone. The sun is
   worldspawn's `sunflare` (`0x48bf50`), in the sky camera's world when
-  `sunflare_inportalsky` is set; a refentity with `RF_LENSFLARE` gets the entity set in
-  its `shaderRGBA`, plus a corona quad of `r_lightcoronasize` (default .1) half-size
-  at the light whenever it is in front of the eye and visible (`0x48b3c0`); a dynamic
-  light with the `lensflare` or `viewlensflare` bit gets the same in its colour; an
-  entity with `RF_VIEWLENSFLARE` gets the dlight set. The intro's Lochnar (a green
-  light with `+lensflare`) matches the retail captures at 13 to 15 seconds. Not read
-  from retail: the sun's colour (white here), what happens to a flare in the sky
-  portal's own pass (retail skips `RF_SKYENTITY` entities in the main pass and has a
-  second pass; here every light is drawn once, in the main view). `r_sunflare "x y z"`
+  `sunflare_inportalsky` is set. The other two sets are used the other way round from
+  their names: `0x48bf90` reads the file's `entity` section into the object at
+  `0x96d790` and its `dlight` section into `0x96d5e8`, and `0x48bb20` draws `0x96d5e8`
+  for `RF_LENSFLARE` and for lights, `0x96d790` for `RF_VIEWLENSFLARE`. So a
+  refentity with `RF_LENSFLARE` gets the dlight set in its `shaderRGBA` (only the
+  small ghost flares, nothing at the light itself), plus a corona quad of
+  `r_lightcoronasize` (default .1, archived) half-size at the light whenever it is in
+  front of the eye and visible (`0x48b3c0`); a dynamic light with the `lensflare` or
+  `viewlensflare` bit gets the same in its colour; an entity with `RF_VIEWLENSFLARE`
+  gets the entity set, with its .2 flare at the light. Giving `RF_LENSFLARE` the
+  entity set had put that big flare on `training`'s shooting targets, three times
+  retail's light on a target faced squarely; with the sets the right way round the
+  light each flare adds matches retail's within 2% (`probe-lensflare.scr`, a camera on
+  the four targets with and without `+lensflare`), and the intro's Lochnar (a green
+  light with `+lensflare`) shows retail's small corona and ghost rings at 13 seconds.
+  A refentity's `RF_SKYENTITY` bit must match the view's `isPortalSky` (`0xcdc688`),
+  so the main view leaves sky entities out, and only the sun's set draws its
+  full-screen blend (`0x48b5a0` on `0x96d448`). Not read from retail: the sun's colour
+  (white here), what happens to a flare in the sky portal's own pass (retail draws in
+  the back end after every draw-surface list, and tests the view against the front
+  end's `tr.viewParms`; here every light is drawn once, in the main view). `r_sunflare "x y z"`
   (with `r_sunflare_inportalsky`) places the sun by hand as retail's developer cvar
   does, which is how the sun flare was compared: with the sun put at `training`'s
   player start, ours and retail show the same disc and ring at the same strength. The
