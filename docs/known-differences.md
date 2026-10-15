@@ -1165,7 +1165,11 @@ What is implemented, and on what basis:
   radius (`radius * 7500 / d^2`) and does not bend the light direction, directed light is
   held to 255 (scaling the ambient with it), and a `lightoffset` entity (a sentient
   flashing when hit) adds its colour to the ambient. A TIKI model is lit from the centre
-  of its frame's bounds, not its origin (`0x48cff0`), moved by the definition's
+  of its frame's bounds, not its origin (`0x48cff0`): the bounds the animation file
+  stores for the frame (a `.tan` frame's at byte 0, a `.ska` frame's at byte 0), not
+  those of the vertexes, and a light cube's radius is the file's own frame radius (byte
+  60 of a `.tan` frame, 24 of a `.ska` frame) times the scales and a half, which the
+  vertex bounds had made about half as large. The centre is moved by the definition's
   `lightoffset <x y z>` (setup section, `TIKI_ParseSetup` `0x44c3eb`; added at `0x48d0b2`
   and scaled with the model). No retail model has one; `probe-lightoff.scr` with
   `fx\test_lightoff.tik` (the statue lit from 168 units higher) gives the same dark

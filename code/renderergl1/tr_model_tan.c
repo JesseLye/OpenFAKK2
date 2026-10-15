@@ -68,6 +68,8 @@ typedef struct {
 	vec3_t		bounds[2];		// of the model as placed, after scaling
 	vec3_t		localOrigin;
 	float		radius;
+	vec3_t		lightCentre;	// the model is lit from here: the centre of the file's bounds, placed
+	float		lightRadius;	// the file's radius, scaled (fakk2.exe 0x48cff0)
 	vec3_t		scale;			// tan: decoded vertex = packed * scale + offset
 	vec3_t		offset;
 } tikiFrame_t;
@@ -606,7 +608,10 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		for ( k = 0 ; k < 3 ; k++ ) {
 			frame->scale[k] = TAN_Float( f + 24 + k * 4 ) * tiki->scale;
 			frame->offset[k] = ( TAN_Float( f + 36 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
+			frame->lightCentre[k] = ( ( TAN_Float( f + k * 4 ) + TAN_Float( f + 12 + k * 4 ) ) * 0.5f
+				+ tiki->origin[k] ) * tiki->scale;
 		}
+		frame->lightRadius = TAN_Float( f + 60 ) * tiki->scale;
 		ClearBounds( frame->bounds[0], frame->bounds[1] );
 	}
 
@@ -756,6 +761,8 @@ static skelAnim_t *R_SkaLoad( const tikiModel_t *tiki, const char *skaFile ) {
 			frame->bounds[1][k] = ( TAN_Float( f + 12 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
 		}
 		R_TikiFinishFrame( frame, &anim->radius );
+		VectorCopy( frame->localOrigin, frame->lightCentre );
+		frame->lightRadius = TAN_Float( f + 24 ) * tiki->scale;
 		for ( j = 0 ; j < numBones * 8 ; j++ ) {
 			anim->bones[i * numBones * 8 + j] = TAN_Short( f + SKA_FRAME_HEADER_SIZE + j * 2 );
 		}
@@ -1006,15 +1013,17 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 	// FAKK2 lights a TIKI model from the centre of its frame's bounds, not
 	// from its origin (fakk2.exe 0x48cff0), which keeps a model whose origin
 	// sits in a wall (the training room's door button, in the door frame)
-	// sampling the grid where the model is. A scene without a world (the
-	// inventory's windows) gets the flat ambient R_SetupEntityLighting gives it.
+	// sampling the grid where the model is. The bounds and the radius are
+	// the ones the animation file stores, not those of the vertexes. A scene
+	// without a world (the inventory's windows) gets the flat ambient
+	// R_SetupEntityLighting gives it.
 	{
 		const tikiFrame_t	*frame = &frames[ent->e.frame];
 		float				escale = R_TikiEntityScale( &ent->e );
 		vec3_t				local, lightOrigin;
 
 		// plus the definition's "lightoffset", scaled as the model is (0x48d0b2)
-		VectorMA( frame->localOrigin, tiki->scale, tiki->lightOffset, local );
+		VectorMA( frame->lightCentre, tiki->scale, tiki->lightOffset, local );
 		VectorScale( local, escale, local );
 		if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
 			VectorCopy( ent->e.lightingOrigin, lightOrigin );
@@ -1027,7 +1036,7 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		if ( ent->e.renderfx & ( RF_EXTRALIGHT | RF_INVISIBLE ) ) {
 			// betterlighting: a light cube from the map's lights instead
 			// of the grid (fakk2.exe 0x48e170)
-			R_SetupEntityLightCube( ent, lightOrigin, local, frame->radius * escale * 0.5f );
+			R_SetupEntityLightCube( ent, lightOrigin, local, frame->lightRadius * escale * 0.5f );
 		} else {
 			R_SetupEntityLighting( &tr.refdef, ent, lightOrigin );
 		}
