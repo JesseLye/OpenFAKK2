@@ -1447,6 +1447,16 @@ What is implemented, and on what basis:
   the floor as in the retail capture (`tools/retail-compare/probe-crosshair.scr`). Not
   done: the retail sprite path also skips a quad whose corners are all outside one
   frustum plane, which only saves drawing.
+- **A sprite's bounds and radius** (`ModelBounds` `0x475510`, `ModelRadius` `0x475640`,
+  the `re` export table's slots at `0x72d614` and `0x72d618`). A `.spr` model's bounds
+  are its quad's half width and half height either way in x and y, times the shader's
+  `spriteScale`, and 0 in z; its radius is the larger half. This port returned zero for
+  both, and the client game module sizes the targeting reticle (`left_targeted.spr`,
+  `right_targeted.spr`, the yellow ring an autoaim weapon such as the hand gun puts on its
+  target) by `radius / ModelRadius(reticle)`, so the scale was infinite and the ring
+  never appeared. `tools/retail-compare/probe-pot.scr` shows it on both games. On
+  `training`'s brush targets the ring is drawn at the box's centre and no wider than the
+  box, so it is hidden on both games when seen from the front.
 - **The entity's scale** (`refEntity_t.scale`, the entity state's `scale`, which maps and
   scripts set: `intro`'s dropship is placed at 0.02, Obadiah in `swamp1` at 2.0) multiplies
   a `.tik` model's vertexes, bounds and radius on top of the definition's own scale, as the

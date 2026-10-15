@@ -1139,6 +1139,13 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 	} else if ( model->type == MOD_TIKI ) {
 		R_TikiBounds( model, mins, maxs );
 		return;
+	} else if ( model->type == MOD_SPRITE ) {
+		// FAKK2: the quad's half size, flat in z (fakk2.exe 0x475510)
+		float	scale = model->spriteShader->spriteScale ? model->spriteShader->spriteScale : 1.0f;
+
+		VectorSet( mins, -model->spriteHalfWidth * scale, -model->spriteHalfHeight * scale, 0 );
+		VectorSet( maxs, model->spriteHalfWidth * scale, model->spriteHalfHeight * scale, 0 );
+		return;
 	}
 
 	VectorClear( mins );
@@ -1149,7 +1156,10 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 ====================
 RE_ModelRadius
 
-FAKK2: how far a model reaches from its origin.
+FAKK2: how far a model reaches from its origin. A sprite's is the larger of
+its quad's half width and half height (fakk2.exe 0x475640): the client game
+module sizes the targeting reticle by it, and a radius of 0 made the
+reticle's scale infinite, so it was never seen.
 ====================
 */
 float RE_ModelRadius( qhandle_t handle ) {
@@ -1158,6 +1168,10 @@ float RE_ModelRadius( qhandle_t handle ) {
 
 	if ( model->type == MOD_TIKI ) {
 		return R_TikiRadius( model );
+	}
+	if ( model->type == MOD_SPRITE ) {
+		R_ModelBounds( handle, mins, maxs );
+		return MAX( maxs[0], maxs[1] );
 	}
 	R_ModelBounds( handle, mins, maxs );
 	return RadiusFromBounds( mins, maxs );
