@@ -144,6 +144,7 @@ foreach ($c in $selected) {
         $measured = @()
         for ($k = 0; $k -lt $runs; $k++) {
             $dir = if ($k) { "$oursDir-2" } else { $oursDir }
+            if ($k) { foreach ($d in 'save', 'screenshots') { Remove-Item (Join-Path $TestFakk $d) -Recurse -Force -ErrorAction SilentlyContinue } }
             $note = Invoke-CheckSide $c 'ours' $dir $Bin
             $logs = @(Get-ChildItem $dir -File | Where-Object { $_.Extension -eq '.log' -or $_.Name -eq 'output.txt' } | ForEach-Object FullName)
             $crash = @(Find-Crash $logs $Bin)
@@ -154,7 +155,7 @@ foreach ($c in $selected) {
                 throw 'crashed'
             }
             if ($c.kind -eq 'build' -and (Get-Content (Join-Path $dir 'exit.txt') -ErrorAction SilentlyContinue) -ne '0') { $buildFailed = $true }
-            $measured += , (Measure-Check $c $dir $(if ($hasRetail) { $refDir } else { $null }) (Join-Path $checkDir 'evidence') $(if (Test-Path $baseDir) { $baseDir } else { '' }))
+            $measured += , (Measure-Check $c $dir $(if ($hasRetail) { $refDir } else { $null }) (Join-Path $checkDir $(if ($k) { 'evidence-2' } else { 'evidence' })) $(if (Test-Path $baseDir) { $baseDir } else { '' }))
         }
         $ms = $measured[0]
         $r.metrics = $ms.metrics; $r.evidence = @($ms.evidence); $r.images = @($ms.images | ForEach-Object { $_.Substring($runDir.Length + 1) })
