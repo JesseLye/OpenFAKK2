@@ -118,6 +118,13 @@ Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras
 and more) install into both sandboxes with `install-example-maps.ps1` and run as
 `-Map example/<map>`; `probe-scripting.md` lists what each one shows.
 
+`capture-menus.ps1 [-Menus loadsave,controls] [-Side retail|ours]` shoots the `.urc` menus
+with no map loaded, one run per menu on each game, and pairs them in
+`build\compare\captures\menus`. It clears the retail sandbox's archived `developer` (retail
+opens its console window at startup while it is set, dimming the menus). For the load and
+save menu, copy the install's `save\*.ssv` and `*.tga` into
+`build\sandbox\retail\fakk\save` first, so retail lists the games ours finds in the install.
+
 OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
 `fs_homepath`; the retail runs use a clean copy of the install. So that ours does not
 read the player's own `autoexec.cfg` from the install, `common.ps1` keeps an empty one in

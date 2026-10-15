@@ -32,6 +32,7 @@ qboolean    haveClampToEdge = qfalse;
 glstate_t	glState;
 
 static void GfxInfo_f( void );
+static void R_SetGfxInfoCvar( void );
 
 #ifdef USE_RENDERER_DLOPEN
 cvar_t  *com_altivec;
@@ -1011,6 +1012,101 @@ void GfxInfo_f( void )
 	if ( r_finish->integer ) {
 		ri.Printf( PRINT_ALL, "Forcing glFinish\n" );
 	}
+	R_SetGfxInfoCvar();
+}
+
+/*
+================
+R_SetGfxInfoCvar
+
+The retail renderer's gfxinfo (0x461930, its text built at 0x460790) also
+keeps what it prints in r_gfxinfo, which the GFX Info menu's text box
+shows: the same lines with each extension on its own "GL_EXTENSIONS:"
+line, in a 4096-byte buffer that takes a line only if all of it fits.
+================
+*/
+static void QDECL R_GfxInfoAppend( char *buf, int size, const char *fmt, ... ) {
+	char	line[4096];
+	va_list	argptr;
+
+	va_start( argptr, fmt );
+	Q_vsnprintf( line, sizeof( line ), fmt, argptr );
+	va_end( argptr );
+	if ( strlen( buf ) + strlen( line ) < (size_t)size - 1 ) {
+		Q_strcat( buf, size, line );
+	}
+}
+
+static void R_SetGfxInfoCvar( void ) {
+	static const char	*enablestrings[] = { "disabled", "enabled" };
+	static const char	*fsstrings[] = { "windowed", "fullscreen" };
+	static char			buf[4096];
+	char				exts[BIG_INFO_STRING];
+	char				*p;
+	int					primitives;
+
+	buf[0] = 0;
+	R_GfxInfoAppend( buf, sizeof( buf ), "\nGL_VENDOR: %s\n", glConfig.vendor_string );
+	R_GfxInfoAppend( buf, sizeof( buf ), "GL_RENDERER: %s\n", glConfig.renderer_string );
+	R_GfxInfoAppend( buf, sizeof( buf ), "GL_VERSION: %s\n", glConfig.version_string );
+	Q_strncpyz( exts, glConfig.extensions_string, sizeof( exts ) );
+	for ( p = exts ; p ; ) {
+		char	*space = strchr( p, ' ' );
+
+		if ( space ) {
+			*space = 0;
+		}
+		if ( strlen( p ) > 1 ) {
+			R_GfxInfoAppend( buf, sizeof( buf ), "GL_EXTENSIONS: %s\n", p );
+		}
+		p = space ? space + 1 : NULL;
+	}
+	R_GfxInfoAppend( buf, sizeof( buf ), "GL_MAX_TEXTURE_SIZE: %d\n", glConfig.maxTextureSize );
+	R_GfxInfoAppend( buf, sizeof( buf ), "GL_MAX_ACTIVE_TEXTURES_ARB: %d\n", glConfig.numTextureUnits );
+	R_GfxInfoAppend( buf, sizeof( buf ), "\nPIXELFORMAT: color(%d-bits) Z(%d-bit) stencil(%d-bits)\n", glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
+	R_GfxInfoAppend( buf, sizeof( buf ), "MODE: %d, %d x %d %s hz:", r_mode->integer, glConfig.vidWidth, glConfig.vidHeight, fsstrings[r_fullscreen->integer == 1] );
+	if ( glConfig.displayFrequency ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "%d\n", glConfig.displayFrequency );
+	} else {
+		R_GfxInfoAppend( buf, sizeof( buf ), "N/A\n" );
+	}
+	R_GfxInfoAppend( buf, sizeof( buf ), glConfig.deviceSupportsGamma ? "GAMMA: hardware w/ %d overbright bits\n" :
+		"GAMMA: software w/ %d overbright bits\n", tr.overbrightBits );
+	R_GfxInfoAppend( buf, sizeof( buf ), "CPU: %s\n", ri.Cvar_Get( "sys_cpustring", "", 0 )->string );
+	R_GfxInfoAppend( buf, sizeof( buf ), "rendering primitives: " );
+	primitives = r_primitives->integer;
+	if ( primitives == 0 ) {
+		primitives = qglLockArraysEXT ? 2 : 1;
+	}
+	if ( primitives == -1 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "none\n" );
+	} else if ( primitives == 2 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "single glDrawElements\n" );
+	} else if ( primitives == 1 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "multiple glArrayElement\n" );
+	} else if ( primitives == 3 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "multiple glColor4ubv + glTexCoord2fv + glVertex3fv\n" );
+	}
+	R_GfxInfoAppend( buf, sizeof( buf ), "texturemode: %s\n", r_textureMode->string );
+	R_GfxInfoAppend( buf, sizeof( buf ), "picmip: %d\n", r_picmip->integer );
+	R_GfxInfoAppend( buf, sizeof( buf ), "texture bits: %d\n", r_texturebits->integer );
+	R_GfxInfoAppend( buf, sizeof( buf ), "multitexture: %s\n", enablestrings[qglActiveTextureARB != 0] );
+	R_GfxInfoAppend( buf, sizeof( buf ), "compiled vertex arrays: %s\n", enablestrings[qglLockArraysEXT != 0] );
+	R_GfxInfoAppend( buf, sizeof( buf ), "texenv add: %s\n", enablestrings[glConfig.textureEnvAddAvailable != 0] );
+	R_GfxInfoAppend( buf, sizeof( buf ), "compressed textures: %s\n", enablestrings[glConfig.textureCompression != TC_NONE] );
+	if ( r_vertexLight->integer || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "HACK: using vertex lightmap approximation\n" );
+	}
+	if ( glConfig.hardwareType == GLHW_RAGEPRO ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "HACK: ragePro approximations\n" );
+	}
+	if ( glConfig.hardwareType == GLHW_RIVA128 ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "HACK: riva128 approximations\n" );
+	}
+	if ( r_finish->integer ) {
+		R_GfxInfoAppend( buf, sizeof( buf ), "Forcing glFinish\n" );
+	}
+	ri.Cvar_Set( "r_gfxinfo", buf );
 }
 
 /*

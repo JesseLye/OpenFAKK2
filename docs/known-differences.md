@@ -409,24 +409,81 @@ Not read, done another way:
   topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)
   and takes the left button (`clicksound`, `stuffcommand`; a check box toggles its
   `linkcvar`). `aliascache` names are picked by weight among the aliases sharing the
-  prefix; a new sound on the menu channel stops the one before it. Sliders
-  (`setrange`, `stepsize`, `slidertype`) drag their thumb (the 8x16 `slider_thumb`
-  images) and set their cvar; check boxes draw their 16x16 image at the left of their
-  rect; a label with a `linkcvar` shows the cvar's value through its `linkstring`
-  names; a pulldown (`menushader`, `addpopup`) opens a list under its arrow and runs
-  the entry's command. The retail client's return to the menu (`0x4212f0`) puts on
-  `music/intro.mus` when no map is active; so does this one's, when it shows the main
-  menu. `togglemenu` without a name toggles `main`, which is what `default.cfg` binds
-  to Escape. The FakkBindList widget reads its `filename` script (`ui/bind.scr`:
-  headers, widths, colours, sounds, `binditem` rows) and shows each command's first two
-  bound keys; a clicked key cell takes the next key pressed in place of the old one,
-  Escape leaves it, the wheel scrolls. Its rows are set in `verdana-12` (a guess from
-  the retail capture; the script names no font). The font scripts say `rgbGen
-  identity`, but retail draws its text in the menus' colours, so the renderer gives
-  `gfx/fonts/*` stages the caller's colour. Not done: keyboard in menus beyond
-  Escape, Field and List editing, `ui_newvidmode` (the resolution box stays empty),
-  borders, `invmodelrender`, `tileshader` tiling (drawn stretched) and `ordernumber`.
-  The menu shaders use `rgbGen global` /
+  prefix; a new sound on the menu channel stops the one before it. The retail client's
+  return to the menu (`0x4212f0`) puts on `music/intro.mus` when no map is active; so
+  does this one's, when it shows the main menu. `togglemenu` without a name toggles
+  `main`, which is what `default.cfg` binds to Escape.
+
+  The menus are drawn as retail's widget library in `fakk2.exe` (uilib) draws them,
+  and capture pixel for pixel like retail at 640x480 (the main, load/save, video/audio,
+  advanced, controls, credits, quit and GFX info menus; what differs is the animated
+  clouds and the two games' own cvar values). `resource X` makes the class `UIX`, with
+  `Label` aliased to `FakkLabel` (`0x40cc40`, which draws as `UILabel` when it has no
+  stat, `0x4185e0`); the loader creates every widget in `verdana-12` (`0x4aad60`;
+  `verdana-14` was used before), on UIWidget's defaults of white on UGrey (0.75) with an
+  indented border (`0x49d320`). `UIWidget::Display` (`0x49ef30`) draws each widget in a
+  viewport of its own frame, so what overruns it is cut off (the bind list's
+  "MWHEELDOW"): the background colour; the border (`RAISED`/`INDENT_BORDER` a one-pixel
+  3D edge, `0x49a260`, `3D_BORDER` two pixels of the background colour, `0x49a650`),
+  whose colours come from the background colour and its alpha (`0x49e800`: two thirds,
+  a third, and a lighter one), so the files' clear backgrounds show none; the material
+  in the foreground colour, `shader` stretched and `tileshader` tiled; the
+  `hovershader` over it, not instead of it; then the class's Draw. Text goes through
+  `UIFont::PrintJustified` (`0x4b03c0`) and the renderer's `DrawString` (`0x481690`):
+  glyphs are spaced and sized as the "Ritual fonts" entry under the renderer describes
+  (the intro's quote now lines up with retail's glyph for glyph), and the position is
+  truncated to whole pixels. Labels and
+  buttons centre their text (a held button's a pixel down and right, `0x4ae660`).
+  `UISlider` (`0x4b5970`, `0x4b64e0`) has 15-pixel arrows at both ends
+  (`textures/menu/arrow_left`/`right`, `_sel` while held, a click steps by `stepsize`)
+  and its thumb (the image's own width, `_sel` while dragged) moving between them;
+  it writes its cvar as `%d` or `%.3f` (`0x4b61c0`). `UICheckBox` (`0x4bb6e0`) draws
+  its 16x16 box 16 pixels in, centred, and its title left-justified 48 pixels in.
+  `UIPulldownMenu` (`0x4be190`) draws its `menushader` at the image's size, the
+  `selmenushader` while its list is open; the list (`UIPopupMenu`, `0x4bf1f0`,
+  `0x4bf4a0`) opens below it in `verdana-14`, as wide as its widest entry plus 24, an
+  entry per line plus 4 above and below, black on white with a raised edge (the
+  entry under the cursor is drawn white under black, `0x4bda90`, so it looks the
+  same). Labels with a `linkcvar` show the value through their `linkstring` names;
+  `ui_newvidmode`, which the resolution box shows, is set to `r_mode` when a menu comes
+  up and to -1 when the last goes (`0x40ab60`).
+
+  `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
+  `ui/bind.scr` header pictures in the title colours) over a label per `binditem`
+  (its picture) and two `UIBindButton`s, with the fill picture tiled in columns between
+  them and a scroll bar; it shows (height - row) / row rows. The selected row (row 0 at
+  first) is in the highlight colours, its selected cell (the primary key at first) in
+  the select colours, or the active ones with a two-pixel border in
+  `activebordercolor` while it waits for a key, when `textures/menu/presskey` shows in
+  the middle of the screen (`0x4c10e0`); the other rows are in the inactive colours. A
+  key cell (`0x4bc410`) shows `textures/bind/<key name>`, or `textures/bind/emptykey`
+  with the name centred over it when there is no such picture. `UIVertScroll`
+  (`0x4b3ab0`, 16 pixels down the right of its owner, `0x4b4620`) is a black-lined
+  UGrey frame with an arrow box at each end (a raised edge while there is something to
+  scroll, the marlett font's "5" and "6") and a UDarkGrey thumb as tall as the shown
+  share of the track (at least 6). The load and save menu's `FakkLoadGameClass` is a
+  `UIListCtrl` (`0x4ace40`): columns "Location", "Elapased Time" (sic) and "Date &
+  Time", four, two and four tenths of its width (`0x414710`), headers a font height
+  plus four tall in 0.3 grey with white lines, a row per `save/*.ssv` (`0x4147d0`; its
+  header is the save time, the map time in milliseconds and the 64-character location)
+  newest first, the selected one white with black text, and its picture
+  (`save/<name>.tga`, or `textures/menu/no_saved_games.tga`) on the `LoadSaveShot`
+  label (`0x415390`). `widgetcommand LoadSaveList` takes `loadgame`, `savegame` and
+  `removegame` (which deletes the four files from the home directory); the engine has
+  no `loadgame` or `savegame` command yet, so the first two do nothing. The GFX info
+  menu's `MultiLineEdit` (`0x4b7530`) shows `r_gfxinfo`, which the renderer now fills
+  as retail's does (`0x460790`): the `gfxinfo` text with each extension on its own
+  `GL_EXTENSIONS:` line, cut at 4096 bytes. The font scripts say `rgbGen identity`, but
+  retail draws its text in the menus' colours, so the renderer gives `gfx/fonts/*`
+  stages the caller's colour. Not checked: how retail places the menus at other
+  resolutions (they are scaled to the window here). Not done: keyboard in menus beyond
+  Escape, the arrows in the load list
+  and a waiting bind cell; Field and List editing; pulled-down lists' sounds; a pressed
+  button's border; `ordernumber`. On purpose: the main menu's "Back to Game" button
+  (`backtogame`) is hidden and cannot be clicked until a level is active. Retail's
+  pushmenu (`0x40c044`) sends it `disable` while the client is not active (`disable`,
+  `0x49e670`, hides it), yet retail's captures show it at startup and after a
+  `popmenu`/`pushmenu main`. The menu shaders use `rgbGen global` /
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
