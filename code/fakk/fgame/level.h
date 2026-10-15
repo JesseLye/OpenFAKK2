@@ -172,6 +172,7 @@ class Level : public Class
       void           Restart( void );
       void           PlayerRestart( void );
       void           Precache( void );
+      void           ExecGlobalScripts( void );
       void			   FindTeams( void );
 
       void           SpawnEntities( const char *mapname, const char *entities, int levelTime );

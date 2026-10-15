@@ -515,9 +515,16 @@ void Level::SpawnEntities
 	sv_numtraces = 0;
 
    // parse world
-   entities = args.Parse( entities ); 
+   entities = args.Parse( entities );
 	spawn_entnum = ENTITYNUM_WORLD;
    args.Spawn();
+
+   // OpenFAKK2: entities look global aliases up as they spawn (Door::Door
+   // takes door_moving, door_stop and snd_locked), but retail first runs the
+   // global scripts in Start, after spawning. The aliases are never cleared,
+   // so only the first map after launch missed them: its doors were silent.
+   // Precache runs the scripts again; adding an alias twice changes nothing.
+   ExecGlobalScripts();
 
    // parse ents
 	inhibit = 0;
@@ -684,6 +691,33 @@ void Level::Archive
 
 /*
 ==============
+ExecGlobalScripts
+
+Loads in global0-9.scr: the global sound aliases (door_moving, snd_locked, ...)
+and a couple of light styles.
+==============
+*/
+void Level::ExecGlobalScripts
+   (
+   void
+   )
+
+   {
+   str filename;
+   int i;
+
+   for( i = 0; i < 100; i++ )
+      {
+      filename = va( "global/global%i.scr", i );
+      if ( !G_LoadAndExecScript( filename.c_str(), NULL, qtrue ) )
+         {
+         break;
+         }
+      }
+   }
+
+/*
+==============
 Precache
 
 Calls precache scripts
@@ -699,17 +733,7 @@ void Level::Precache
    const char *scriptname;
    int i;
 
-   //
-   // load in global0-9.scr
-   //
-   for( i = 0; i < 100; i++ )
-      {
-      filename = va( "global/global%i.scr", i );
-      if ( !G_LoadAndExecScript( filename.c_str(), NULL, qtrue ) )
-         {
-         break;
-         }
-      }
+   ExecGlobalScripts();
 
    //
    // load in precache0-9.scr

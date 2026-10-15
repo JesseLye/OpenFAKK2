@@ -1,0 +1,98 @@
+// Every door on training, one at a time, with the sound trace on (ours: s_show 1 with the
+// software mixer; retail: s_show_sounds 1). The func_doors are opened from script; the
+// blocker doors run the map's own Lower_Blocker_Door thread, which plays its sound itself, and
+// blocker_door4 (before the wall-hug lesson) runs course_thread9's own lines.
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ==== t179"
+$t179 open $player
+wait 2.5
+stuffcmd "echo ==== t180"
+$t180 open $player
+wait 2.5
+stuffcmd "echo ==== t181"
+$t181 open $player
+wait 2.5
+stuffcmd "echo ==== t182"
+$t182 open $player
+wait 2.5
+stuffcmd "echo ==== t183"
+$t183 open $player
+wait 2.5
+stuffcmd "echo ==== t184"
+$t184 open $player
+wait 2.5
+stuffcmd "echo ==== t185"
+$t185 open $player
+wait 2.5
+stuffcmd "echo ==== t186"
+$t186 open $player
+wait 2.5
+stuffcmd "echo ==== t187"
+$t187 open $player
+wait 2.5
+stuffcmd "echo ==== t189"
+$t189 open $player
+wait 2.5
+stuffcmd "echo ==== t190"
+$t190 open $player
+wait 2.5
+stuffcmd "echo ==== main_door"
+$main_door open $player
+wait 2.5
+stuffcmd "echo ==== final_door"
+$final_door open $player
+wait 2.5
+stuffcmd "echo ==== switch_door"
+$switch_door open $player
+wait 2.5
+stuffcmd "echo ==== button_door"
+$button_door open $player
+wait 2.5
+stuffcmd "echo ==== valve_door"
+$valve_door open $player
+wait 2.5
+stuffcmd "echo ==== blocker_door1"
+parm.door string "$blocker_door1"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== blocker_door2"
+parm.door string "$blocker_door2"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== blocker_door3"
+parm.door string "$blocker_door3"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== blocker_door4"
+$blocker_door4a bind $blocker_door4
+$blocker_door4a time 1
+$blocker_door4 time 3
+$blocker_door4a playsound sound/environment/machine/singles/mechmove30a.wav 1 1 500
+$blocker_door4a rotateydown 90
+waitfor $blocker_door4a
+$blocker_door4 playsound sound/environment/machine/singles/metalboom4.wav 1 1 500
+$blocker_door4 moveSouth 432
+waitfor $blocker_door4
+stuffcmd "echo ==== blocker_door5"
+parm.door string "$blocker_door5"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== blocker_door6"
+parm.door string "$blocker_door6"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== blocker_door7"
+parm.door string "$blocker_door7"
+parm.distance = 248
+thread maps/training.scr::Lower_Blocker_Door
+wait 2.5
+stuffcmd "echo ==== done"
+stuffcmd "pendingevents"
+end

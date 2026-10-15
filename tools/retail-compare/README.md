@@ -107,6 +107,14 @@ retail game again. Choose the probe with `-Probe`:
   `config_fakkhouse0004.*` into `build\sandbox\home\fakk\save` first. Real clients only:
   `.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse`.
   It finishes ("loadsave menu up") or the client exits with code 2.
+- `probe-doors` (`training`) and `probe-h2e` (`homes2evil`) open every door on the map in
+  turn and are read from the sound trace, so they are for the real clients with sound on:
+  `-Extra "+set s_initsound 1 +set s_useOpenAL 0 +set s_show 1"` on ours,
+  `-Extra "+set s_initsound 1 +set s_show_sounds 1"` with `-Retail` (the retail sandbox
+  needs the install's `snddrivers` folder copied in for sound). Each sliding door
+  should start `fastpneu.wav` as it opens and closes. Retail only does so when the map
+  was not the first loaded (add `+map <map>` to `-Extra`); ours does on a first load
+  too (see `docs/known-differences.md`, "The game module").
 
 When the engine crashes on Windows it prints the fault and the stack into the console log
 as module-relative addresses and writes `crash.dmp` beside the log (`Sys_CrashReport`,
