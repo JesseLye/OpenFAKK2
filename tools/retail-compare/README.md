@@ -42,12 +42,14 @@ retail game again. Choose the probe with `-Probe`:
 - `probe-sling` gives the player the sling, charges and fires it standing still, and runs
   `whatis` on entities 0 to 299 a third of a second later, so the rock is among them.
   `probe-sling-down` does the same after holding `+lookdown`; the test player cannot
-  pitch, so that one is for the real client (`run-client.ps1 -Run "+map zoo +script
-  thread probe-sling-down.scr::probe"`).
+  pitch, so that one is for the real clients:
+  `.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-sling-down -Map zoo`
+  runs it on ours, and with `-Retail` on the retail game for the reference.
 - `probe-gaspod-down` gives the gas sling and its ammo (`$player ammo "Gas Pod" 5`, since
   the sling starts empty), fires it after 0.6 s of `+lookdown`, and reads the pod's slot
-  every 0.05 s because it explodes where it lands. Real client only; it is the regression
-  probe for the trace owner rule (the pod parked in Julie's chest before the fix).
+  every 0.05 s because it explodes where it lands. Real clients only (`probe-client.ps1`,
+  with `-Retail` for the reference); it is the regression probe for the trace owner rule
+  (the pod parked in Julie's chest before the fix).
 - `probe-walk-jump` walks two seconds, jumps, lands and stops, reading the player every
   0.1 s through each slow-down. On the headless test player the final position reads 4 to
   6 units short of retail (see `docs/known-differences.md`, "With scripted input");
@@ -58,6 +60,13 @@ its random numbers from the clock, so retail differs from itself on some maps; t
 by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.
 
 A probe must end with `pendingevents`; that is how the script knows it has finished.
+
+Screenshot probes end with `stuffcmd "quit"` instead and are run on both games by the
+`retail-capture` skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <p>
+-Map <m>`), which pairs the shots. `probe-crosshair` wields the shotgun in `training` and
+shoots the crosshair on a target and on the floor; `probe-swbranch` cues three cameras on
+`swamp1`; `probe-hud` steps the health and water gauges; `probe-shot-*` shoot the intro at
+fixed times.
 
 OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
 `fs_homepath`; the retail runs use a clean copy of the install. So that ours does not

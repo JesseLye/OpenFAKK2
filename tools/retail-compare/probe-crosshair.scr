@@ -1,9 +1,6 @@
 // Wields the shotgun, which shows the crosshair, and screenshots it on the wall
 // ahead and then on the floor, for comparing the crosshair with OpenFAKK2's.
-// Retail: run-retail-client.ps1 -Map training -Secs 60 -After "+script thread probe-crosshair.scr::probe"
-// Ours: copy it into build\sandbox\home\fakk\maps without the waitforplayer and with a
-// short first wait, then
-// run-client.ps1 -Run "+set r_mode 3 +devmap training +wait 3300 +script thread probe-crosshair.scr::probe" -Secs 90
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-crosshair -Map training -MaskNotify
 probe:
 waitforplayer
 wait 25

@@ -17,8 +17,9 @@ choosing how to run it, and reading what comes back.
 | Need | Runner | Reference available |
 | --- | --- | --- |
 | Server-side state after scripted keys, compared with retail | `tools\retail-compare\compare-player.ps1 -Map <m> -Probe <p>` (headless test player) | Yes: retail runs the same probe |
-| Anything that needs aim pitch, the mouse, the camera or the HUD | `scripts\probe-client.ps1 -Probe <p> -Map <m>` (the real client, this repo's build) | No retail run; compare builds instead |
-| "Did my change fix it?" | `probe-client.ps1` twice: `-Bin <main checkout>\build\x86-Release\Release -Name before`, then the default build `-Name fixed` | Before/after |
+| Anything that needs aim pitch, the mouse, the camera or the HUD | `scripts\probe-client.ps1 -Probe <p> -Map <m>` (the real OpenFAKK2 client, this repo's build) | Yes: the same command with `-Retail` runs the probe on the real retail client |
+| "Did my change fix it?" | `probe-client.ps1` twice: `-Bin <main checkout>\build\x86-Release\Release -Name before`, then the default build `-Name fixed` | Before/after, plus `-Retail` for what it should be |
+| What something looks like (a sprite, the HUD, fog, lighting) | the `retail-capture` skill: screenshots from the same probe on both engines | Yes |
 
 The headless test player (`sv_testplayer 1`) only knows the movement and attack keys:
 `+forward +back +moveleft +moveright +moveup +movedown +left +right +attackleft
@@ -27,6 +28,15 @@ aiming will not show there, so when a report mentions standing still, looking do
 aiming at something, go to the real client and vary pitch with `+lookdown` / `+lookup`.
 The sling bug that motivated this skill was invisible at pitch 0 on every runner and
 obvious with 0.6 s of `+lookdown`.
+
+The retail reference for such a probe comes from the real retail client:
+`probe-client.ps1 -Retail` runs the same `.scr` in `fakk2.exe` from the sandbox copy in
+`build\sandbox\retail`, and its log reads the same way. The probe starts before the
+player spawns on both clients, so `waitforplayer` works on both and one file serves both.
+Key presses are timed by rendered frames, and the two clients render at different rates,
+so a held key lands a little differently on each: the rock of `probe-sling-down` read 6
+units apart in x between retail and ours (2026-10-15). Run each side twice to see its own
+spread before calling a gap that size a bug.
 
 Both runners resolve paths from their own location, so a worktree tests its own build in
 its own `build\` tree. Point `-Bin` at another checkout's build to compare two versions.
@@ -89,6 +99,9 @@ tools\retail-compare\compare-player.ps1 -Map zoo -Probe probe-sling -Secs 120 [-
 # the real client with this repo's build; prints the projectile and the player afterwards
 .claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-sling-down -Map zoo -Classname Projectile
 
+# the same probe on the real retail client: the reference for a pitched shot
+.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-sling-down -Map zoo -Classname Projectile -Retail
+
 # the same probe on the unpatched build in the main checkout
 .claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-sling-down -Map zoo -Name before `
     -Bin <main checkout>\build\x86-Release\Release
@@ -98,7 +111,10 @@ tools\retail-compare\compare-player.ps1 -Map zoo -Probe probe-sling -Secs 120 [-
 ```
 
 Logs land in `build\compare`: `player-retail-<map>-<probe>.log`, `player-ours-<map>-<probe>.log`
-from the headless comparison, `client-<name>-<map>-<probe>.log` from the client runner.
+from the headless comparison, `client-<name>-<map>-<probe>.log` from the client runner
+(`client-retail-...` with `-Retail`). On retail, a cvar passed in `-Extra` that retail
+archives is saved in the sandbox's `config.cfg` and carries into later retail runs; set it
+back or check that file before trusting a "default" run.
 The client's log echoes every server print twice (once as the raw `serverCommand`, once
 as console output); `readings.ps1` drops the echo.
 
