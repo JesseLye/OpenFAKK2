@@ -86,6 +86,9 @@ skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zo
   the fade rules, overlapping sprites); copy `fx\*.tik` into each engine's
   `fakk\models` first. A model spawned by a script does not start its animation, so the
   probes name it and send `anim idle`.
+- `probe-dlight` (on `training`, not `zoo`) holds `fx\test_dlight.tik`, a light the
+  hand gun's muzzle flash colour and radius, at four places over a glowing pad
+  (`padfloor_target1`, a brush model) and shoots each from a script camera.
 
 A dual-handed weapon's primary fire is `+attackleft` and its alternate `+attackright`
 (`global/julie_torso.st`); one-handed weapons attack with `+attackright`.

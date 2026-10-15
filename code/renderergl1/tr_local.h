@@ -1492,7 +1492,7 @@ LIGHTS
 ============================================================
 */
 
-void R_DlightBmodel( bmodel_t *bmodel );
+int R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent, const vec3_t origin );
 
 void RE_ShaderImageSize( qhandle_t hShader, int *width, int *height );

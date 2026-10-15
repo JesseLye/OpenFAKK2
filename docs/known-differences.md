@@ -1000,9 +1000,6 @@ explosion, soot, beams and swipes now appear as in retail. What it took:
 
 Still different:
 
-- **Dynamic lights on the world** are Quake III's (see the renderer section): a muzzle
-  flash, the crossbow's charge and an explosion light the floor around them far more
-  brightly in retail.
 - **Moving while a weapon's fire animation plays** carried Julie much further on ours: a
   0.6-second `+moveleft` right after a shotgun blast moved her to the corridor wall on
   ours and a few units in retail. Seen in passing; not looked into.
@@ -1302,10 +1299,25 @@ What is implemented, and on what basis:
   world space and drawn after the view's surfaces are sorted. `r_light_int_scale` ("0.05")
   is registered and never read, as in retail. `probe-llines` frames Julie on `zoo`: her
   lines and stars and her full white cube matched retail's shots.
-- **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
-  and the lens flare bits give the light a lens flare (next). On the world they are much
-  dimmer than retail's: a muzzle flash that lights the floor yellow around Julie in
-  retail barely shows here (`probe-fx-guns`). Swipes are drawn (see "Weapon effects").
+- **Dynamic lights** follow the retail pass (`fakk2.exe` `0x47cfe0`) where it differs
+  from Quake III's. Quake III projected the light's texture straight down world Z at
+  `1 / radius` and kept full strength to half the radius above and below, so on a wall
+  every point in a column took the same texture coordinate: a muzzle flash over the
+  training room's glowing pads painted the walls below it with a band of light. Retail
+  projects along the axis each vertex's normal points along most, at `0.75 / radius`
+  (a wider spot), with the strength `(radius - |d|) / radius` for the light's distance
+  `d` from the vertex along its normal, and does not read `r_dlightBacks` (it registers
+  it, archived, default 1, at `0x461040`). Culling the surfaces of a brush model
+  (`0x485d40`, `0x486440`) tests each face's plane and each patch's bounds against the
+  light's origin in the model's own space and against every light that reaches the
+  model; Quake III used the world origin, which is wrong for FAKK2's brush models (their
+  faces are stored about the model's origin), so which faces a moving platform lit
+  depended on where in the map it stood, and tested only the first light. `probe-dlight`
+  on `training` matches retail in every shot (a mean difference of about 2.5 per
+  channel, as with no light; it was 5.4 with the old pass). Of FAKK2's light types
+  `additive` is honoured and the lens flare bits give the light a lens flare (next);
+  retail picks a different blend for an additive light (`0x47d32b`), which has not been
+  read or followed. Swipes are drawn (see "Weapon effects").
 - **Debug lines**: the game module's (`G_DebugLine`: `cam show`, the AI's node display,
   `csys_draw`) and the client game module's are drawn as `fakk2.exe` draws them. The
   renderer is handed the game's array and count (`ri.DebugLines`, as retail's refimport
