@@ -83,6 +83,10 @@ retail game again. Choose the probe with `-Probe`:
   as the menu's waits count milliseconds on retail and frames on ours; compare whether
   the print shows. Retail's own "Wrote screenshots/..." takes the print's place, so its
   second shot shows that rather than "GAME SAVED".
+- `probe-oneprint` puts up a centre print and, a second later, a location print, which
+  replaces it (retail keeps one print), then a location print of
+  `@textures/menu/gamesaved`, which retail writes as text:
+  `capture.ps1 -Probe probe-oneprint -Map zoo -MaskNotify`.
 - `probe-pfade` shoots a centre print 375 ms into its 750 ms fade-in; crop the text
   (`shots.py pair ... --crop 200 220 440 260`) to compare its strength with retail's.
 - `probe-lsload` loads a saved game, `fakkhouse0004`, and opens the main menu and the

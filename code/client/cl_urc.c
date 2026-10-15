@@ -12,8 +12,9 @@ the player's dual-weapon item slot is empty (activeItems[4] < 0) and
 dualweaphud otherwise, and bosshud when the boss-health stat is at least
 1. Centre and location prints arrive as their own network messages
 (svc_centerprint: string; svc_locprint: short x, short y, string), are
-drawn with the facfont-20 font for 4 seconds (0x418cc0), and a text that
-starts with '@' names a shader to draw instead. While a map loads (from
+drawn with the facfont-20 font for 4 seconds (0x418cc0), and a centre
+print's text that starts with '@' names a shader to draw instead. There is
+one print: each replaces the one up, whichever kind (0x418cc0, 0x418ec0). While a map loads (from
 CL_MapLoading, 0x4207f0, to the first active snapshot, 0x41d520) the update
 fills the screen black and draws textures/menu/loading in the middle.
 
@@ -181,14 +182,17 @@ typedef struct {
 
 #define URC_MAX_ALIASES		256
 
+// the one print the retail interface keeps (+0x160 to +0x178 of its root
+// widget): a centre print and a location print each replace whatever print
+// was up (0x418cc0, 0x418ec0)
 typedef struct {
 	qboolean	active;
-	qboolean	located;
-	int			x, y;
-	char		text[1024];
-	qhandle_t	shader;				// text beginning with '@'
-	float		alpha;
-	int			startTime;
+	qboolean	located;			// +0x170
+	int			x, y;				// +0x174, +0x178
+	char		text[1024];			// +0x168
+	qhandle_t	shader;				// +0x16c: a centre print's text beginning with '@'
+	float		alpha;				// +0x164
+	int			startTime;			// +0x160 counts the 4000 ms down
 } urcPrint_t;
 
 static urcMenu_t	urc_menus[URC_MAX_MENUS];
@@ -199,8 +203,7 @@ static urcFont_t	urc_fonts[URC_MAX_FONTS];
 static int			urc_numFonts;
 static int			urc_stack[URC_MAX_STACK];
 static int			urc_stackDepth;
-static urcPrint_t	urc_centerprint;
-static urcPrint_t	urc_locprint;
+static urcPrint_t	urc_print;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
 static int			urc_pausedByMenu;		// 1: the menus paused the game, 2: it was paused already
@@ -3036,7 +3039,19 @@ PRINTS
 =======================================================================
 */
 
-static void URC_SetPrint( urcPrint_t *pr, qboolean located, int x, int y, const char *text, float alpha ) {
+/*
+=================
+URC_CenterPrint / URC_LocationPrint
+
+Retail keeps one print, and each of these replaces it, whichever kind was
+up, starting its 4000 ms again. The centre print (0x418cc0) takes a text
+beginning with '@' as the name of a picture; the location print (0x418ec0)
+keeps its text as it is and only draws text (0x419770).
+=================
+*/
+static void URC_SetPrint( qboolean located, int x, int y, const char *text, float alpha ) {
+	urcPrint_t	*pr = &urc_print;
+
 	Com_Memset( pr, 0, sizeof( *pr ) );
 	pr->active = qtrue;
 	pr->located = located;
@@ -3044,7 +3059,7 @@ static void URC_SetPrint( urcPrint_t *pr, qboolean located, int x, int y, const 
 	pr->y = y;
 	pr->alpha = alpha;
 	pr->startTime = cls.realtime;
-	if ( text[0] == '@' ) {
+	if ( !located && text[0] == '@' ) {
 		pr->shader = re.RegisterShaderNoMip( text + 1 );
 		Q_strncpyz( pr->text, text + 1, sizeof( pr->text ) );
 	} else {
@@ -3059,14 +3074,14 @@ void URC_CenterPrint( const char *text, float alpha ) {
 	if ( !urc_initialised ) {
 		return;
 	}
-	URC_SetPrint( &urc_centerprint, qfalse, 320, 160, text, alpha );
+	URC_SetPrint( qfalse, 320, 160, text, alpha );
 }
 
 void URC_LocationPrint( int x, int y, const char *text, float alpha ) {
 	if ( !urc_initialised ) {
 		return;
 	}
-	URC_SetPrint( &urc_locprint, qtrue, x, y, text, alpha );
+	URC_SetPrint( qtrue, x, y, text, alpha );
 }
 
 static void URC_DrawPrint( urcPrint_t *pr ) {
@@ -3886,14 +3901,13 @@ void URC_Draw( void ) {
 		return;
 	}
 
-	// the center and location prints ("GAME SAVED" is one) are drawn by the
+	// the print, centre or located ("GAME SAVED" is one), is drawn by the
 	// retail desktop's own Draw (0x419ba0, then 0x4193f0, the print at
 	// 0x419480 or 0x419770), and UIWidget::Display (0x49ef30) draws a widget
 	// before its children, every menu and the HUD among them: so the prints are
 	// under the menus, and the main menu, which covers the screen, hides them
 	if ( clc.state == CA_ACTIVE ) {
-		URC_DrawPrint( &urc_centerprint );
-		URC_DrawPrint( &urc_locprint );
+		URC_DrawPrint( &urc_print );
 	}
 
 	// the widget under the cursor, and its hover sound on arrival
@@ -4630,8 +4644,7 @@ void URC_Init( void ) {
 
 	urc_numFonts = 0;
 	urc_stackDepth = 0;
-	Com_Memset( &urc_centerprint, 0, sizeof( urc_centerprint ) );
-	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
+	Com_Memset( &urc_print, 0, sizeof( urc_print ) );
 	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
 	urc_loadingShader = re.RegisterShaderNoMip( URC_LOADING_SHADER );
 	urc_ritualShader = re.RegisterShaderNoMip( URC_RITUAL_SHADER );

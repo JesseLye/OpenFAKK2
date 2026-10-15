@@ -659,10 +659,19 @@ Not read, done another way:
   same, as a fresh implementation of the file grammar the 31 shipped files use. Not
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
   tests a field of its print object), the stat-bar flash (half a second after a
-  change). Retail keeps one print, centre or located (`+0x170` says which), where
-  OpenFAKK2 keeps one of each; and retail's `screenshot` reports "Wrote
-  screenshots/..." through it, centred, replacing a print that was up, where OpenFAKK2's
-  goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
+  change). There is one print, centre or located (`+0x170` says which): the centre
+  print (`0x418cc0`) and the location print (`0x418ec0`) each replace the one up,
+  whichever kind it was, and start its 4000 ms again. Only a centre print takes a
+  leading `@` for a picture; a location print keeps it as text and draws only text
+  (`0x419770`). OpenFAKK2 kept one of each, both drawn at once, and took `@` in either;
+  it now does as retail (`probe-oneprint` on `zoo`: a location print a second after a
+  centre print shows alone, as on retail, where both showed before; `locprint 40 200
+  "@textures/menu/gamesaved"` writes that text on both games, where ours drew the
+  picture: 2.50% of pixels off by more than 24 before, 0.72% after). Still different:
+  retail draws a print's text over a black copy one pixel down and right (`0x419480`,
+  `0x419770`), and a location print at x or y -1 is placed differently, which was not
+  worked out; retail's `screenshot` reports "Wrote screenshots/..." through the print,
+  centred, replacing one that was up, where OpenFAKK2's goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
   prints the cursor's place, `x:y`, ten units right of it and ten above, in `verdana-12`
   while a cursor is up (`0x4982a3`). The prints'
   places come from retail captures of the intro: a location print's x is its left edge

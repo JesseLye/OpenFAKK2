@@ -1,0 +1,20 @@
+// Retail keeps one print: a location print replaces a centre print that is still up
+// (0x418cc0, 0x418ec0), so the first shot shows only the location print. A location
+// print also keeps a leading '@' as text (only a centre print names a picture with it),
+// which the second shot shows.
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-oneprint -Map zoo -MaskNotify
+probe:
+waitforplayer
+wait 2
+centerprint "CENTRE PRINT"
+wait 1
+locprint 40 200 "LOCATION PRINT"
+wait 1
+stuffcmd "screenshot"
+wait 1
+locprint 40 200 "@textures/menu/gamesaved"
+wait 1
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "quit"
+end
