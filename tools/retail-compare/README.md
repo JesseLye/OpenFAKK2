@@ -39,6 +39,10 @@ retail game again. Choose the probe with `-Probe`:
   prints it again.
 - `probe-entities` runs `whatis` on entities 0 to 299 after ten seconds.
 - `probe-entry` prints the player six times in the first five seconds after entry.
+- `probe-exit` runs on `fakkhouse` and leaves it as the trainer cinematic does,
+  `map training$spawn_fakkhouse`, with `probe-client.ps1`. The log must show
+  `Server: training$spawn_fakkhouse` and no "Can't find map"; the probe ends with the
+  level, so it never prints `pendingevents` and the runner waits out `-Secs`.
 - `probe-cine` is a picture probe for `training` (run it with the `retail-capture`
   skill): it holds `+forward` from entry and takes a shot every 0.05 s while the entry
   cinematic takes over. No shot may show the player's own view or the HUD; before the

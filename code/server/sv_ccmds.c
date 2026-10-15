@@ -156,6 +156,7 @@ static void SV_Map_f( void ) {
 	qboolean	killBots, cheat;
 	char		expanded[MAX_QPATH];
 	char		mapname[MAX_QPATH];
+	char		bspname[MAX_QPATH];
 
 	map = Cmd_Argv(1);
 	if ( !map ) {
@@ -163,8 +164,11 @@ static void SV_Map_f( void ) {
 	}
 
 	// make sure the level exists before trying to change, so that
-	// a typo at the server console won't end the game
-	Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
+	// a typo at the server console won't end the game. FAKK2: a map name
+	// may name the spawn point after a '$' ("training$spawn_fakkhouse");
+	// the retail command (0x442130) looks for the bsp named before it
+	SV_MapBaseName( map, bspname, sizeof( bspname ) );
+	Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", bspname);
 	if ( FS_ReadFile (expanded, NULL) == -1 ) {
 		Com_Printf ("Can't find map %s\n", expanded);
 		return;

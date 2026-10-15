@@ -333,7 +333,16 @@ Not read, done another way:
   The intro's trails match the retail capture at 60 seconds.
 - **Level changes.** The game module ends a level with `gamemap <next>` (`G_ExitLevel`),
   which Quake III names but this tree had dropped; it is the `map` command again. The
-  `stopsound` command it sends first stops all sounds.
+  `stopsound` command it sends first stops all sounds. A map name may carry the spawn
+  point after a `$`: fakkhouse's trainer cinematic ends with `map
+  training$spawn_fakkhouse`, the only way a new game reaches `training`. The retail
+  `map` command (`0x442130`) checks for the bsp named before the `$`, and
+  `SV_SpawnServer` (`0x445e90`) loads that bsp but sets `mapname` to the whole name and
+  hands that to the game, whose `Level::SpawnEntities` splits it again; the client game
+  does the same for the world it draws. OpenFAKK2 does likewise (`SV_MapBaseName`); it
+  looked for `maps/training$spawn_fakkhouse.bsp`, printed "Can't find map" and left the
+  player in fakkhouse (2026-10-15, `probe-exit.scr` through `probe-client.ps1`). Not
+  followed: on arrival the retail game autosaves (`Saving game...training0000`).
 - **The console** has no `console` shader in FAKK2 (the retail console was a window);
   it is drawn on a dark translucent sheet rather than the default shader's black.
 - **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets

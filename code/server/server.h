@@ -375,6 +375,7 @@ void SV_GetUserinfo( int index, char *buffer, int bufferSize );
 
 void SV_ChangeMaxClients( void );
 void SV_SpawnServer( char *server, qboolean killBots );
+void SV_MapBaseName( const char *map, char *out, int outSize );
 
 
 
