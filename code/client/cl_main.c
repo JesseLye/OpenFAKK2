@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
 #include "../qcommon/alias.h"
+#include "../tiki/tiki.h"
 
 #ifdef USE_MUMBLE
 #include "libmumblelink.h"
@@ -3764,6 +3765,10 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("configstrings", CL_Configstrings_f);
 	Cmd_AddCommand ("aliasdump", Alias_Dump);	// FAKK2: the global sound aliases (fakk2.exe 0x41c550)
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f);
+	// FAKK2: the model definitions (fakk2.exe 0x42294e on)
+	Cmd_AddCommand ("tikilist", TIKI_List_f);
+	Cmd_AddCommand ("tiki", TIKI_Info_f);
+	Cmd_AddCommand ("cachealltikis", TIKI_CacheAll_f);
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
@@ -3844,6 +3849,9 @@ void CL_Shutdown(char *finalmsg, qboolean disconnect, qboolean quit)
 	Cmd_RemoveCommand ("configstrings");
 	Cmd_RemoveCommand ("aliasdump");
 	Cmd_RemoveCommand ("clientinfo");
+	Cmd_RemoveCommand ("tikilist");
+	Cmd_RemoveCommand ("tiki");
+	Cmd_RemoveCommand ("cachealltikis");
 	Cmd_RemoveCommand ("snd_restart");
 	Cmd_RemoveCommand ("vid_restart");
 	Cmd_RemoveCommand ("disconnect");

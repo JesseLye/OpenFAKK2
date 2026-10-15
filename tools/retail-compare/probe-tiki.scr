@@ -1,0 +1,21 @@
+// The client's model definition commands, compared by their log output rather than
+// a picture: "tiki" on a vertex-animated and a skeletal model, its usage and failure
+// messages, and "tikilist". The sections between the ==== markers of the two logs
+// match line for line, except tikilist's definition sizes ("T" lines and the totals
+// over them), which measure each engine's own structures.
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ====TIKI1"
+stuffcmd "tiki obj_statue"
+stuffcmd "echo ====TIKI2"
+stuffcmd "tiki models/julie.tik"
+stuffcmd "echo ====TIKI3"
+stuffcmd "tiki"
+stuffcmd "tiki nosuchmodel"
+stuffcmd "echo ====LIST"
+stuffcmd "tikilist"
+stuffcmd "echo ====END"
+wait 1
+stuffcmd "quit"
+end

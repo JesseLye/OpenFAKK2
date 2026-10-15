@@ -134,7 +134,6 @@ Missing from OpenFAKK2, to be done:
   it waits on level of detail itself, below). Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
-- TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
 - The client game module's imports that are still stubs: `get_camera_offset` (what
   `+cameralook` turns), `S_SetGlobalAmbientVolumeLevel`, `S_UpdateEntity`'s velocity, and
   `R_AddPolyToScene`'s render flags.
@@ -142,7 +141,8 @@ Missing from OpenFAKK2, to be done:
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`), `ui_drawcoords`, `ui_showmouse`, `ui_hidemouse`, `ui_hud`,
   `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `inv_restart`, `vidmode`, `dialog`,
-  and the tools `notepad`, `editscript`, `editshader`, `maplist` and `soundpicker`. The
+  and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
+  `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
   `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
   `additem`.
@@ -1031,6 +1031,18 @@ What is implemented, and on what basis:
 - **`r_customaspect`** (archived, latched, 1) is `r_mode -1`'s window aspect as it is
   (`R_GetModeInfo`, `0x45fe58`), where Quake III divides the width over the height by
   `r_customPixelAspect`, which retail does not have.
+- **The client's definition commands** print as retail's do (`tiki.c`): `tiki <name>`
+  (`0x421430`; `models/` and `.tik` added when missing) lists the animations sorted by
+  alias with their file, frames, time, file length and delta, the surfaces with their
+  triangles (a vertex-animated surface's count printed twice, as its vertex count too,
+  as retail does) and skins, the tags or the bones with their parents, and the totals
+  (`0x451f30`); `tikilist` (`0x451e00`) every animation file once with its length, then
+  every definition, with the totals. `probe-tiki` on `zoo` gave the same lines as retail
+  for `obj_statue`, Julie, the usage and a missing model, and the same 738 animations,
+  10992312 bytes and 156 definitions; a definition's own size counts this engine's
+  structures, not retail's. `cachealltikis` (`0x452490`) loads every `models/*.tik`
+  with retail's progress lines; retail also rewrites its binary cache of each
+  definition (`0x44d4d0`), which this engine does not keep.
 - **Models from `.tik` definitions**: the `.tan` file of the animation the entity asks
   for is loaded on first use, and the entity's frame and old frame are decoded and
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by

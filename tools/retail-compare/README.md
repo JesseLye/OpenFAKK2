@@ -131,6 +131,8 @@ sandboxes' `config.cfg` afterwards. `probe-llines` frames Julie (lit from a ligh
 both sandboxes' `config.cfg` for them afterwards.
 `probe-skel` draws Julie's skeleton on `zoo` (`r_showskel 1`), then sets `r_place_sunflare 1`
 and prints `r_sunflare`, the point it wrote, to the log.
+`probe-tiki` runs `tiki` and `tikilist` on `zoo` for their log output, between `====`
+markers; compare the two logs' sections.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

@@ -29,6 +29,11 @@ typedef struct tiki_s tiki_t;
 
 void		TIKI_Shutdown( void );
 
+// the client's console commands: tiki <name>, tikilist, cachealltikis
+void		TIKI_Info_f( void );
+void		TIKI_List_f( void );
+void		TIKI_CacheAll_f( void );
+
 // Returns the cached definition, loading it on first use, or NULL when the
 // file is missing or malformed. A failure is remembered and reported once.
 tiki_t		*TIKI_Register( const char *name );
