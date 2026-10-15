@@ -9,17 +9,9 @@ if (-not (Test-Path $retail)) {
 }
 & "$PSScriptRoot\run-openfakk2.ps1" -Map $Map -Secs $Secs -After $After -MinSecs $MinSecs | Out-Null
 
-# keep only what the game module and map spawn print: everything after the server banner
-function GameLines($file) {
-    $l = Get-Content $file | Where-Object { $_ -match '\S' }
-    $start = ($l | Select-String '^Server: ' | Select-Object -First 1).LineNumber
-    if (-not $start) { return @() }
-    $l[$start..($l.Count - 1)] | ForEach-Object { $_.TrimEnd() } | Where-Object {
-        $_ -notmatch '^(Hunk_Clear|LoadLibrary|----- FS_Startup|We are looking|Current search path|C:\\|handle \d|-+$|\d+ files in pk3|Hitch warning|Warning: cvar|[^ ]+\.tik: dropping animation|WARNING: CM_|SV_ArchivePersistantFile|Com_WipeSaveGame|Working directory)'
-    }
-}
-$a = GameLines $retail
-$b = GameLines "$sp\of-$(Get-MapTag $Map).log"
+. (Join-Path $PSScriptRoot 'compare-lib.ps1')
+$a = Get-GameLines $retail
+$b = Get-GameLines "$sp\of-$(Get-MapTag $Map).log"
 $d = Compare-Object $a $b
 $onlyRetail = @($d | Where-Object SideIndicator -eq '<=')
 $onlyOurs = @($d | Where-Object SideIndicator -eq '=>')

@@ -49,31 +49,8 @@ function Run-Ours($name, $run) {
     $log
 }
 
-# "whatis" readings in order of appearance: a list of ordered field tables
-function Readings($file) {
-    $blocks = New-Object System.Collections.Generic.List[object]
-    $cur = $null
-    foreach ($line in Get-Content $file) {
-        if ($line -match '^Entity #\s*: (\d+)') { $cur = [ordered]@{}; $blocks.Add($cur) }
-        if ($cur -and $line -match '^(\w[\w ]*?)\s*: (.*)$') { $cur[$Matches[1].Trim()] = $Matches[2].Trim(); if ($Matches[1].Trim() -eq 'Edict Owner') { $cur = $null } }
-        elseif ($cur -and $line -notmatch '^\s*$' -and $line -notmatch '^(\w[\w #]*?)\s*:') { $cur = $null }
-    }
-    return ,$blocks
-}
-function SameValue($x, $y) {
-    if ($x -eq $y) { return $true }
-    $nx = [regex]::Matches($x, '-?\d+(\.\d+)?'); $ny = [regex]::Matches($y, '-?\d+(\.\d+)?')
-    if ($nx.Count -ne $ny.Count -or $nx.Count -eq 0) { return $false }
-    if (([regex]::Replace($x, '-?\d+(\.\d+)?', '#')) -ne ([regex]::Replace($y, '-?\d+(\.\d+)?', '#'))) { return $false }
-    for ($i = 0; $i -lt $nx.Count; $i++) { if ([Math]::Abs([double]$nx[$i].Value - [double]$ny[$i].Value) -gt $Tolerance) { return $false } }
-    return $true
-}
-function Vars($file) {
-    $lines = Get-Content $file
-    $start = ($lines | Select-String '^Level Variables' | Select-Object -Last 1).LineNumber
-    if (-not $start) { return @() }
-    $lines[$start..($lines.Count - 1)] | Where-Object { $_ -match '^\S.* = ' }
-}
+. (Join-Path $PSScriptRoot 'compare-lib.ps1')
+function Vars($file) { Get-Dump $file | Where-Object { $_ -match '^\S.* = ' } }
 
 $saved = Run-Ours 'saved' "+map $Map +script thread $probe.scr::probe"
 $saveFile = Join-Path $homeDir 'fakk\save\config_server_probesave.sav'
@@ -86,15 +63,6 @@ $varDiff = @(Compare-Object @(Vars $saved) @(Vars $loaded))
 "  level variables differing: $($varDiff.Count)"
 $varDiff | Select-Object -First $Show | ForEach-Object { "  var {0} {1}" -f ($_.SideIndicator -replace '<=', 'saved: ' -replace '=>', 'loaded:'), $_.InputObject }
 
-$ra = Readings $saved; $rb = Readings $loaded
-$n = [Math]::Min($ra.Count, $rb.Count)
-$same = 0; $fieldCounts = @{}; $examples = New-Object System.Collections.Generic.List[string]
-for ($i = 0; $i -lt $n; $i++) {
-    $x = $ra[$i]; $y = $rb[$i]
-    $bad = @(($x.Keys + $y.Keys | Select-Object -Unique) | Where-Object { -not (SameValue ([string]$x[$_]) ([string]$y[$_])) })
-    if (-not $bad.Count) { $same++; continue }
-    foreach ($f in $bad) { $fieldCounts[$f] = 1 + [int]$fieldCounts[$f] }
-    if ($examples.Count -lt $Show) { $f = $bad[0]; $examples.Add(("  reading {0} (entity {1}, {2}) {3}: saved {4} | loaded {5}" -f ($i + 1), $x['Entity #'], $x['Classname'], $f, $x[$f], $y[$f])) }
-}
-"  whatis readings: $($ra.Count) saved / $($rb.Count) loaded; identical $same of $n" + $(if ($fieldCounts.Count) { "; fields differing: " + (($fieldCounts.GetEnumerator() | Sort-Object Value -Descending | ForEach-Object { "$($_.Key) x$($_.Value)" }) -join ', ') } else { '' })
-$examples
+$r = Compare-Readings (Get-Readings $saved) (Get-Readings $loaded) $Tolerance $Show -Labels saved, loaded
+Format-ReadingsLine $r -Labels saved, loaded
+$r.Examples
