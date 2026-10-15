@@ -2491,7 +2491,12 @@ void PmoveSingle (pmove_t *pmove)
 	PM_SetWaterLevel();
 
    // don't fall down stairs or do really short falls
-   if ( !pml.walking && ( walking || ( ( pml.previous_velocity[ 2 ] >= 0 ) && ( pm->ps->velocity[ 2 ] <= 0 ) ) ) )
+   // OpenFAKK2: not while a rope holds the player (PMF_NO_GRAVITY). The rope zeroes her
+   // velocity, so this passed every frame and dropped her up to STEPSIZE onto the floor
+   // below, then the rope put her back; at the bottom of the training rope her feet
+   // entered the pool each frame and spawned 20 splashes a second (retail does the same).
+   if ( !( pm->ps->pm_flags & PMF_NO_GRAVITY ) &&
+      !pml.walking && ( walking || ( ( pml.previous_velocity[ 2 ] >= 0 ) && ( pm->ps->velocity[ 2 ] <= 0 ) ) ) )
       {
 	   vec3_t   point;
 	   trace_t  trace;

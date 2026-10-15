@@ -1,0 +1,25 @@
+probe:
+waitforplayer
+wait 30
+spawn script_origin targetname "ropedest" origin "-1614 -2032 300" angles "0 0 0"
+spawn trigger_teleport targetname "ropetp" target "ropedest"
+wait 0.5
+$ropetp teleport $player
+wait 1
+stuffcmd "+movedown"
+wait 6
+stuffcmd "-movedown"
+spawn Camera targetname "cam1" origin "-1440 -2032 140" angles "15 180 0"
+wait 0.5
+cuecamera $cam1
+wait 1
+cuecamera $cam1
+wait 2
+stuffcmd "screenshot"
+wait 3
+stuffcmd "screenshot"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
