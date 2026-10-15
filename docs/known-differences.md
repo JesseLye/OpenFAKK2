@@ -739,9 +739,30 @@ Not read, done another way:
   nothing then (its `CG_DrawActiveFrame` returns while `infoScreenText` is set), so
   without this OpenFAKK2 showed whatever the frame buffer held. OpenFAKK2 does the same
   from `CL_MapLoading`, `CL_FirstSnapshot` and `CL_Disconnect` (`URC_BeginLoading`,
-  `URC_EndLoading`, `URC_DrawLoading`). Not read from retail: whether the
-  `textures/menu/ritual` and `textures/menu/gathering` pictures `UI_Init` also
-  registers are drawn at any point of a load (they are the intro's logos, `0x40ad90`).
+  `URC_EndLoading`, `URC_DrawLoading`). The `textures/menu/ritual` and
+  `textures/menu/gathering` pictures `UI_Init` also registers are the intro's logos
+  (below), never drawn during a load.
+- **The intro.** At the end of `UI_Init` (`0x40e9d0`) the retail client puts `dointro`
+  in the command buffer when `developer` is 0 (with `developer` set it opens the
+  console instead). `dointro` (`0x40e360`) starts `_intro` (`0x40e0b0`), a state
+  machine at `0x501150` whose every step ends in `wait <ms>; _intro` (retail's `wait`
+  counts milliseconds: `Cbuf_Execute`, `0x42c590`, takes the frame's msec off it, and
+  `wait 1` is one frame): `music/intro` and 3 seconds of black; the Ritual logo
+  fading in over a second, held for 3 and fading out over one; the same for the
+  Gathering logo; then the main menu (`0x40b7c0`, with the menu's `backtogame`
+  disabled when no game is active). The update (`0x40af50`) fills the screen black
+  (`0x40acd0`) while no menu is up, no map loads and the client is not active, and
+  draws the logo (`0x40ad90`) centred at 1.5 times its 256x256 size, its alpha moving
+  linearly between the step's two values. A menu coming up (Escape's `togglemenu`), a
+  map load or the client becoming active sets the state to -1, which ends the intro.
+  OpenFAKK2 does the same in `URC_DoIntro_f`, `URC_IntroStep` and `URC_DrawIntro`; a
+  held logo captures like retail's to within 0.04 of 255. Differences: OpenFAKK2's
+  `wait` counts frames, so the steps are timed by the client instead of the command
+  buffer (retail's `wait` also holds every command queued behind it for the intro's
+  13 seconds); the intro is queued only at the first UI start of a run, since
+  OpenFAKK2's `vid_restart` restarts the UI and would otherwise replace the video menu
+  with the intro; and `dointro`/`_intro` stay registered while the UI is down, doing
+  nothing then (a startup `+map` shuts the UI down before the queued `dointro` runs).
 - **Tag functions.** (They honour the blending arguments the module passes; see
   "Tag placement" above. Retail's table points `Tag_Orientation` straight at
   `0x44fe40`, `Tag_NamedOrientation` at `0x450560`, which looks the name up and asks
