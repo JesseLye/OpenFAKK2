@@ -130,7 +130,6 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- Sound: `s_loadas8bit` (advanced options' "Force 8-bit Sound"), `s_separation`.
 - The `fps` counter: frame rate and triangle counts at the bottom left, and a warning
   below 18 frames a second.
 - `cl_avidemo <n>`: a screenshot every frame at 1/n of a second a frame (Ritual's
@@ -221,6 +220,16 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   sword as group 3, holsters and runs `weapgroup3`: both games list the same alias and
   bindings and the sword comes back. Pressing ALT or CTRL itself has not been tried in a
   run (the harness cannot hold them); that path follows `0x41f9c0`.
+- **Sound settings** (`S_Init` `0x43e670`): `s_volume` defaults to 1.0 (Quake III's 0.8
+  before). `s_loadas8bit` (archived and latched, the advanced options' "Force 8-bit
+  Sound") keeps every sound at 8 bits in retail's own mixer (`0x440196`) and opens Miles'
+  output at 8 bits (`0x45b5e6`); OpenFAKK2 cuts each sound to 8 bits as it loads, for
+  either backend, which is the first of those; streamed sounds (dialog, music) are left at
+  16. `s_separation` (archived, 0.5) sets how far apart retail's own mixer puts the ears
+  (`0x43f2cc`) and the pan it gives a Miles sample (`0x45e8d0`), but with Miles' 3D
+  provider, which places the sounds itself, it changes nothing: `probe-sound-pan`
+  recorded on retail with 0.5 and with 0 gave the same levels at all fourteen bearings.
+  OpenFAKK2 registers it and leaves the panning alone.
 - **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
   `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
   the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`
