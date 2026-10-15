@@ -880,6 +880,7 @@ extern	cvar_t	*com_altivec;
 extern	cvar_t	*com_standalone;
 extern	cvar_t	*com_basegame;
 extern	cvar_t	*com_homepath;
+extern	cvar_t	*com_dropsim;
 
 // both client and server must agree to pause
 extern	cvar_t	*cl_paused;		// FAKK2: the cvar is called paused

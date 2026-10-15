@@ -128,7 +128,6 @@ Missing from OpenFAKK2, to be done:
   `ctrlbindlist`, the `cl_altbindings` and `cl_ctrlbindings` switches (advanced options),
   and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
   `weapgroup<n>` and CTRL+n to `saveweaps <n>`; here those twenty lines fail.
-- Console: the `com_dropsim` cvar.
 - Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
   `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
   `+holster`; no retail file binds either.
@@ -213,6 +212,9 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
 - **`add`, `subtract` and `scale`** (`0x42f650`, `0x42f700`, `0x42f7b0`) change a cvar
   by an amount, as `set` would set it (read-only and cheat cvars refuse), writing a
   whole result as an integer.
+- **`com_dropsim`** (a cheat cvar, `0x42e3ce`) drops that share (0 to 1) of incoming
+  network packets, as Quake III 1.32's did (`Com_EventLoop` `0x42de63`); ioquake3's
+  `net_dropsim`, a percentage, is still there. Neither drops the loopback's packets.
 - **How the console prints**: a cvar as `"name" is:"value" default:"default"`
   (`0x42f3ae`), and `echo` each word followed by a space (`0x42c780`). One script run
   on both games (sums, alias listing, an alias, a loop of two aliases, `echo`) printed
