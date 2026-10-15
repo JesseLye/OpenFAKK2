@@ -1365,10 +1365,16 @@ static qboolean S_AL_CheckInput(int entityNum, sfxHandle_t sfx)
 =================
 S_AL_StartLocalSound
 
-Play a local (non-spatialized) sound effect
+Play a local (non-spatialized) sound effect. FAKK2: a local sound started for
+an entity (a "localsound" in the sound info, or one the listener makes) keeps
+that entity, so S_AL_StopSound finds it. Retail's Miles backend keeps the
+entity and channel of every sample and MP3 stream it starts, local or not
+(fakk2.exe 0x45bd10, 0x45bf00), and its stop matches on them (0x45d710).
+Dialog MP3s are local sounds, so without this an actor's stopdialog missed
+the line it was saying and the next line played over it.
 =================
 */
-static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int channel, float volume)
+static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int entnum, int channel, float volume)
 {
 	srcHandle_t src;
 	const soundInfo_t *info;
@@ -1381,13 +1387,13 @@ static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int channel, float volume)
 		volume = info->volume;
 
 	// Try to grab a source
-	src = S_AL_SrcAlloc(SRCPRI_LOCAL, -1, channel);
+	src = S_AL_SrcAlloc(SRCPRI_LOCAL, entnum, channel);
 
 	if(src == -1)
 		return;
 
 	// Set up the effect
-	S_AL_SrcSetup(src, sfx, SRCPRI_LOCAL, -1, channel, qtrue, volume, info->minDist);
+	S_AL_SrcSetup(src, sfx, SRCPRI_LOCAL, entnum, channel, qtrue, volume, info->minDist);
 
 	// Start it playing
 	srcList[src].isPlaying = qtrue;
@@ -1397,7 +1403,7 @@ static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int channel, float volume)
 static
 void S_AL_StartLocalSound(sfxHandle_t sfx, int channel)
 {
-	S_AL_StartLocalSoundEx(sfx, channel, -1);
+	S_AL_StartLocalSoundEx(sfx, -1, channel, -1);
 }
 
 /*
@@ -1430,7 +1436,7 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 
 	if(info->localSound)
 	{
-		S_AL_StartLocalSoundEx(sfx, entchannel, volume);
+		S_AL_StartLocalSoundEx(sfx, entnum, entchannel, volume);
 		return;
 	}
 
@@ -1442,7 +1448,7 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 	{
 		if(S_AL_HearingThroughEntity(entnum))
 		{
-			S_AL_StartLocalSoundEx(sfx, entchannel, volume);
+			S_AL_StartLocalSoundEx(sfx, entnum, entchannel, volume);
 			return;
 		}
 
@@ -1564,8 +1570,10 @@ static void S_AL_SetReverb( int type, float level )
 =================
 S_AL_StopSound
 
-FAKK2: stops what an entity plays on a channel; CHAN_AUTO stops all of
-the entity's channels. (The retail engine's rule has not been read.)
+FAKK2: stops what an entity plays on a channel, local sounds included;
+CHAN_AUTO stops all of the entity's channels. Retail's Miles stop
+(fakk2.exe 0x45d710) ends only the first sample or stream with exactly that
+entity and channel.
 =================
 */
 static void S_AL_StopSound( int entnum, int entchannel )
@@ -1588,7 +1596,8 @@ static void S_AL_StopSound( int entnum, int entchannel )
 =================
 S_AL_StopLocalSound
 
-FAKK2: local sounds are set up with entity -1 (S_AL_StartLocalSoundEx).
+FAKK2: S_StartLocalSound's sounds are set up with entity -1
+(S_AL_StartLocalSound).
 =================
 */
 static void S_AL_StopLocalSound( int channel )

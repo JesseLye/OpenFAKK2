@@ -210,12 +210,27 @@ Not read, done another way:
   resolves an alias, registers the name and plays it on the listener's entity on
   `CHAN_MENU`; the channel numbers are FAKK2's. Not followed: `maxnumber` and
   `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity stays), loop blocks,
-  the `s_show` print is retail's format only; `S_StopSound` stops the entity's channel
-  (the retail rule has not been read); the `.mp3` dialog files (1015 of them) are decoded
+  the `s_show` print is retail's format only; `S_StopSound` stops every match where
+  retail's Miles stop (`0x45d710`) ends the first sample or `.mp3` stream with that
+  entity and channel, and `CHAN_AUTO` here stops all of the entity's channels; a new
+  sample on an entity's busy channel (not `CHAN_AUTO`) replaces the old one in retail
+  (Miles' picker `0x45bc70`, the software mixer's `S_PickChannel` `0x43f010`) and plays
+  beside it here, while `.mp3` streams never replace each other in retail either except
+  on `CHAN_MENU` (`0x45bd10`); the `.mp3` dialog files (1015 of them) are decoded
   whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
   through Miles (`0x45bf00` sends them down a separate path); ambient-volume
   calls are ignored; looping sounds are keyed by their
   order in the frame. `s_soundinfo [name]` prints the table's size or a name's entry.
+- **Stopping an actor's dialog.** Retail keeps the entity and channel of every sample and
+  `.mp3` stream it starts, a `localsound` included (`0x45bf00`, `0x45bd10`), so its stop
+  (`0x45d710`) finds them. The dialog `.mp3`s are `localsound`s in the sound information,
+  and the OpenAL backend used to file local sounds under entity -1, so an actor's
+  `stopdialog` missed the line it was saying: on `training`, a trigger that stops the
+  trainer and starts her next line played it over the old one. Local sounds keep their
+  entity now (`S_AL_StartLocalSoundEx`); the software mixer always did. The game module
+  refuses a new line while the actor's last one plays, so with the stop working an
+  actor says one line at a time. Checked on `training` with logging on both backends
+  (the stop ends the old line before the next starts); not by ear.
 - **Reverb.** The game's `trigger_reverb` entities (placed by the level's `maps/<map>.snd`
   sound-manager file; 28 levels have them, `swamp1` and `training` do not) put an EAX
   environment number (`eax_generic` 0 to `eax_psychotic` 25) and a level in the player
