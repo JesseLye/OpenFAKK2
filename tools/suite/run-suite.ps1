@@ -170,7 +170,16 @@ foreach ($c in $selected) {
 
         # judge each measure against retail and ours' last good result
         $base = $null
-        if (Test-Path (Join-Path $baseDir 'baseline.json')) { $base = Get-Content (Join-Path $baseDir 'baseline.json') -Raw | ConvertFrom-Json; $r.baseline = $base.metrics }
+        if (Test-Path (Join-Path $baseDir 'baseline.json')) {
+            $base = Get-Content (Join-Path $baseDir 'baseline.json') -Raw | ConvertFrom-Json
+            # numbers measured against another retail reference do not compare: judged
+            # against retail alone until the baseline is made again
+            if ($hasRetail -and (Get-Prop $base 'reference') -and (Get-Prop $base 'reference') -ne (Get-ReferenceStamp $refDir)) {
+                $r.details += "the retail reference was made again after ours' last good result: run with -UpdateBaseline on main"
+                $base = $null
+            }
+            else { $r.baseline = $base.metrics }
+        }
         $worse = @(); $differs = @(); $unknown = @()
         foreach ($key in $ms.metrics.Keys) {
             $v = [double]$ms.metrics[$key]
@@ -205,7 +214,7 @@ foreach ($c in $selected) {
         New-Item -ItemType Directory -Force $baseDir | Out-Null
         Get-ChildItem $baseDir -File | Remove-Item -Force
         Get-ChildItem $oursDir -File | Where-Object { $_.Extension -in '.tga', '.log', '.json', '.txt' } | Copy-Item -Destination $baseDir -Force
-        [ordered]@{ metrics = $r.metrics; commit = $commit; branch = $branch; date = (Get-Date -Format s) } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $baseDir 'baseline.json') -Encoding utf8
+        [ordered]@{ metrics = $r.metrics; commit = $commit; branch = $branch; date = (Get-Date -Format s); reference = $(if (Test-HasRetail $c) { Get-ReferenceStamp $refDir } else { '' }) } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $baseDir 'baseline.json') -Encoding utf8
     }
     $results.Add([pscustomobject]$r)
 }

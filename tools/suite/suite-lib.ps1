@@ -56,6 +56,13 @@ function Get-SuiteChecks($Config) {
 
 function Get-RefDir([string]$Root, [string]$Name) { Join-Path $Root ($Name -replace '/', '\') }
 
+# Which version of a retail reference a result was measured against: when it was made.
+function Get-ReferenceStamp([string]$RefDir) {
+    $meta = Join-Path $RefDir 'meta.json'
+    if (-not (Test-Path $meta)) { return '' }
+    [string](Get-Content $meta -Raw | ConvertFrom-Json).date
+}
+
 # Whether a check is measured against a retail reference (the rest are judged against
 # ours' last good result only).
 function Test-HasRetail($c) {
