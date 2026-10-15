@@ -2851,6 +2851,16 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 			// had errors, so use default shader
 			shader.defaultShader = qtrue;
 		}
+
+		// FAKK2: a vertex-lit world surface (a triangle soup the map compiler
+		// made of a make_static model) takes the colours the compiler lit its
+		// vertexes with in its first stage, whatever rgbGen the script gave it,
+		// unless the shader says it needs no lightmap (fakk2.exe 0x4759b0).
+		// swamp1's branches have "rgbGen lightingDiffuse" (black on the world)
+		// and no rgbGen at all (identity: full bright) in their scripts.
+		if ( shader.lightmapIndex == LIGHTMAP_BY_VERTEX && !( shader.surfaceFlags & SURF_NOLIGHTMAP ) ) {
+			stages[0].rgbGen = CGEN_EXACT_VERTEX;
+		}
 		sh = FinishShader();
 		return sh;
 	}

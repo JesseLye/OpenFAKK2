@@ -1,0 +1,27 @@
+// Looks at the swamp branches baked into swamp1.bsp (plant_swbranch1.tik,
+// make_static) against the far-plane fog, for a like-for-like capture of
+// vertex-lit world surfaces: three cameras, three screenshots.
+// Retail: run-retail-client.ps1 -Map swamp1 -Secs 60 -After "+script thread probe-swbranch.scr::probe"
+// Ours (after a +wait that lets the map load) drop the waitforplayer, which
+// only returns when the player spawns after the thread starts.
+probe:
+waitforplayer
+wait 25
+spawn Camera targetname probecam1 origin "-2050 -4600 980" angles "-9 63 0"
+spawn Camera targetname probecam2 origin "-3000 -2000 900" angles "-13 134 0"
+spawn Camera targetname probecam3 origin "-4100 -2200 1000" angles "-20 130 0"
+wait .2
+cuecamera $probecam1
+wait 1
+stuffcmd "screenshot"
+wait 1
+cuecamera $probecam2
+wait 1
+stuffcmd "screenshot"
+wait 1
+cuecamera $probecam3
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

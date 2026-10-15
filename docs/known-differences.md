@@ -674,6 +674,17 @@ What is implemented, and on what basis:
 - **A scene without a world** (`RDF_NOWORLDMODEL`: the inventory's model windows)
   lights its TIKI models with the flat ambient Quake III gives such scenes; the TIKI
   path had skipped the lighting setup there and drew them black.
+- **Vertex-lit world surfaces** (the triangle soups the map compiler makes of the
+  models placed with `make_static`, lit per vertex at compile time; `swamp1`'s trees
+  and branches) take the compiler's vertex colours in their first stage whatever
+  `rgbGen` the shader script gave it, unless the shader says `surfaceparm nolightmap`
+  (`R_FindShader`, `0x4759b0`, after parsing a script for a `LIGHTMAP_BY_VERTEX`
+  lookup sets stage 0 to `exactVertex`; a surface without a script gets the same
+  default). `swamp1`'s `swampbranch` says `rgbGen lightingDiffuse`, which on the world
+  entity is black, and `swbranch2` says nothing, which is full bright; the branches
+  came out as black silhouettes among bright leaves until this followed retail. Seen
+  from three cameras in `swamp1` (`probe-swbranch.scr`) the branches and leaves now
+  match the retail capture to within a unit or two.
 - **The light grid** is 192 x 192 x 320 units a sample (`fakk2.exe` `0x4839c0`), not
   Quake III's 64 x 64 x 128 (and the retail engine reads no `gridsize` key). With the
   Quake III size no FAKK2 map's grid lump was the expected length, so "light grid
