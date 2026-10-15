@@ -5,6 +5,13 @@ same map and compare what the game module prints. The retail engine needs the ga
 in a drive. Nothing is written to the game install: the retail engine runs from a copy
 under `build\sandbox`, and logs go to `build\compare`.
 
+`common.ps1` holds the shared paths. `$GameInstall` is the retail install
+(`FAKK2_INSTALL` overrides it). `$RitualTools` is a clone of Ritual's Tools 1.02 release
+(github.com/Sporesirius/fakk2; `FAKK2_TOOLS` overrides it): design documents, tool
+sources, example maps and the tools. Read from it, but never commit anything taken from
+it: Ritual's licence does not allow copying it, and its Miles files are not
+redistributable.
+
     # one map, developer-level spawn output
     tools\retail-compare\compare.ps1 -Map zoo
 
