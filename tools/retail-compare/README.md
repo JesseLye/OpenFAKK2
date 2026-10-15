@@ -87,6 +87,10 @@ retail game again. Choose the probe with `-Probe`:
   replaces it (retail keeps one print), then a location print of
   `@textures/menu/gamesaved`, which retail writes as text:
   `capture.ps1 -Probe probe-oneprint -Map zoo -MaskNotify`.
+- `probe-printpos` shoots a two-line centre print (centred as one block, the lines from
+  its left edge) and location prints at x -1, y -1 and both (centred across, down, both),
+  each with retail's black copy one pixel down and right:
+  `capture.ps1 -Probe probe-printpos -Map zoo -MaskNotify`.
 - `probe-pfade` shoots a centre print 375 ms into its 750 ms fade-in; crop the text
   (`shots.py pair ... --crop 200 220 440 260`) to compare its strength with retail's.
 - `probe-lsload` loads a saved game, `fakkhouse0004`, and opens the main menu and the

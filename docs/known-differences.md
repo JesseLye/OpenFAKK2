@@ -667,18 +667,28 @@ Not read, done another way:
   it now does as retail (`probe-oneprint` on `zoo`: a location print a second after a
   centre print shows alone, as on retail, where both showed before; `locprint 40 200
   "@textures/menu/gamesaved"` writes that text on both games, where ours drew the
-  picture: 2.50% of pixels off by more than 24 before, 0.72% after). Still different:
-  retail draws a print's text over a black copy one pixel down and right (`0x419480`,
-  `0x419770`), and a location print at x or y -1 is placed differently, which was not
-  worked out; retail's `screenshot` reports "Wrote screenshots/..." through the print,
-  centred, replacing one that was up, where OpenFAKK2's goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
+  picture: 2.50% of pixels off by more than 24 before, 0.72% after). A print's text is
+  placed by `UIFont::PrintJustified` (`0x4b03c0`) in the screen's rectangle, as one
+  block: centred by its widest line (`0x4b04c0`; a tab counts three tab glyphs), every
+  line starting at the block's left edge, as the renderer's `DrawString` takes a
+  newline back to where the string started and a font height down (`0x48199c`; a
+  carriage return only goes back, `0x481992`). A centre print is centred both ways
+  (`0x419480`). A location print (`0x419770`) puts the block's top left at x and at
+  480 - y - the font's height, scaled to the screen, in a rectangle the screen's size;
+  an x of -1 centres it across the screen instead (`0x419873`), a y of -1 down it
+  (`0x41987e`). Both draw the text twice, black one pixel down and right, then white.
+  OpenFAKK2 centred a centre print line by line, had no -1 rule and no black copy; it now
+  does as retail (`probe-printpos` on `zoo`: a two-line centre print and location
+  prints at x -1, y -1 and both land where retail's do, the text's outline gone from
+  the difference; `probe-oneprint`'s shots went from 0.67% and 0.72% to 0.56% and 0.55%,
+  the scene's own level). The black copy is one unit of the 640 x 480 interface down
+  and right, which is retail's one pixel at 640 x 480 and more at larger sizes. Retail's
+  `screenshot` reports "Wrote screenshots/..." through the print, centred, replacing
+  one that was up, where OpenFAKK2's goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
   prints the cursor's place, `x:y`, ten units right of it and ten above, in `verdana-12`
-  while a cursor is up (`0x4982a3`). The prints'
-  places come from retail captures of the intro: a location print's x is its left edge
-  and its y is measured up from the bottom of the screen to the bottom of its first
-  line (`locprint 230 220` puts the quote's first line at y 241, left-aligned at
-  x 230), later lines following below; a centre print is centred on the screen line by
-  line. The retail
+  while a cursor is up (`0x4982a3`). Retail captures of the intro agree with the
+  location print's rule: `locprint 230 220` puts the quote's first line at y 241,
+  left-aligned at x 230, later lines following below. The retail
   client shows the system cursor over a menu (`ShowCursor`); so does this one: the
   mouse is released while a menu is up and its window position reaches the menu, whose
   topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)

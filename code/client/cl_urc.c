@@ -3087,10 +3087,10 @@ void URC_LocationPrint( int x, int y, const char *text, float alpha ) {
 static void URC_DrawPrint( urcPrint_t *pr ) {
 	int			elapsed;
 	float		alpha;
-	vec4_t		color;
+	vec4_t		color, shadow;
 	urcFont_t	*font;
-	const char	*line;
-	float		y;
+	float		r[4];
+	int			horz, vert;
 
 	if ( !pr->active ) {
 		return;
@@ -3127,32 +3127,41 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 	if ( !font ) {
 		return;
 	}
-	// retail captures: a centre print is centred on the screen, line by
-	// line; a location print's x is its left edge and its y is measured up
-	// from the bottom of the screen to the bottom of its first line, the
-	// other lines following below
+	// the text is placed in the screen's rectangle by PrintJustified
+	// (0x4b03c0), as one block: centred by its widest line, every line from
+	// the block's left edge. A centre print (0x419480) is centred both ways.
+	// A location print (0x419770) puts the block's top left at x and at y
+	// measured up from the bottom of the screen to the bottom of the first
+	// line (480 - y - the font's height), the rectangle keeping the screen's
+	// size; an x of -1 centres it across the screen instead, a y of -1 down it.
+	// The text is drawn twice, black one unit down and right, then white
+	// (retail's unit there is a screen pixel)
+	r[0] = r[1] = 0;
+	r[2] = 640;
+	r[3] = 480;
+	horz = URC_JUSTIFY_CENTER;
+	vert = URC_JUSTIFY_MIDDLE;
 	if ( pr->located ) {
-		y = 480 - pr->y - font->height;
-	} else {
-		int		lines = 1;
-
-		for ( line = pr->text ; *line ; line++ ) {
-			lines += ( *line == '\n' );
+		horz = URC_JUSTIFY_LEFT;
+		vert = URC_JUSTIFY_TOP;
+		if ( pr->x == -1 ) {
+			horz = URC_JUSTIFY_CENTER;
+		} else {
+			r[0] = pr->x;
 		}
-		y = 240 - lines * font->height * 0.5f;
-	}
-	for ( line = pr->text ; *line ; ) {
-		float	w = URC_StringWidth( font, line );
-
-		URC_DrawString( font, pr->located ? pr->x : 320 - w * 0.5f, y, line, color );
-		y += font->height;
-		while ( *line && *line != '\n' ) {
-			line++;
-		}
-		if ( *line == '\n' ) {
-			line++;
+		if ( pr->y == -1 ) {
+			vert = URC_JUSTIFY_MIDDLE;
+		} else {
+			r[1] = 480 - pr->y - URC_FontHeight( font );
 		}
 	}
+	Vector4Set( shadow, 0, 0, 0, alpha );
+	r[0] += 1;
+	r[1] += 1;
+	URC_PrintJustified( font, r, horz, vert, pr->text, shadow );
+	r[0] -= 1;
+	r[1] -= 1;
+	URC_PrintJustified( font, r, horz, vert, pr->text, color );
 }
 
 /*
