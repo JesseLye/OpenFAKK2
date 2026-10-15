@@ -1046,6 +1046,29 @@ and hid the problem). The same function confirmed the inferred `SOLID_NOT` /
 also records that entity's number in the accumulated trace, which Quake III did not.
 `SV_PointContents` has not been compared.
 
+### Hanging from a rope (deliberate)
+
+`probe-rope.scr` teleports the player beside the long rope over the pool on `training`
+(`func_rope` at -1600 -2032, bottom at z 144), lets her grab it, climbs her down with
+`+movedown` until the pool floor stops her, reads her and every entity, then lets go
+with `+use`. At the bottom she hangs with her feet about 7 units above the water
+(z 90.4 on retail, 86.6 on ours; the 3.8 comes from where the grab caught her).
+
+Retail spawns a splash there every server frame: 21 `fx_splashsmall.tik` entities alive
+at once, a white heap of spray in the water under her (`probe-ropesp.scr`, a picture
+probe). The cause is in the game module, `PmoveSingle` in `bg_pmove.c`: its "don't fall
+down stairs" snap runs when the player is airborne and her vertical velocity has just
+gone from up to down, and the rope zeroes her velocity every frame, so the test passes
+every frame. The snap drops her up to `STEPSIZE` (31) onto the pool floor, her feet
+enter the water (`EV_WATER_TOUCH`, the splash), and the rope's think puts her back.
+OpenFAKK2 skips the snap while `PMF_NO_GRAVITY` is set, which only the rope sets: no
+splashes, and her hanging position is unchanged.
+
+One knock-on: letting go at the bottom. The snap left her on the ground at the end of
+each move, and `Rope::Release` gives the jump-off push (300 up, 100 forward) only when
+she is not, so retail drops her straight down onto the floor. Ours now pushes her off as
+it does anywhere else on the rope; she lands 92 units ahead.
+
 ### Weapon effects
 
 Compared through the real client on both engines with the same probes and screenshots

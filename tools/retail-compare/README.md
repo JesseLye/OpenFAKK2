@@ -70,6 +70,13 @@ retail game again. Choose the probe with `-Probe`:
   0.1 s through each slow-down. On the headless test player the final position reads 4 to
   6 units short of retail (see `docs/known-differences.md`, "With scripted input");
   `-Extra "+set sv_fps 40"` closes it.
+- `probe-rope` runs on `training`: it teleports the player beside the long rope over the
+  pool (a `trigger_teleport` and a `script_origin` spawned by the script, since
+  `$player origin` does not move her), climbs her to the bottom with `+movedown`, sweeps
+  entities 0 to 1023 and lets go with `+use`. Retail has 21 `fx_splashsmall.tik`
+  splashes alive under her; ours has none (see "Hanging from a rope" in
+  `docs/known-differences.md`). `probe-ropesp` is its picture probe for the
+  `retail-capture` skill, a script camera on the water under her.
 - `probe-mnwalk` holds `+forward`, opens the main menu (which pauses the game), closes it
   again and reads the player every 0.25 s; `probe-mswalk` saves the game under the menu
   as well. Real clients only (`probe-client.ps1`, `-Classname none -Fields Origin`). The
