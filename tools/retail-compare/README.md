@@ -99,7 +99,11 @@ Screenshot probes end with `stuffcmd "quit"` instead and are run on both games b
 -Map <m>`), which pairs the shots. `probe-crosshair` wields the shotgun in `training` and
 shoots the crosshair on a target and on the floor; `probe-swbranch` cues three cameras on
 `swamp1`; `probe-hud` steps the health and water gauges; `probe-shot-*` shoot the intro at
-fixed times.
+fixed times. `probe-load` takes one shot after entry and quits: does a map load.
+
+Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
+and more) install into both sandboxes with `install-example-maps.ps1` and run as
+`-Map example/<map>`; `probe-scripting.md` lists what each one shows.
 
 OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
 `fs_homepath`; the retail runs use a clean copy of the install. So that ours does not

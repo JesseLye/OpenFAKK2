@@ -19,6 +19,6 @@ $deadline = (Get-Date).AddSeconds($Secs)
 while ((Get-Date) -lt $deadline -and -not $p.HasExited) { Start-Sleep -Milliseconds 500 }
 if ($p.HasExited) { $state = "exited with code $($p.ExitCode)" } else { $p.Kill(); $p.WaitForExit(); $state = "stopped after ${Secs}s" }
 
-$out = Join-Path $LogDir "client-retail-$Map$Tag.log"
+$out = Join-Path $LogDir "client-retail-$(Get-MapTag $Map)$Tag.log"
 if (Test-Path $log) { Copy-Item $log $out -Force; "[$Map] $state, $((Get-Content $out).Count) lines -> $out" }
 else { "[$Map] $state, but the game wrote no qconsole.log" }

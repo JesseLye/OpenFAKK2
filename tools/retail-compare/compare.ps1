@@ -2,7 +2,7 @@ param([string]$Map = 'zoo', [int]$Secs = 30, [int]$Show = 30, [string]$After = '
 # Runs OpenFAKK2 on a map and compares its game-side log against the saved retail log for that map.
 . (Join-Path $PSScriptRoot 'common.ps1')
 $sp = $LogDir
-$retail = "$sp\ded-retail-$Map$Tag.log"
+$retail = "$sp\ded-retail-$(Get-MapTag $Map)$Tag.log"
 if (-not (Test-Path $retail)) {
     & "$PSScriptRoot\run-retail.ps1" -Name retail -Map $Map -Secs $RetailSecs -After $After | Out-Null
     Copy-Item "$sp\ded-retail.log" $retail -Force
@@ -19,7 +19,7 @@ function GameLines($file) {
     }
 }
 $a = GameLines $retail
-$b = GameLines "$sp\of-$Map.log"
+$b = GameLines "$sp\of-$(Get-MapTag $Map).log"
 $d = Compare-Object $a $b
 $onlyRetail = @($d | Where-Object SideIndicator -eq '<=')
 $onlyOurs = @($d | Where-Object SideIndicator -eq '=>')
