@@ -1,0 +1,24 @@
+// Floats a pot with +autoaim in front of the player, wields the hand gun in the right
+// hand and screenshots the yellow targeting reticle it puts on the pot.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-pot -Map training -MaskNotify
+probe:
+waitforplayer
+wait 25
+spawn script_model model obj_pot1.tik origin "1311 951 140" targetname tgt
+wait 0.1
+$tgt anim idle
+$tgt flags +autoaim
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+wait 1
+stuffcmd "+left"
+wait 0.2
+stuffcmd "-left"
+wait 2
+stuffcmd "screenshot"
+wait 4
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
