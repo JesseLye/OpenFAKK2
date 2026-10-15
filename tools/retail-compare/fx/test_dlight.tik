@@ -1,0 +1,28 @@
+TIKI
+// Dynamic light test (probe-dlight.scr): a held light the colour and radius of the hand
+// gun's muzzle flash (weapon_gun.tik: tagdlight tag_barrel 1 1 0.1 175), with no model.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      originemitter testlight
+         (
+         dlight 1 1 0.1 175
+         )
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+   }

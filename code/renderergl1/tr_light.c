@@ -58,7 +58,7 @@ R_DlightBmodel
 Determine which dynamic lights may effect this bmodel
 =============
 */
-void R_DlightBmodel( bmodel_t *bmodel ) {
+int R_DlightBmodel( bmodel_t *bmodel ) {
 	int			i, j;
 	dlight_t	*dl;
 	int			mask;
@@ -89,6 +89,8 @@ void R_DlightBmodel( bmodel_t *bmodel ) {
 	}
 
 	tr.currentEntity->needDlights = (mask != 0);
+
+	return mask;
 
 	// set the dlight bits in all the surfaces
 	for ( i = 0 ; i < bmodel->numSurfaces ; i++ ) {

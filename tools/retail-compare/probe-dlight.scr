@@ -1,0 +1,46 @@
+// Dynamic lights on a brush model, for the real client on training: a held light the
+// hand gun's muzzle flash colour and radius (fx\test_dlight.tik, copy it in first) over
+// padfloor_target1, the pad that glows red for the distraction lesson, seen from a
+// camera: a shot before the light, then the light 40 units over the pad's middle, just
+// past its near edge, 100 units over it, and just inside its far edge, where the
+// recess wall faces the camera. Quake III's projection straight down Z painted walls
+// under the light as a band; retail projects along each vertex's normal.
+probe:
+waitforplayer
+wait 25
+$padfloor_target1 shader waveamp 0.4
+spawn Camera targetname cam1 origin "1400 720 160" angles "28 270 0"
+wait 0.1
+cuecamera $cam1
+wait 1
+stuffcmd "screenshot"
+wait 3
+spawn test_dlight.tik origin "1400 416 8" targetname dl1
+wait 0.2
+$dl1 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+$dl1 remove
+spawn test_dlight.tik origin "1400 500 8" targetname dl2
+wait 0.2
+$dl2 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+$dl2 remove
+spawn test_dlight.tik origin "1400 416 68" targetname dl3
+wait 0.2
+$dl3 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+$dl3 remove
+spawn test_dlight.tik origin "1400 350 10" targetname dl4
+wait 0.2
+$dl4 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "quit"
+end

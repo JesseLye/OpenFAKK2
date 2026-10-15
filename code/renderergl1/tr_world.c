@@ -169,7 +169,8 @@ static int R_DlightFace( srfSurfaceFace_t *face, int dlightBits ) {
 			continue;
 		}
 		dl = &tr.refdef.dlights[i];
-		d = DotProduct( dl->origin, face->plane.normal ) - face->plane.dist;
+		// a brush model's planes are in its own space (fakk2.exe 0x485d40)
+		d = DotProduct( dl->transformed, face->plane.normal ) - face->plane.dist;
 		if ( d < -dl->radius || d > dl->radius ) {
 			// dlight doesn't reach the plane
 			dlightBits &= ~( 1 << i );
@@ -193,12 +194,12 @@ static int R_DlightGrid( srfGridMesh_t *grid, int dlightBits ) {
 			continue;
 		}
 		dl = &tr.refdef.dlights[i];
-		if ( dl->origin[0] - dl->radius > grid->meshBounds[1][0]
-			|| dl->origin[0] + dl->radius < grid->meshBounds[0][0]
-			|| dl->origin[1] - dl->radius > grid->meshBounds[1][1]
-			|| dl->origin[1] + dl->radius < grid->meshBounds[0][1]
-			|| dl->origin[2] - dl->radius > grid->meshBounds[1][2]
-			|| dl->origin[2] + dl->radius < grid->meshBounds[0][2] ) {
+		if ( dl->transformed[0] - dl->radius > grid->meshBounds[1][0]
+			|| dl->transformed[0] + dl->radius < grid->meshBounds[0][0]
+			|| dl->transformed[1] - dl->radius > grid->meshBounds[1][1]
+			|| dl->transformed[1] + dl->radius < grid->meshBounds[0][1]
+			|| dl->transformed[2] - dl->radius > grid->meshBounds[1][2]
+			|| dl->transformed[2] + dl->radius < grid->meshBounds[0][2] ) {
 			// dlight doesn't reach the bounds
 			dlightBits &= ~( 1 << i );
 		}
@@ -327,6 +328,7 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 	int			clip;
 	model_t		*pModel;
 	int			i;
+	int			dlightBits;
 
 	pModel = R_GetModelByHandle( ent->e.hModel );
 
@@ -336,12 +338,14 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 	if ( clip == CULL_OUT ) {
 		return;
 	}
-	
-	R_SetupEntityLighting( &tr.refdef, ent, NULL );
-	R_DlightBmodel( bmodel );
 
+	R_SetupEntityLighting( &tr.refdef, ent, NULL );
+	dlightBits = R_DlightBmodel( bmodel );
+
+	// each surface is tested against every light that reaches the model, not
+	// only the first (fakk2.exe 0x485d40)
 	for ( i = 0 ; i < bmodel->numSurfaces ; i++ ) {
-		R_AddWorldSurface( bmodel->firstSurface + i, tr.currentEntity->needDlights );
+		R_AddWorldSurface( bmodel->firstSurface + i, dlightBits );
 	}
 }
 
@@ -691,5 +695,8 @@ void R_AddWorldSurfaces (void) {
 	if ( tr.refdef.num_dlights > MAX_DLIGHTS ) {
 		tr.refdef.num_dlights = MAX_DLIGHTS ;
 	}
+	// the surface tests use the lights' transformed origins, which a brush
+	// model of the last view left in its own space
+	R_TransformDlights( tr.refdef.num_dlights, tr.refdef.dlights, &tr.viewParms.world );
 	R_RecursiveWorldNode( tr.world->nodes, tr.viewParms.farplaneCull ? 31 : 15, ( 1ULL << tr.refdef.num_dlights ) - 1 );
 }

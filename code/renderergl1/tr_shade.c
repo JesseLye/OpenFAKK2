@@ -472,7 +472,7 @@ static void ProjectDlightTexture_scalar( void ) {
 		dl = &backEnd.refdef.dlights[l];
 		VectorCopy( dl->transformed, origin );
 		radius = dl->radius;
-		scale = 1.0f / radius;
+		scale = 0.75f / radius;
 
 		if(r_greyscale->integer)
 		{
@@ -497,52 +497,54 @@ static void ProjectDlightTexture_scalar( void ) {
 			floatColor[2] = dl->color[2] * 255.0f;
 		}
 
+		// FAKK2 (fakk2.exe 0x47cfe0): the light texture is projected along the
+		// axis the vertex normal points along most, not always down world Z,
+		// so a wall gets a round spot instead of a band running down it under
+		// the light; the strength falls off linearly with the light's distance
+		// from the vertex along its normal, and r_dlightBacks is not read
 		for ( i = 0 ; i < tess.numVertexes ; i++, texCoords += 2, colors += 4 ) {
 			int		clip = 0;
+			int		s, t;
 			vec3_t	dist;
-			
+			float	*normal;
+			float	d;
+
 			VectorSubtract( origin, tess.xyz[i], dist );
+			normal = tess.normal[i];
 
 			backEnd.pc.c_dlightVertexes++;
 
-			texCoords[0] = 0.5f + dist[0] * scale;
-			texCoords[1] = 0.5f + dist[1] * scale;
-
-			if( !r_dlightBacks->integer &&
-					// dist . tess.normal[i]
-					( dist[0] * tess.normal[i][0] +
-					dist[1] * tess.normal[i][1] +
-					dist[2] * tess.normal[i][2] ) < 0.0f ) {
-				clip = 63;
-			} else {
-				if ( texCoords[0] < 0.0f ) {
-					clip |= 1;
-				} else if ( texCoords[0] > 1.0f ) {
-					clip |= 2;
-				}
-				if ( texCoords[1] < 0.0f ) {
-					clip |= 4;
-				} else if ( texCoords[1] > 1.0f ) {
-					clip |= 8;
-				}
-				texCoords[0] = texCoords[0];
-				texCoords[1] = texCoords[1];
-
-				// modulate the strength based on the height and color
-				if ( dist[2] > radius ) {
-					clip |= 16;
-					modulate = 0.0f;
-				} else if ( dist[2] < -radius ) {
-					clip |= 32;
-					modulate = 0.0f;
+			if ( Q_fabs( normal[0] ) <= Q_fabs( normal[1] ) ) {
+				if ( Q_fabs( normal[2] ) < Q_fabs( normal[1] ) ) {
+					s = 0; t = 2;	// along Y
 				} else {
-					dist[2] = Q_fabs(dist[2]);
-					if ( dist[2] < radius * 0.5f ) {
-						modulate = 1.0f;
-					} else {
-						modulate = 2.0f * (radius - dist[2]) * scale;
-					}
+					s = 0; t = 1;	// along Z
 				}
+			} else if ( Q_fabs( normal[0] ) <= Q_fabs( normal[2] ) ) {
+				s = 0; t = 1;		// along Z
+			} else {
+				s = 1; t = 2;		// along X
+			}
+
+			texCoords[0] = 0.5f + dist[s] * scale;
+			texCoords[1] = 0.5f + dist[t] * scale;
+
+			if ( texCoords[0] < 0.0f ) {
+				clip |= 1;
+			} else if ( texCoords[0] > 1.0f ) {
+				clip |= 2;
+			}
+			if ( texCoords[1] < 0.0f ) {
+				clip |= 4;
+			} else if ( texCoords[1] > 1.0f ) {
+				clip |= 8;
+			}
+
+			d = DotProduct( dist, normal );
+			if ( d > radius || d < -radius ) {
+				modulate = 0.0f;
+			} else {
+				modulate = ( radius - Q_fabs( d ) ) * scale * ( 4.0f / 3.0f );
 			}
 			clipBits[i] = clip;
 			colors[0] = ri.ftol(floatColor[0] * modulate);
