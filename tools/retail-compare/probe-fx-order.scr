@@ -10,4 +10,5 @@ wait 1
 stuffcmd "screenshot"
 wait 0.5
 stuffcmd "pendingevents"
+stuffcmd "quit"
 end

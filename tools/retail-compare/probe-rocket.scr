@@ -28,4 +28,5 @@ wait 0.5
 stuffcmd "whatis 0"
 stuffcmd "levelvars"
 stuffcmd "pendingevents"
+stuffcmd "quit"
 end

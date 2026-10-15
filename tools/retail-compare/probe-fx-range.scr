@@ -45,4 +45,5 @@ stuffcmd "screenshot"
 stuffcmd "-attackleft"
 wait 0.5
 stuffcmd "pendingevents"
+stuffcmd "quit"
 end

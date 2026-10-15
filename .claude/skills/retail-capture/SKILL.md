@@ -1,6 +1,6 @@
 ---
 name: retail-capture
-description: Compare what OpenFAKK2 draws with what the retail FAKK2 game draws, from screenshots of the same moment taken by one probe script on both engines, paired with a difference image and figures. Use this whenever a report or a change is about how something looks rather than where it is (a sprite, the crosshair, the HUD, a menu, fog, lighting, a model, an effect, a lens flare, the loading screen), whenever someone attaches a retail and an OpenFAKK2 screenshot, says "looks different", "match retail" or "doesn't look right", and whenever a renderer or UI fix needs showing against retail, even if nobody says "capture", "screenshot" or "probe".
+description: Compare what OpenFAKK2 draws with what the retail FAKK2 game draws, from screenshots of the same moment taken by one probe script on both engines, paired with a difference image and figures. Use this whenever a report or a change is about how something looks rather than where it is (a sprite, the crosshair, the HUD, a menu, fog, lighting, a model, a weapon effect, a decal, a swipe, a lens flare, the loading screen), whenever someone attaches a retail and an OpenFAKK2 screenshot, says "looks different", "match retail" or "doesn't look right", and whenever a renderer or UI fix needs showing against retail, even if nobody says "capture", "screenshot" or "probe".
 ---
 
 # Capturing the picture against retail
@@ -42,7 +42,24 @@ differs by more than 24, and the box around them.
 
 Probes live in `tools\retail-compare\<name>.scr`; start from `probe-crosshair.scr` (the
 player aims, two shots), `probe-swbranch.scr` (three script cameras) or `probe-hud.scr`
-(a script line changes the state between shots).
+(a script line changes the state between shots). The weapon effect probes run on `zoo`:
+`probe-shotgun`, `probe-rocket`, `probe-sword` (swipes) and `probe-fx-guns`,
+`probe-fx-range`, `probe-fx-melee` fire each weapon at the floor and catch the burst,
+puffs, decals and explosions; `probe-fx-expl`, `probe-sprites` and `probe-fx-order` spawn
+one effect model alone.
+
+To test one effect alone, spawn its model from the probe and start its animation, which
+a model spawned by a script does not do by itself:
+
+```
+spawn fx_explosion.tik origin "x y z" targetname "fx"
+wait 0.1
+$fx anim idle                   // runs the entry commands that make the effects
+```
+
+`tools\retail-compare\fx` holds test models (still sprites, the fade rules, overlapping
+sprites). `capture.ps1` does not install them: copy `fx\*.tik` into
+`build\sandbox\retail\fakk\models` and `build\sandbox\home\fakk\models` first.
 
 ```
 probe:
@@ -144,6 +161,13 @@ added to the wrong cells.
   +exec <cfg>`, the cfg in `build\sandbox\home\fakk` holding `wait 1` / `screenshot` pairs
   (the startup command line is capped at 32 lines); the shots before `CS_PRIMED to
   CS_ACTIVE` in the log are the load.
+- **Keep probe names short.** The retail client silently drops the end of a long command
+  line, so a long probe name plus `-Extra` or `-RetailExtra` means the probe never starts
+  on retail: the map loads and nothing happens (14 characters was too long with
+  `+set r_mode 4`). A retail log with no probe output points here.
+- **Retail cuts long file paths.** Paths over 127 characters lose their end, so from a
+  deep worktree retail writes `shot0000.tg`; `capture.ps1` takes any `shot*` file as a
+  TGA.
 - **Image sizes.** `-Mode 3` is 640x480 on both engines. `shots.py` reads uncompressed TGA
   only, which is what `screenshot` writes; PIL is not installed, so do not reach for it.
 

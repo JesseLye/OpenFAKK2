@@ -65,10 +65,12 @@ function Invoke-Side([string]$label, [string]$exe, [string]$workDir, [string]$ga
 
     $log = Join-Path $LogDir "capture-$label-$Map-$probeName.log"
     if (Test-Path $console) { Copy-Item $console $log -Force } else { $log = '(no console log)' }
-    # this run's shots: names that are new, or rewritten since the run started
+    # this run's shots: names that are new, or rewritten since the run started. Retail
+    # cuts the file's path at 127 characters, so from a deep worktree its shots can be
+    # shot0000.tg (still a TGA); any shot* name counts
     $new = @()
     if (Test-Path $shotDir) {
-        $new = @(Get-ChildItem $shotDir -File -Filter '*.tga' | Where-Object { -not $before.ContainsKey($_.Name) -or $before[$_.Name] -ne $_.LastWriteTimeUtc } | Sort-Object Name)
+        $new = @(Get-ChildItem $shotDir -File -Filter 'shot*' |Where-Object { -not $before.ContainsKey($_.Name) -or $before[$_.Name] -ne $_.LastWriteTimeUtc } | Sort-Object Name)
     }
     Get-ChildItem $outDir -File -Filter "$label-*" -ErrorAction SilentlyContinue | Remove-Item
     $n = 0

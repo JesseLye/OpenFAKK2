@@ -56,9 +56,8 @@ retail game again. Choose the probe with `-Probe`:
   `-Extra "+set sv_fps 40"` closes it.
 
 Weapon effects are drawn by the client, so these probes are for the real client on
-`zoo` (`.claude\skills\retail-probe\scripts\probe-client.ps1` for ours,
-`run-retail-client.ps1 -After "+script thread <probe>.scr::probe"` for retail, the probe
-copied to `build\sandbox\retail\fakk\maps`) and are compared by their screenshots:
+`zoo` and are compared by their screenshots, run on both games by the `retail-capture`
+skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zoo`):
 
 - `probe-shotgun` fires the shotgun's plasma blast (its holes and green puffs) and a
   grenade; `probe-rocket` fires a rocket at the floor (explosion, smoke, soot);
