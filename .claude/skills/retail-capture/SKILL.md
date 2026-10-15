@@ -48,14 +48,22 @@ player aims, two shots), `probe-swbranch.scr` (three script cameras) or `probe-h
 puffs, decals and explosions; `probe-fx-expl`, `probe-sprites` and `probe-fx-order` spawn
 one effect model alone.
 
-To test one effect alone, spawn its model from the probe and start its animation, which
-a model spawned by a script does not do by itself:
+Before writing a probe that fires, aims, moves or sets up a scene, read
+`tools\retail-compare\probe-scripting.md`, shared with the retail-probe skill: weapons,
+ammo, aim timing, movement, cameras, script objects, and spawning one effect model alone
+(`spawn <model>.tik ...` then `$name anim idle`, since a spawned model does not start its
+animation by itself). The two mistakes that cost a picture most often:
 
-```
-spawn fx_explosion.tik origin "x y z" targetname "fx"
-wait 0.1
-$fx anim idle                   // runs the entry commands that make the effects
-```
+- **The wrong button.** A dual-handed weapon fires its primary mode with `+attackleft`
+  and its alternate with `+attackright` (the shotgun's plasma blast is left, its grenade
+  right); a right-hand weapon (swords, uzi, hand gun) attacks with `+attackright`. The
+  wrong one shows the other mode's effect.
+- **No ammo.** A weapon whose tik says `startammo 0` (the gas sling) fires nothing,
+  silently, and the shot comes out empty, which reads as "ours draws nothing". Give it
+  with a script line before the `use`: `$player ammo "Gas Pod" 5`.
+
+`retail-probe`'s `make_probe.py` expands `@cmd` and `@hold` shorthand, but its `@end`
+does not quit: end a picture probe with `stuffcmd "quit"` yourself.
 
 `tools\retail-compare\fx` holds test models (still sprites, the fade rules, overlapping
 sprites). `capture.ps1` does not install them: copy `fx\*.tik` into

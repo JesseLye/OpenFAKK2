@@ -84,6 +84,8 @@ its random numbers from the clock, so retail differs from itself on some maps; t
 by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.
 
 A probe must end with `pendingevents`; that is how the script knows it has finished.
+How to write one (keys, weapons, ammo, aim, movement, scene set-up) is in
+`probe-scripting.md`.
 
 Screenshot probes end with `stuffcmd "quit"` instead and are run on both games by the
 `retail-capture` skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <p>

@@ -52,8 +52,11 @@ the weapon effect probes (`probe-shotgun`, `probe-fx-*`, `probe-sprites`, ...) r
 
 Probes live in `tools\retail-compare\<name>.scr`. Start from `probe-sling.scr`,
 `probe-gaspod-down.scr` (ammo, pitch, fast reads of a projectile that explodes) or
-`probe-walk-jump.scr` (movement), or expand a short template with `scripts\make_probe.py` (see
-`references/probe-cookbook.md` for the directives and ready-made snippets). The shape:
+`probe-walk-jump.scr` (movement), or expand a short template with `scripts\make_probe.py`.
+Before writing one, read `tools\retail-compare\probe-scripting.md` (keys, weapons and
+which button fires which mode, ammo, aim, movement, scene set-up; shared with
+retail-capture) and `references/probe-cookbook.md` (reading state: sweeps, entity
+numbers, projectiles, timing the reads). The shape:
 
 ```
 probe:
