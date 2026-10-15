@@ -1,0 +1,67 @@
+// Walks Julie forward, opens the menu, saves under it and closes it, reading her every 0.25 s.
+probe:
+waitforplayer
+wait 2
+stuffcmd "+forward"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "togglemenu; wait 100; savegame probewalk; wait 300; togglemenu"
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "-forward"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

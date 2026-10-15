@@ -1,0 +1,67 @@
+// Control for probe-mswalk: the same menu visit without the save.
+probe:
+waitforplayer
+wait 2
+stuffcmd "+forward"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "togglemenu; wait 100; wait 300; togglemenu"
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "whatis 0"
+wait 0.25
+stuffcmd "-forward"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

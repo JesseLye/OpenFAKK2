@@ -763,6 +763,22 @@ Not read, done another way:
   loops left out until then), leaving the music's streams alone. Not followed: the
   same update halves the sound volume (`0x43ed10`) while the client's cinematic flag
   (`0xb129ec`, the one that makes Escape `skipcinematic`) is set.
+- **The client's clock under a pause (deliberate).** Retail's `CL_SetCGameTime`
+  (`0x41d590`) leaves `cl.serverTime` alone while paused but lets `cls.realtime` run on
+  (`CL_Frame`, `0x421f30`), so when the pause ends `cl.serverTime` jumps by its length
+  while the server's clock stood still. The next command carries that time: the server
+  moves the player through the whole pause at once and then drops every command after
+  it as old until its clock catches up, so after a menu (a save, say) the player has no
+  control for about as long as the menu was up (`probe-mnwalk` on `zoo` with
+  `probe-client.ps1 -Retail` and a 3 s pause: Julie moves 300 units in one reading, then
+  stands for 3.25 s with `+forward` held). OpenFAKK2 takes each paused frame off
+  `cl.serverTimeDelta`, so the client's clock stands still with the server's and the
+  walk carries on through the menu (`probe-mnwalk`, `probe-mswalk`).
+- **The client's timeout.** Retail's `CL_CheckTimeout` (`0x421e80`) counts the frames
+  past `cl_timeout` while not `paused` and never disconnects; only `CL_ClearState`'s
+  `memset` (`0x4208f6`) touches the count otherwise. ioquake3's disconnected on the
+  sixth, which threw the level away when a menu had been up for more than 125 s; the
+  check now does what retail's does.
 - **The loading screen.** The retail `CL_MapLoading` (`0x4207f0`) calls `UI_BeginLoad`
   (`0x40d520`), which sets a loading flag, and pops every menu (`0x4a29f0`) before its
   first screen update; `UI_EndLoad` (`0x40d4f0`) clears the flag when the first active
