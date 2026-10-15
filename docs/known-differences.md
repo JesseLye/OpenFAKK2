@@ -404,7 +404,9 @@ Not read, done another way:
   `AIL_set_3D_sample_loop_block(start, end)` and a loop count of 0 (`0x45c1df`), and one
   without a block a count of 1. The offsets are bytes into the file's data, as Miles takes
   them: two 16-bit files end their blocks 2 bytes short of their data, past their sample
-  counts, and the retail uzi repeats every 92 ms (2019 samples, `loopend 4038`). The fire
+  counts, and the retail uzi repeats every 92 ms (2019 samples, `loopend 4038`); they
+  count the file's own bytes, so a sound `s_loadas8bit` has cut to 8 bits keeps its
+  block (`snd_info_t::fileWidth`). The fire
   animation starts `start.wav` on channel 1 and stops channel 1 when it ends, so the uzi
   rattles for as long as the trigger is held; here it used to play its 0.35 s once and
   fall silent, at the start of each burst only (the same with two uzis). The OpenAL backend

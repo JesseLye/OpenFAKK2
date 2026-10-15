@@ -35,6 +35,7 @@ typedef struct snd_info_s
 	int samples;
 	int size;
 	int dataofs;
+	int fileWidth;	// FAKK2: width in the file, before s_loadas8bit (S_CodecLoad)
 } snd_info_t;
 
 typedef struct snd_codec_s snd_codec_t;

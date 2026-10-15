@@ -272,7 +272,7 @@ qboolean S_LoadSound( sfx_t *sfx )
 	sfx->loopStart = sfx->loopEnd = 0;
 	{
 		const soundInfo_t	*sinfo = S_SoundInfoForName( sfx->soundName );
-		int					frame = info.width * info.channels;
+		int					frame = info.fileWidth * info.channels;	// before s_loadas8bit
 		float				scale = (float)dma.speed / info.rate;
 
 		if ( sinfo->loopStart >= 0 && frame && info.samples > 0 && Q_stricmp( COM_GetExtension( sfx->soundName ), "mp3" ) ) {

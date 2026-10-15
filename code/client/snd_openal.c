@@ -401,7 +401,7 @@ static qboolean alLoopPoints;	// AL_SOFT_loop_points
 static void S_AL_BufferLoadLoop(alSfx_t *curSfx, const void *data, const snd_info_t *info, ALuint format)
 {
 	const soundInfo_t *sinfo = S_SoundInfoForName(curSfx->filename);
-	int frame = info->width * info->channels;
+	int frame = info->fileWidth * info->channels;	// bytes in the file, before s_loadas8bit
 	ALint points[2];
 
 	if(sinfo->loopStart < 0 || !frame || info->samples <= 0 || !Q_stricmp(COM_GetExtension(curSfx->filename), "mp3"))
@@ -419,7 +419,7 @@ static void S_AL_BufferLoadLoop(alSfx_t *curSfx, const void *data, const snd_inf
 	}
 
 	S_AL_ClearError(qfalse);
-	qalBufferData(curSfx->loopBuffer, format, data, points[1] * frame, info->rate);
+	qalBufferData(curSfx->loopBuffer, format, data, points[1] * info->width * info->channels, info->rate);
 	if(points[0] > 0 && alLoopPoints && qalBufferiv)
 		qalBufferiv(curSfx->loopBuffer, AL_LOOP_POINTS_SOFT, points);
 	if(qalGetError() != AL_NO_ERROR)
