@@ -113,6 +113,8 @@ brings up the weapon bar and then the main menu over it (the menu pauses the gam
 shots and the quit are chained client commands with frame waits; `capture.ps1`'s warning
 that it does not end with `stuffcmd "quit"` is expected); `probe-shot-*` shoot the intro
 at fixed times. `probe-load` takes one shot after entry and quits: does a map load.
+`probe-ambient` spawns a box and a statue on `zoo`, lit from the light grid, before a
+script camera (`r_ambientScale`).
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

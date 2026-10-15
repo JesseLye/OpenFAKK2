@@ -3587,7 +3587,7 @@ void CL_Init( void ) {
 	cl_motd = Cvar_Get ("cl_motd", "1", 0);
 #endif
 
-	cl_timeout = Cvar_Get ("cl_timeout", "200", 0);
+	cl_timeout = Cvar_Get ("cl_timeout", "125", 0);	// FAKK2: the retail default
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );

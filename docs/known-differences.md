@@ -111,17 +111,16 @@ the client game module loads, so the module's own commands are not part of the
 comparison. What the game and client game modules register comes with Ritual's code in
 `code/fakk` and is not listed.
 
-Cvars whose default differs, with the effect where it shows:
-
-| Cvar | Retail | OpenFAKK2 | Note |
-| --- | --- | --- | --- |
-| `r_picmip` | 0 | 1 | Textures load at half size |
-| `r_ambientScale` | 0.5 | 0.6 | `R_SetupEntityLighting` (`0x48f0b5`) multiplies a model's ambient light by it |
-| `r_overBrightBits` | 0 | 1 | |
-| `r_textureMode` | `GL_LINEAR_MIPMAP_NEAREST` | `GL_LINEAR_MIPMAP_LINEAR` | |
-| `r_ignoreFastPath` | 0 | 1 | |
-| `r_swapInterval` | 0 | 1 | |
-| `cl_timeout` | 125 | 200 | |
+Defaults: OpenFAKK2 registers retail's `r_picmip` 0 (Quake III's 1 loaded every
+texture at half size), `r_overBrightBits` 0, `r_ignoreFastPath` 0, `r_textureMode`
+`GL_LINEAR_MIPMAP_NEAREST`, `cl_timeout` 125 and `r_ambientScale` 0.5.
+`R_SetupEntityLighting` (`0x48ed10`) multiplies a model's ambient light from the grid by
+`r_ambientScale` (at `0x48f0b5`) and its directed light by `r_directedScale`, after
+averaging the samples and before the minimum light, as OpenFAKK2 does; with Quake III's
+0.6 a box and a statue spawned on `zoo` (`probe-ambient.scr`) came out 4 to 7 levels
+brighter than retail, with 0.5 they match within 1. Archived values a player already has
+in `config.cfg` stay. On purpose, `r_mode` stays -2 (the desktop's resolution) where
+retail's default is 3 (640x480).
 
 Missing from OpenFAKK2, to be done:
 

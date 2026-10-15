@@ -1,0 +1,17 @@
+// Models lit from the light grid, for r_ambientScale and the grid lighting: on zoo, spawns
+// a box and a statue ahead of the player's start and frames them with a script camera.
+// Neither model is flagged betterlighting, so both take the grid's ambient and directed
+// light (R_SetupEntityLighting, fakk2.exe 0x48ed10).
+probe:
+waitforplayer
+wait 2
+spawn obj_box1.tik origin "-2150 1520 0" targetname "ambbox"
+spawn obj_statue.tik origin "-2150 1616 0" targetname "ambstatue"
+spawn Camera targetname ambcam origin "-2310 1568 56" angles "8 0 0"
+wait .2
+cuecamera $ambcam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
