@@ -120,7 +120,10 @@ averaging the samples and before the minimum light, as OpenFAKK2 does; with Quak
 0.6 a box and a statue spawned on `zoo` (`probe-ambient.scr`) came out 4 to 7 levels
 brighter than retail, with 0.5 they match within 1. Archived values a player already has
 in `config.cfg` stay. On purpose, `r_mode` stays -2 (the desktop's resolution) where
-retail's default is 3 (640x480).
+retail's default is 3 (640x480). OpenFAKK2's renderer has no fast path: Quake III's would
+skip the light cube, the far plane's fog passes and OpenGL's fog on models, which only the
+generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
+(`probe-wgroup.scr`); the cvar keeps retail's default and changes nothing in the picture.
 
 Missing from OpenFAKK2, to be done:
 

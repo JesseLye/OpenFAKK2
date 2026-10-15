@@ -1908,61 +1908,12 @@ static void ComputeStageIteratorFunc( void )
 		return;
 	}
 
-	if ( r_ignoreFastPath->integer )
-	{
-		return;
-	}
-
-	//
-	// see if this can go into the vertex lit fast path
-	//
-	if ( shader.numUnfoggedPasses == 1 )
-	{
-		if ( stages[0].rgbGen == CGEN_LIGHTING_DIFFUSE )
-		{
-			if ( stages[0].alphaGen == AGEN_IDENTITY )
-			{
-				if ( stages[0].bundle[0].tcGen == TCGEN_TEXTURE )
-				{
-					if ( !shader.polygonOffset )
-					{
-						if ( !shader.multitextureEnv )
-						{
-							if ( !shader.numDeforms )
-							{
-								shader.optimalStageIteratorFunc = RB_StageIteratorVertexLitTexture;
-								return;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	//
-	// see if this can go into an optimized LM, multitextured path
-	//
-	if ( shader.numUnfoggedPasses == 1 )
-	{
-		if ( ( stages[0].rgbGen == CGEN_IDENTITY ) && ( stages[0].alphaGen == AGEN_IDENTITY ) )
-		{
-			if ( stages[0].bundle[0].tcGen == TCGEN_TEXTURE && 
-				stages[0].bundle[1].tcGen == TCGEN_LIGHTMAP )
-			{
-				if ( !shader.polygonOffset )
-				{
-					if ( !shader.numDeforms )
-					{
-						if ( shader.multitextureEnv )
-						{
-							shader.optimalStageIteratorFunc = RB_StageIteratorLightmappedMultitexture;
-						}
-					}
-				}
-			}
-		}
-	}
+	// FAKK2: no fast path. Quake III's vertex-lit and lightmapped ones would
+	// skip what only the generic path does for FAKK2 (the light cube of a
+	// "betterlighting" model, the far plane's fog passes, OpenGL's fog on
+	// models), and drew Julie black once r_ignoreFastPath took retail's
+	// default of 0; a fast path only saves time, so r_ignoreFastPath keeps its
+	// value and changes nothing in the picture
 }
 
 typedef struct {
