@@ -127,10 +127,6 @@ generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
 
 Missing from OpenFAKK2, to be done:
 
-- Weapon groups: `altbind`, `ctrlbind`, `unaltbind`, `unctrlbind`, `altbindlist`,
-  `ctrlbindlist`, the `cl_altbindings` and `cl_ctrlbindings` switches (advanced options),
-  and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
-  `weapgroup<n>` and CTRL+n to `saveweaps <n>`; here those twenty lines fail.
 - Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
   `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
   `+holster`; no retail file binds either.
@@ -212,6 +208,19 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   (`0x42cab0`); retail's config file has three headed parts, bindings, cvars and
   aliases, and ours now has too. `aliasdump` (the client's, `0x41c550`) prints the
   global sound alias list, as developer output (`0x41c460`).
+- **Weapon groups.** A key has an ALT and a CTRL binding besides its own (`altbind`,
+  `ctrlbind`, `unaltbind`, `unctrlbind`, `altbindlist`, `ctrlbindlist`, `0x41f900`), used
+  when it is pressed with ALT or CTRL held while `cl_altbindings` or `cl_ctrlbindings`
+  (advanced options, archived, 0) is on (`CL_KeyEvent` `0x41f9c0`); on release the button
+  commands of both it and the plain binding are let go. `unbindall` leaves them, and the
+  config file writes each key's `altbind` and `ctrlbind` after its `bind` (`0x41f790`).
+  `default.cfg` gives CTRL+n `saveweaps <n>` (`0x40e4a0`), which makes the console alias
+  `weapgroup<n>` take up the weapons held now (`0x40e380`: `use "<item>" dual`,
+  `dualwield "<left>" "<right>"`, `use "<item>" left|right`, or `holster`) and centre-prints
+  "Saved Weapon Group <n>", and ALT+n `weapgroup<n>`. `probe-wgroup.scr` saves the green
+  sword as group 3, holsters and runs `weapgroup3`: both games list the same alias and
+  bindings and the sword comes back. Pressing ALT or CTRL itself has not been tried in a
+  run (the harness cannot hold them); that path follows `0x41f9c0`.
 - **`add`, `subtract` and `scale`** (`0x42f650`, `0x42f700`, `0x42f7b0`) change a cvar
   by an amount, as `set` would set it (read-only and cheat cvars refuse), writing a
   whole result as an integer.

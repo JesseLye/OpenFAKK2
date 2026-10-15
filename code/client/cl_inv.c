@@ -870,6 +870,58 @@ void INV_Draw( void ) {
 
 /*
 =================
+INV_WeaponsCommand
+
+The command that takes up the weapons the player holds now (fakk2.exe
+0x40e380): the two-handed one, both hands', one hand's, or none.
+=================
+*/
+static const char *INV_WeaponsCommand( void ) {
+	static char	cmd[1024];
+	const char	*left = "", *right = "";
+	const int	*active = cl.snap.ps.activeItems;
+
+	if ( active[4] >= 0 ) {
+		Com_sprintf( cmd, sizeof( cmd ), "use \"%s\" dual", INV_ConfigString( INV_CS_ITEMS + active[4] ) );
+		return cmd;
+	}
+	if ( active[2] >= 0 ) {
+		left = INV_ConfigString( INV_CS_ITEMS + active[2] );
+	}
+	if ( active[3] >= 0 ) {
+		right = INV_ConfigString( INV_CS_ITEMS + active[3] );
+	}
+	if ( left[0] && right[0] ) {
+		Com_sprintf( cmd, sizeof( cmd ), "dualwield \"%s\" \"%s\"\n", left, right );
+	} else if ( left[0] ) {
+		Com_sprintf( cmd, sizeof( cmd ), "use \"%s\" left\n", left );
+	} else if ( right[0] ) {
+		Com_sprintf( cmd, sizeof( cmd ), "use \"%s\" right\n", right );
+	} else {
+		return "holster\n";
+	}
+	return cmd;
+}
+
+/*
+=================
+INV_SaveWeaps_f
+
+saveweaps <n> (0x40e4a0, CTRL+n in default.cfg): makes the alias
+"weapgroup<n>" take up the weapons held now, which ALT+n runs
+=================
+*/
+static void INV_SaveWeaps_f( void ) {
+	const char	*cmd = INV_WeaponsCommand();
+
+	if ( cmd[0] ) {
+		Cmd_SetAlias( va( "weapgroup%s", Cmd_Argv( 1 ) ), cmd );
+	}
+	Cmd_ExecuteString( va( "centerprint \"Saved Weapon Group %d\"\n", atoi( Cmd_Argv( 1 ) ) ) );
+}
+
+/*
+=================
 INV_Init / INV_Shutdown
 
 With the UI, on every map.
@@ -887,6 +939,7 @@ void INV_Init( void ) {
 	Cmd_AddCommand( "nextinv", INV_NextInv_f );
 	Cmd_AddCommand( "previnv", INV_PrevInv_f );
 	Cmd_AddCommand( "inventory", INV_Inventory_f );
+	Cmd_AddCommand( "saveweaps", INV_SaveWeaps_f );
 }
 
 void INV_Shutdown( void ) {
@@ -894,5 +947,6 @@ void INV_Shutdown( void ) {
 	Cmd_RemoveCommand( "nextinv" );
 	Cmd_RemoveCommand( "previnv" );
 	Cmd_RemoveCommand( "inventory" );
+	Cmd_RemoveCommand( "saveweaps" );
 	inv_loaded = qfalse;		// its shaders are the map's
 }
