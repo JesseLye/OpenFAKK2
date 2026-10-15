@@ -228,13 +228,27 @@ static void R_BindAnimatedImage( textureBundle_t *bundle ) {
 		return;
 	}
 
-	// it is necessary to do this messy calc to make sure animations line up
-	// exactly with waveforms of the same frequency
-	index = tess.shaderTime * bundle->imageAnimationSpeed * FUNCTABLE_SIZE;
-	index >>= FUNCTABLE_SIZE2;
+	// FAKK2 (fakk2.exe 0x47cf5b): a frameFromEntity bundle shows the frame the
+	// entity names, which the game's "shader frame" sets; an animMapOnce one
+	// stays on its last image instead of starting over
+	if ( bundle->frameFromEntity && backEnd.currentEntity ) {
+		index = backEnd.currentEntity->e.frame;
+		if ( index < 0 ) {
+			index = 0;
+		}
+	} else {
+		// it is necessary to do this messy calc to make sure animations line up
+		// exactly with waveforms of the same frequency
+		index = tess.shaderTime * bundle->imageAnimationSpeed * FUNCTABLE_SIZE;
+		index >>= FUNCTABLE_SIZE2;
 
-	if ( index < 0 ) {
-		index = 0;	// may happen with shader time offsets
+		if ( index < 0 ) {
+			index = 0;	// may happen with shader time offsets
+		}
+	}
+	if ( bundle->animMapOnce && index >= bundle->numImageAnimations ) {
+		GL_Bind( bundle->image[bundle->numImageAnimations - 1] );
+		return;
 	}
 
 	// Windows x86 doesn't load renderer DLL with 64 bit modulus
@@ -992,6 +1006,11 @@ static void ComputeTexCoords( shaderStage_t *pStage ) {
 
 			case TMOD_SCALE:
 				RB_CalcScaleTexCoords( pStage->bundle[b].texMods[tm].scale,
+									 ( float * ) tess.svars.texcoords[b] );
+				break;
+
+			case TMOD_PARALLAX:
+				RB_CalcParallaxTexCoords( pStage->bundle[b].texMods[tm].scroll,
 									 ( float * ) tess.svars.texcoords[b] );
 				break;
 			

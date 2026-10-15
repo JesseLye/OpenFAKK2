@@ -1048,6 +1048,26 @@ void RB_CalcScaleTexCoords( const float scale[2], float *st )
 }
 
 /*
+** RB_CalcParallaxTexCoords
+**
+** FAKK2's "tcMod parallax": the coordinates moved by the view's x and y times
+** the rates (fakk2.exe 0x4951f0), so layers drawn with different rates slide
+** past each other as the viewer moves
+*/
+void RB_CalcParallaxTexCoords( const float rate[2], float *st )
+{
+	float	s = backEnd.viewParms.or.origin[0] * rate[0];
+	float	t = backEnd.viewParms.or.origin[1] * rate[1];
+	int		i;
+
+	for ( i = 0; i < tess.numVertexes; i++, st += 2 )
+	{
+		st[0] += s;
+		st[1] += t;
+	}
+}
+
+/*
 ** RB_CalcScrollTexCoords
 */
 void RB_CalcScrollTexCoords( const float scrollSpeed[2], float *st )

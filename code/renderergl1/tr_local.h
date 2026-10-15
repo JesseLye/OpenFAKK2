@@ -244,7 +244,8 @@ typedef enum {
 	TMOD_SCALE,
 	TMOD_STRETCH,
 	TMOD_ROTATE,
-	TMOD_ENTITY_TRANSLATE
+	TMOD_ENTITY_TRANSLATE,
+	TMOD_PARALLAX			// FAKK2: offset by the view's position, rates in scroll[]
 } texMod_t;
 
 #define	MAX_SHADER_DEFORMS	3
@@ -303,6 +304,9 @@ typedef struct {
 	int				videoMapHandle;
 	qboolean		isLightmap;
 	qboolean		isVideoMap;
+
+	qboolean		frameFromEntity;	// FAKK2: the animMap frame is the entity's (the game's "shader frame")
+	qboolean		animMapOnce;		// FAKK2: the animation stops on its last frame
 } textureBundle_t;
 
 #define NUM_TEXTURE_BUNDLES 2
@@ -1628,6 +1632,7 @@ void	RB_CalcFogTexCoords( float *dstTexCoords );
 void	RB_CalcScrollTexCoords( const float scroll[2], float *dstTexCoords );
 void	RB_CalcRotateTexCoords( float rotSpeed, float *dstTexCoords );
 void	RB_CalcScaleTexCoords( const float scale[2], float *dstTexCoords );
+void	RB_CalcParallaxTexCoords( const float rate[2], float *dstTexCoords );
 void	RB_CalcTurbulentTexCoords( const waveForm_t *wf, float *dstTexCoords );
 void	RB_CalcTransformTexCoords( const texModInfo_t *tmi, float *dstTexCoords );
 void	RB_CalcModulateColorsByFog( unsigned char *dstColors );

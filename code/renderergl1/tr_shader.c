@@ -441,6 +441,28 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 		tmi->type = TMOD_SCALE;
 	}
 	//
+	// FAKK2: parallax <sRate> <tRate> (fakk2.exe 0x4783ed)
+	//
+	else if ( !Q_stricmp( token, "parallax" ) )
+	{
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing rate parms in shader '%s'\n", shader.name );
+			return;
+		}
+		tmi->scroll[0] = atof( token );
+
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing rate parms in shader '%s'\n", shader.name );
+			return;
+		}
+		tmi->scroll[1] = atof( token );
+		tmi->type = TMOD_PARALLAX;
+	}
+	//
 	// scroll
 	//
 	else if ( !Q_stricmp( token, "scroll" ) )
@@ -654,6 +676,12 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			*nextBundle = qtrue;
 			break;
 		}
+		// FAKK2: frameFromEntity, the animMap image the entity's frame names
+		// (fakk2.exe 0x476c03; Ritual's shader manual's scripted animation)
+		else if ( !Q_stricmp( token, "frameFromEntity" ) )
+		{
+			stage->bundle[0].frameFromEntity = qtrue;
+		}
 		//
 		// map <name>
 		//
@@ -731,10 +759,16 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 		}
 		//
 		// animMap <frequency> <image1> .... <imageN>
+		// FAKK2: animMapOnce, the same but stopping on the last image
+		// (fakk2.exe 0x476d71)
 		//
-		else if ( !Q_stricmp( token, "animMap" ) )
+		else if ( !Q_stricmp( token, "animMap" ) || !Q_stricmp( token, "animMapOnce" ) )
 		{
 			int	totalImages = 0;
+
+			if ( !Q_stricmp( token, "animMapOnce" ) ) {
+				stage->bundle[0].animMapOnce = qtrue;
+			}
 
 			token = COM_ParseExt( text, qfalse );
 			if ( !token[0] )

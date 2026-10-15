@@ -138,10 +138,9 @@ Missing from OpenFAKK2, to be done:
   `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
-- Shader scripts: `tcMod parallax` and `frameFromEntity` (an animated stage's frame from
-  the game's `shader frame`), which retail parses and no retail script uses. TIKI
-  definitions: `lightoffset <x y z>` in the setup section, which retail stores with the
-  definition (`TIKI_ParseSetup` `0x44c170`, at `0x44c3eb`) and no retail model uses.
+- Shader scripts: `tcMod macro`, `alphaGen dot` and `oneMinusDot`, and `rgbGen colorwave`
+  are approximations (see the renderer's "Shader scripts" below), and retail scripts use
+  all four.
 - TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
 - The client game module's imports that are still stubs: `get_camera_offset` (what
   `+cameralook` turns), `S_SetGlobalAmbientVolumeLevel`, `S_UpdateEntity`'s velocity, and
@@ -1003,7 +1002,12 @@ What is implemented, and on what basis:
   `depthMask`, `noDepthTest`, `portalsky`, `skyParms full|half`, `tcMod macro|offset`,
   animated textures of up to 64 frames. From the scripts' own usage. Approximations:
   `tcMod macro` is a plain scale, `alphaGen dot|oneMinusDot` is opaque, `colorwave`
-  ignores its colour, `surfaceColor` and similar are ignored.
+  ignores its colour, `surfaceColor` and similar are ignored. From `fakk2.exe`:
+  `tcMod parallax <s> <t>` (`0x4783ed`) moves the coordinates by the view's x and y times
+  the rates (`0x4951f0`); `animMapOnce` (`0x476d71`) is `animMap` stopping on its last
+  image, and `frameFromEntity` (`0x476c03`) shows the image the entity's frame names,
+  which the game's `shader frame` sets (`R_BindAnimatedImage` `0x47cf5b`). No retail
+  script uses these three.
 - **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
