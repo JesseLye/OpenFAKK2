@@ -1,0 +1,17 @@
+// A TIKI definition's "lightoffset": on zoo, the plain statue (left) and
+// tools/retail-compare/fx/test_lightoff.tik, the same statue lit from 168 units higher
+// (right), before a script camera. Copy fx\test_lightoff.tik into both sandboxes'
+// fakk\models first.
+probe:
+waitforplayer
+wait 2
+spawn obj_statue.tik origin "-2150 1616 0" targetname "plainstatue"
+spawn test_lightoff.tik origin "-2150 1520 0" targetname "offstatue"
+spawn Camera targetname offcam origin "-2310 1568 56" angles "8 0 0"
+wait .2
+cuecamera $offcam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

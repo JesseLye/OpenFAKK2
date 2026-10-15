@@ -1,0 +1,15 @@
+TIKI
+// obj_statue.tik lit from a point moved by "lightoffset" (probe-lightoff.scr): the
+// offset is in the model's own space and scaled with it, so this statue samples the
+// light grid 1.4 * 120 units above where the plain statue does
+setup
+   {
+   scale 1.4
+   path models/obj/statue
+   lightoffset 0 0 120
+   surface f_stat5 shader f_stat5.tga
+   }
+animations
+   {
+   idle f_stat5.tan
+   }

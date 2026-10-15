@@ -35,6 +35,7 @@ typedef struct {
 	const char	*name;			// the .tik file's name, identifies the model
 	float		scale;			// applied to every vertex
 	vec3_t		origin;			// added after scaling
+	vec3_t		lightOffset;	// FAKK2 "lightoffset": moves where the model is lit from
 	const char	*path;			// directory the model's images are in
 	qboolean	skeletal;		// animations are .ska over a .skb skeleton, not .tan files
 	const char	*skelFile;		// the .skb file of a skeletal model

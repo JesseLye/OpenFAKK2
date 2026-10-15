@@ -130,6 +130,7 @@ struct tiki_s {
 	float				lodScale;
 	float				lodBias;
 	vec3_t				loadOrigin;
+	vec3_t				lightOffset;	// "lightoffset"
 	vec3_t				mins, maxs;
 	float				radius;
 	qboolean			radiusSet;
@@ -717,6 +718,12 @@ static void TIKI_ParseSetup( tikiParse_t *parse, char **tokens, int numTokens ) 
 		tiki->loadOrigin[0] = atof( tokens[1] );
 		tiki->loadOrigin[1] = atof( tokens[2] );
 		tiki->loadOrigin[2] = atof( tokens[3] );
+	} else if ( !Q_stricmp( key, "lightoffset" ) && numTokens >= 4 ) {
+		// where the model is lit from, moved in its own axes (TIKI_ParseSetup,
+		// fakk2.exe 0x44c3eb; the renderer adds it at 0x48d0b2)
+		tiki->lightOffset[0] = atof( tokens[1] );
+		tiki->lightOffset[1] = atof( tokens[2] );
+		tiki->lightOffset[2] = atof( tokens[3] );
 	} else {
 		Com_DPrintf( "TIKI: unknown setup keyword '%s' in %s\n", key, tiki->name );
 	}
@@ -1221,6 +1228,14 @@ void TIKI_Origin( const tiki_t *tiki, vec3_t origin ) {
 		VectorCopy( tiki->loadOrigin, origin );
 	} else {
 		VectorClear( origin );
+	}
+}
+
+void TIKI_LightOffset( const tiki_t *tiki, vec3_t offset ) {
+	if ( tiki ) {
+		VectorCopy( tiki->lightOffset, offset );
+	} else {
+		VectorClear( offset );
 	}
 }
 

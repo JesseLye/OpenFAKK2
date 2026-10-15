@@ -59,6 +59,7 @@ qhandle_t CL_RegisterTikiModel( const char *name, tiki_t **tikiOut ) {
 	desc.name = TIKI_Name( tiki );
 	desc.scale = TIKI_Scale( tiki );
 	TIKI_Origin( tiki, desc.origin );
+	TIKI_LightOffset( tiki, desc.lightOffset );
 	desc.path = TIKI_Path( tiki );
 	desc.skeletal = TIKI_IsSkeletal( tiki );
 	desc.skelFile = TIKI_SkelFile( tiki );

@@ -139,6 +139,7 @@ struct tikiModel_s {
 	char		path[MAX_QPATH];
 	float		scale;
 	vec3_t		origin;
+	vec3_t		lightOffset;	// "lightoffset", in the model's space before its scale
 	qboolean	skeletal;
 	vec3_t		mins, maxs;
 	float		radius;
@@ -503,6 +504,7 @@ qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc ) {
 	}
 	tiki->scale = desc->scale ? desc->scale : 1;
 	VectorCopy( desc->origin, tiki->origin );
+	VectorCopy( desc->lightOffset, tiki->lightOffset );
 	tiki->skeletal = desc->skeletal;
 	VectorCopy( desc->mins, tiki->mins );
 	VectorCopy( desc->maxs, tiki->maxs );
@@ -1011,7 +1013,9 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		float				escale = R_TikiEntityScale( &ent->e );
 		vec3_t				local, lightOrigin;
 
-		VectorScale( frame->localOrigin, escale, local );
+		// plus the definition's "lightoffset", scaled as the model is (0x48d0b2)
+		VectorMA( frame->localOrigin, tiki->scale, tiki->lightOffset, local );
+		VectorScale( local, escale, local );
 		if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
 			VectorCopy( ent->e.lightingOrigin, lightOrigin );
 		} else {

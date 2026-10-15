@@ -118,6 +118,8 @@ script camera (`r_ambientScale`). `probe-wgroup` saves the green sword as weapon
 on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`). `probe-fps`
 frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`
 and remove the archived `fps` from both sandboxes' `config.cfg` afterwards.
+`probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
+on `zoo`; copy that tik into both sandboxes' `fakk\models` first.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

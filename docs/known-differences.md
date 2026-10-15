@@ -1155,8 +1155,12 @@ What is implemented, and on what basis:
   radius (`radius * 7500 / d^2`) and does not bend the light direction, directed light is
   held to 255 (scaling the ambient with it), and a `lightoffset` entity (a sentient
   flashing when hit) adds its colour to the ambient. A TIKI model is lit from the centre
-  of its frame's bounds, not its origin (`0x48cff0`). `r_debugLight 2` prints every
-  entity's light origin, ambient, directed light and direction.
+  of its frame's bounds, not its origin (`0x48cff0`), moved by the definition's
+  `lightoffset <x y z>` (setup section, `TIKI_ParseSetup` `0x44c3eb`; added at `0x48d0b2`
+  and scaled with the model). No retail model has one; `probe-lightoff.scr` with
+  `fx\test_lightoff.tik` (the statue lit from 168 units higher) gives the same dark
+  statue on both games, within half a level. `r_debugLight 2` prints every entity's light
+  origin, ambient, directed light and direction.
 - **Entity lights and the light cube** (`tr_entlight.c`). A model the game flags
   `betterlighting` (`RF_EXTRALIGHT`: the player and the actors) or `invisible` is not lit
   from the grid at all. The BSP's `ENTLIGHTS` lump holds the map's static lights (56
