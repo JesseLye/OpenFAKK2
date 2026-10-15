@@ -878,6 +878,27 @@ Not read, done another way:
 - **The client's own key and mouse events** are not passed to the module; FAKK2's has
   no entry points for them.
 
+## The game module
+
+The rebuilt `gamex86.dll` is Ritual's 1.02 SDK source. It differs from the retail
+module on purpose in this way:
+
+- **Global aliases before spawning.** Entities look global sound aliases up in their
+  constructors: a door takes `door_moving` (`sound/doors/mechanical/fastpneu.wav`),
+  `door_stop` and `snd_locked` (the retail `Door` constructor at `0x1006bf00` in
+  `gamex86.dll`, the same as the SDK's). Those aliases come from `global/global0.scr`,
+  which retail runs only in `Level::Start` (via `0x1009c2b0`), after the entities have
+  spawned. Nothing ever clears the global alias list, so every map after the first gets
+  them. However, the first map loaded after launch (`+map`, `run.cmd <map>`, or
+  `map` typed at the menu) leaves every `func_door` and `func_rotatingdoor` without
+  its open and close sound on retail too. The probes `probe-doors` (`training`) and
+  `probe-h2e` (`homes2evil`) showed no door sound on either game on a first load, and the
+  same doors sounding on both after a prior load. OpenFAKK2 also runs the global
+  scripts right after the world spawns (`Level::ExecGlobalScripts`), so the first map
+  matches a map reached in play. `Precache` still runs them as retail does; adding an
+  alias that exists changes nothing. A game saved on a first load in retail keeps its
+  silent doors, as their sounds are saved with them.
+
 ## With a player present
 
 OpenFAKK2 can put a headless test player in the game (`sv_testplayer 1`). The reference is

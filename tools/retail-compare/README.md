@@ -76,6 +76,14 @@ retail game again. Choose the probe with `-Probe`:
   steps must stay even across the menu: before the client's clock was held through a
   pause, the player stood still and then jumped ahead (and retail does this too; its
   `wait` counts milliseconds, so its menu is up for a shorter time).
+- `probe-doors` (`training`) and `probe-h2e` (`homes2evil`) open every door on the map in
+  turn and are read from the sound trace, so they are for the real clients with sound on:
+  `-Extra "+set s_initsound 1 +set s_useOpenAL 0 +set s_show 1"` on ours,
+  `-Extra "+set s_initsound 1 +set s_show_sounds 1"` with `-Retail` (the retail sandbox
+  needs the install's `snddrivers` folder copied in for sound). Each sliding door
+  should start `fastpneu.wav` as it opens and closes. Retail only does so when the map
+  was not the first loaded (add `+map <map>` to `-Extra`); ours does on a first load
+  too (see `docs/known-differences.md`, "The game module").
 
 Weapon effects are drawn by the client, so these probes are for the real client on
 `zoo` and are compared by their screenshots, run on both games by the `retail-capture`

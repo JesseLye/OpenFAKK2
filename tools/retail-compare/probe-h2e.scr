@@ -1,0 +1,65 @@
+// homes2evil's doors, one at a time, with the sound trace on (ours: s_show 1 with the
+// software mixer; retail: s_show_sounds 1). Each func_door / func_rotatingdoor is unlocked
+// and opened by entity number (one entity per door; the numbers are the same on both
+// engines); the shgliek pen script_door is opened by name.
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ==== door *29"
+*29 unlock
+*29 open $player
+wait 2.5
+stuffcmd "echo ==== door *119"
+*119 unlock
+*119 open $player
+wait 2.5
+stuffcmd "echo ==== door *121"
+*121 unlock
+*121 open $player
+wait 2.5
+stuffcmd "echo ==== door *122"
+*122 unlock
+*122 open $player
+wait 2.5
+stuffcmd "echo ==== door *123"
+*123 unlock
+*123 open $player
+wait 2.5
+stuffcmd "echo ==== door *124"
+*124 unlock
+*124 open $player
+wait 2.5
+stuffcmd "echo ==== door *125"
+*125 unlock
+*125 open $player
+wait 2.5
+stuffcmd "echo ==== door *126"
+*126 unlock
+*126 open $player
+wait 2.5
+stuffcmd "echo ==== door *127"
+*127 unlock
+*127 open $player
+wait 2.5
+stuffcmd "echo ==== door *128"
+*128 unlock
+*128 open $player
+wait 2.5
+stuffcmd "echo ==== door *174"
+*174 unlock
+*174 open $player
+wait 2.5
+stuffcmd "echo ==== door *224"
+*224 unlock
+*224 open $player
+wait 2.5
+stuffcmd "echo ==== door *323"
+*323 unlock
+*323 open $player
+wait 2.5
+stuffcmd "echo ==== shgliekpen_door_useable"
+$shgliekpen_door_useable open $player
+wait 2.5
+stuffcmd "echo ==== done"
+stuffcmd "pendingevents"
+end
