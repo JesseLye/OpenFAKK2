@@ -641,19 +641,54 @@ Not read, done another way:
   location prints are their own messages (`svc_centerprint`: string; `svc_locprint`:
   short x, short y, string), stored per client on the server (`0x4450f0`, 256 bytes,
   "Centerprint text exceeds buffer size" beyond) and drawn with `facfont-20` for
-  4 seconds (`0x418cc0`); a text starting with `@` names a shader. OpenFAKK2 does the
+  4 seconds (`0x418cc0`); a text starting with `@` names a shader, drawn at the
+  image's own size in the middle of the screen (`0x419480`; `gamesaved`, the "GAME
+  SAVED" a save prints, is 256 x 64). A print fades in over its first 750 ms and out
+  over its last 750 (`0x419480` for a centre print, `0x419770` for a location print:
+  with 3250 and 750 of the 4000 left), the print's alpha scaling only the fades, and
+  is opaque in between. The prints are drawn by the interface's root widget itself
+  (its Draw, `0x419ba0`, then `0x4193f0`), and `UIWidget::Display` (`0x49ef30`) draws
+  a widget before its children, every menu and the HUD among them: the prints are
+  under the menus, so the main menu, which covers the screen, hides a "GAME SAVED"
+  printed just before it came up. OpenFAKK2 drew the prints after the menus, on top
+  of the main menu, a 256 x 128 picture and fades of 500 and 1000 ms; it now draws
+  them before the menus, as retail does (`probe-savedmenu` on `zoo`: the print was over
+  the main menu before and is not now, as on retail; the shot of the print alone went
+  from 2.15% of pixels off by more than 24 to 0.81%; `probe-pfade`, a centre print
+  halfway through its fade-in, from 12.11% of the text's region to 2.20%). OpenFAKK2 does the
   same, as a fresh implementation of the file grammar the 31 shipped files use. Not
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
-  tests a field of its print object), the print's fade (in over the first half second,
-  out over the last), the `@shader` size (256x128), the stat-bar flash (half a second
-  after a change). `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
+  tests a field of its print object), the stat-bar flash (half a second after a
+  change). There is one print, centre or located (`+0x170` says which): the centre
+  print (`0x418cc0`) and the location print (`0x418ec0`) each replace the one up,
+  whichever kind it was, and start its 4000 ms again. Only a centre print takes a
+  leading `@` for a picture; a location print keeps it as text and draws only text
+  (`0x419770`). OpenFAKK2 kept one of each, both drawn at once, and took `@` in either;
+  it now does as retail (`probe-oneprint` on `zoo`: a location print a second after a
+  centre print shows alone, as on retail, where both showed before; `locprint 40 200
+  "@textures/menu/gamesaved"` writes that text on both games, where ours drew the
+  picture: 2.50% of pixels off by more than 24 before, 0.72% after). A print's text is
+  placed by `UIFont::PrintJustified` (`0x4b03c0`) in the screen's rectangle, as one
+  block: centred by its widest line (`0x4b04c0`; a tab counts three tab glyphs), every
+  line starting at the block's left edge, as the renderer's `DrawString` takes a
+  newline back to where the string started and a font height down (`0x48199c`; a
+  carriage return only goes back, `0x481992`). A centre print is centred both ways
+  (`0x419480`). A location print (`0x419770`) puts the block's top left at x and at
+  480 - y - the font's height, scaled to the screen, in a rectangle the screen's size;
+  an x of -1 centres it across the screen instead (`0x419873`), a y of -1 down it
+  (`0x41987e`). Both draw the text twice, black one pixel down and right, then white.
+  OpenFAKK2 centred a centre print line by line, had no -1 rule and no black copy; it now
+  does as retail (`probe-printpos` on `zoo`: a two-line centre print and location
+  prints at x -1, y -1 and both land where retail's do, the text's outline gone from
+  the difference; `probe-oneprint`'s shots went from 0.67% and 0.72% to 0.56% and 0.55%,
+  the scene's own level). The black copy is one unit of the 640 x 480 interface down
+  and right, which is retail's one pixel at 640 x 480 and more at larger sizes. Retail's
+  `screenshot` reports "Wrote screenshots/..." through the print, centred, replacing
+  one that was up, where OpenFAKK2's goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
   prints the cursor's place, `x:y`, ten units right of it and ten above, in `verdana-12`
-  while a cursor is up (`0x4982a3`). The prints'
-  places come from retail captures of the intro: a location print's x is its left edge
-  and its y is measured up from the bottom of the screen to the bottom of its first
-  line (`locprint 230 220` puts the quote's first line at y 241, left-aligned at
-  x 230), later lines following below; a centre print is centred on the screen line by
-  line. The retail
+  while a cursor is up (`0x4982a3`). Retail captures of the intro agree with the
+  location print's rule: `locprint 230 220` puts the quote's first line at y 241,
+  left-aligned at x 230, later lines following below. The retail
   client shows the system cursor over a menu (`ShowCursor`); so does this one: the
   mouse is released while a menu is up and its window position reaches the menu, whose
   topmost button or check box under it hovers (`hovershader`, `hoversound` on arrival)
@@ -1817,6 +1852,22 @@ What is implemented, and on what basis:
   largest has 604 vertexes); and OpenFAKK2 leaves out a `RF_THIRD_PERSON` model outside a
   portal before culling, so no `r_showlod` figures show over it, where retail still works
   it out and draws them.
+- **A shader made in the middle of a frame** (`FixRenderCommandList`, `tr_shader.c`;
+  ioquake3's, not taken from retail). A shader sorts among the others, so the draw
+  surfaces already queued for the frame are renumbered past it. The walk over the
+  queued commands went on until it met the end-of-list mark, which is only written
+  when the frame is issued; past the commands queued so far it read what earlier,
+  longer frames had left, and could take a float in one of them for a draw surfaces
+  command and its pointer. The menus register their pictures as they are first drawn
+  (`URC_LoadWidgetShaders`), so this is where it showed: with the "Starting Julie's
+  House" autosave of a session that had played `training` loaded, the main menu's
+  first frame crashed (reading `0x41800000`, 16.0, as the draw surfaces' address),
+  with the rebuilt or the retail `gamex86.dll`. The walk now stops at the end of the
+  commands queued, and steps over the screenshot, video frame, colour mask and depth
+  clear commands, where it used to stop and leave the draw surfaces after them
+  unrenumbered. Other saves and states did not crash, as what lies past the queued
+  commands depends on the frames before: `probe-lsload` needs that session's save
+  (see its header) and crashed on every run before the change.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

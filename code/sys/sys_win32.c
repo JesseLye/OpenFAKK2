@@ -41,6 +41,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <shlobj.h>
 #include <psapi.h>
 #include <float.h>
+#include <signal.h>
+#include <dbghelp.h>
 
 #ifndef KEY_WOW64_32KEY
 #define KEY_WOW64_32KEY 0x0200
@@ -866,9 +868,16 @@ void Sys_GLimpInit( void )
 ==============
 Sys_CrashReport
 
-Prints where a fatal exception happened as module-relative addresses, which
-can be looked up in a linker map. The handler only reports; the exception
-continues to the normal signal handling.
+Called from the signal handler for a fatal exception, before the game shuts
+down: prints where it happened as module-relative addresses, which can be
+looked up in the linker maps (cmake/compilers/msvc.cmake), into the console
+and its log, and writes a minidump, crash.dmp, beside the log.
+
+It runs from the signal handler rather than as a vectored exception handler,
+which sees every exception first, including those a driver raises and handles
+itself: one of those used to take the only report. The C runtime's exception
+filter calls the handler on the faulting thread with the exception's records
+in _pxcptinfoptrs, before anything is unwound.
 ==============
 */
 static void Sys_PrintCodeAddress( const char *label, void *address )
@@ -882,23 +891,56 @@ static void Sys_PrintCodeAddress( const char *label, void *address )
 	}
 	name = strrchr( path, '\\' );
 	name = name ? name + 1 : path;
-	fprintf( stderr, "  %s %s+0x%x\n", label, name, (unsigned)( (char *)address - (char *)module ) );
+	Com_Printf( "  %s %s+0x%x\n", label, name, (unsigned)( (char *)address - (char *)module ) );
 }
 
-static LONG CALLBACK Sys_CrashReport( PEXCEPTION_POINTERS info )
+typedef BOOL ( WINAPI *miniDumpWriteDump_t )( HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
+	PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION );
+
+static void Sys_WriteMiniDump( PEXCEPTION_POINTERS info )
 {
-	static qboolean	reported;
-	DWORD			code = info->ExceptionRecord->ExceptionCode;
+	MINIDUMP_EXCEPTION_INFORMATION	mei;
+	miniDumpWriteDump_t	writeDump;
+	HMODULE		dbghelp;
+	HANDLE		file;
+	const char	*path;
 
-	if ( reported || ( code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION
-		&& code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_PRIV_INSTRUCTION ) ) {
-		return EXCEPTION_CONTINUE_SEARCH;
+	dbghelp = LoadLibraryA( "dbghelp.dll" );
+	writeDump = dbghelp ? (miniDumpWriteDump_t)GetProcAddress( dbghelp, "MiniDumpWriteDump" ) : NULL;
+	if ( !writeDump ) {
+		return;
 	}
-	reported = qtrue;
+	path = FS_BuildOSPath( Cvar_VariableString( "fs_homepath" ), FS_GetCurrentGameDir(), "crash.dmp" );
+	file = CreateFileA( path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+	if ( file == INVALID_HANDLE_VALUE ) {
+		return;
+	}
+	mei.ThreadId = GetCurrentThreadId();
+	mei.ExceptionPointers = info;
+	mei.ClientPointers = FALSE;
+	if ( writeDump( GetCurrentProcess(), GetCurrentProcessId(), file,
+		(MINIDUMP_TYPE)( MiniDumpNormal | MiniDumpWithIndirectlyReferencedMemory ), &mei, NULL, NULL ) ) {
+		Com_Printf( "  minidump written to %s\n", path );
+	}
+	CloseHandle( file );
+}
 
-	fprintf( stderr, "Fatal exception 0x%08x\n", (unsigned)code );
+void Sys_CrashReport( void )
+{
+	PEXCEPTION_POINTERS	info = NULL;
+	DWORD	code;
+
+#ifdef _MSC_VER
+	info = (PEXCEPTION_POINTERS)_pxcptinfoptrs;
+#endif
+	if ( !info || !info->ExceptionRecord || !info->ContextRecord ) {
+		return;
+	}
+	code = info->ExceptionRecord->ExceptionCode;
+
+	Com_Printf( "Fatal exception 0x%08x\n", (unsigned)code );
 	if ( code == EXCEPTION_ACCESS_VIOLATION && info->ExceptionRecord->NumberParameters >= 2 ) {
-		fprintf( stderr, "  %s address 0x%p\n", info->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
+		Com_Printf( "  %s address 0x%p\n", info->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading",
 			(void *)info->ExceptionRecord->ExceptionInformation[1] );
 	}
 	Sys_PrintCodeAddress( "at", info->ExceptionRecord->ExceptionAddress );
@@ -928,10 +970,9 @@ static LONG CALLBACK Sys_CrashReport( PEXCEPTION_POINTERS info )
 		}
 	}
 #endif
-	fflush( stderr );
-
-	return EXCEPTION_CONTINUE_SEARCH;
+	Sys_WriteMiniDump( info );
 }
+
 /*
 ==============
 Sys_PlatformInit
@@ -946,8 +987,6 @@ void Sys_PlatformInit( void )
 #endif
 
 	Sys_SetFloatEnv();
-
-	AddVectoredExceptionHandler( 1, Sys_CrashReport );
 
 #ifndef DEDICATED
 	if(timeGetDevCaps(&ptc, sizeof(ptc)) == MMSYSERR_NOERROR)

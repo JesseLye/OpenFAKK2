@@ -83,6 +83,36 @@ retail game again. Choose the probe with `-Probe`:
   steps must stay even across the menu: before the client's clock was held through a
   pause, the player stood still and then jumped ahead (and retail does this too; its
   `wait` counts milliseconds, so its menu is up for a shorter time).
+- `probe-savedmenu` saves the game on `zoo`, shoots the "GAME SAVED" print and then the
+  main menu over it, which must hide it (retail draws the prints under the menus):
+  `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-savedmenu -Map zoo
+  -MaskNotify`. The menu shots differ from retail's in the menu's fade and its clouds,
+  as the menu's waits count milliseconds on retail and frames on ours; compare whether
+  the print shows. Retail's own "Wrote screenshots/..." takes the print's place, so its
+  second shot shows that rather than "GAME SAVED".
+- `probe-oneprint` puts up a centre print and, a second later, a location print, which
+  replaces it (retail keeps one print), then a location print of
+  `@textures/menu/gamesaved`, which retail writes as text:
+  `capture.ps1 -Probe probe-oneprint -Map zoo -MaskNotify`.
+- `probe-printpos` shoots a two-line centre print (centred as one block, the lines from
+  its left edge) and location prints at x -1, y -1 and both (centred across, down, both),
+  each with retail's black copy one pixel down and right:
+  `capture.ps1 -Probe probe-printpos -Map zoo -MaskNotify`.
+- `probe-pfade` shoots a centre print 375 ms into its 750 ms fade-in; crop the text
+  (`shots.py pair ... --crop 200 220 440 260`) to compare its strength with retail's.
+- `probe-lsload` loads a saved game, `fakkhouse0004`, and opens the main menu and the
+  load/save menu over it, taking a screenshot of the list. It is the regression probe for
+  the renderer's crash on the main menu's first frame (`FixRenderCommandList`, see
+  `docs/known-differences.md`), which only that save showed: copy the crashed session's
+  `config_fakkhouse0004.*` into `build\sandbox\home\fakk\save` first. Real clients only:
+  `.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse`.
+  It finishes ("loadsave menu up") or the client exits with code 2.
+
+When the engine crashes on Windows it prints the fault and the stack into the console log
+as module-relative addresses and writes `crash.dmp` beside the log (`Sys_CrashReport`,
+`code/sys/sys_win32.c`). `python tools/crash-symbols.py <log>` names the functions from
+the linker maps of the build in `build\x86-Release\Release` (pass another build's folder
+as a second argument); it needs the build that crashed, unchanged.
 
 Weapon effects are drawn by the client, so these probes are for the real client on
 `zoo` and are compared by their screenshots, run on both games by the `retail-capture`

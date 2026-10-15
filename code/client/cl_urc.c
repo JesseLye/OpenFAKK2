@@ -12,8 +12,9 @@ the player's dual-weapon item slot is empty (activeItems[4] < 0) and
 dualweaphud otherwise, and bosshud when the boss-health stat is at least
 1. Centre and location prints arrive as their own network messages
 (svc_centerprint: string; svc_locprint: short x, short y, string), are
-drawn with the facfont-20 font for 4 seconds (0x418cc0), and a text that
-starts with '@' names a shader to draw instead. While a map loads (from
+drawn with the facfont-20 font for 4 seconds (0x418cc0), and a centre
+print's text that starts with '@' names a shader to draw instead. There is
+one print: each replaces the one up, whichever kind (0x418cc0, 0x418ec0). While a map loads (from
 CL_MapLoading, 0x4207f0, to the first active snapshot, 0x41d520) the update
 fills the screen black and draws textures/menu/loading in the middle.
 
@@ -63,9 +64,7 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 #define URC_SCROLL_FONT		"marlett"		// UIVertScroll's arrows: "5" up, "6" down (0x4b3ab0)
 #define URC_PRINT_FONT		"facfont-20"
 #define URC_PRINT_TIME		4000		// 0x418cc0 sets 4000.0; retail shows the intro's quote at 1 s and not at 4.5 s
-#define URC_PRINT_FADE		1000		// the fade inside that time; not read from retail
-#define URC_PRINT_HOLD		( URC_PRINT_TIME - URC_PRINT_FADE )
-#define URC_PRINT_FADEIN	500			// the credits fade in; the time is not read from retail
+#define URC_PRINT_FADE		750			// in and out (0x419480, 0x419770: 3250 and 750 of the 4000 left)
 
 #define Vector4Set( v, a, b, c, d )	( (v)[0] = (a), (v)[1] = (b), (v)[2] = (c), (v)[3] = (d) )
 
@@ -183,14 +182,17 @@ typedef struct {
 
 #define URC_MAX_ALIASES		256
 
+// the one print the retail interface keeps (+0x160 to +0x178 of its root
+// widget): a centre print and a location print each replace whatever print
+// was up (0x418cc0, 0x418ec0)
 typedef struct {
 	qboolean	active;
-	qboolean	located;
-	int			x, y;
-	char		text[1024];
-	qhandle_t	shader;				// text beginning with '@'
-	float		alpha;
-	int			startTime;
+	qboolean	located;			// +0x170
+	int			x, y;				// +0x174, +0x178
+	char		text[1024];			// +0x168
+	qhandle_t	shader;				// +0x16c: a centre print's text beginning with '@'
+	float		alpha;				// +0x164
+	int			startTime;			// +0x160 counts the 4000 ms down
 } urcPrint_t;
 
 static urcMenu_t	urc_menus[URC_MAX_MENUS];
@@ -201,8 +203,7 @@ static urcFont_t	urc_fonts[URC_MAX_FONTS];
 static int			urc_numFonts;
 static int			urc_stack[URC_MAX_STACK];
 static int			urc_stackDepth;
-static urcPrint_t	urc_centerprint;
-static urcPrint_t	urc_locprint;
+static urcPrint_t	urc_print;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
 static int			urc_pausedByMenu;		// 1: the menus paused the game, 2: it was paused already
@@ -3038,7 +3039,19 @@ PRINTS
 =======================================================================
 */
 
-static void URC_SetPrint( urcPrint_t *pr, qboolean located, int x, int y, const char *text, float alpha ) {
+/*
+=================
+URC_CenterPrint / URC_LocationPrint
+
+Retail keeps one print, and each of these replaces it, whichever kind was
+up, starting its 4000 ms again. The centre print (0x418cc0) takes a text
+beginning with '@' as the name of a picture; the location print (0x418ec0)
+keeps its text as it is and only draws text (0x419770).
+=================
+*/
+static void URC_SetPrint( qboolean located, int x, int y, const char *text, float alpha ) {
+	urcPrint_t	*pr = &urc_print;
+
 	Com_Memset( pr, 0, sizeof( *pr ) );
 	pr->active = qtrue;
 	pr->located = located;
@@ -3046,7 +3059,7 @@ static void URC_SetPrint( urcPrint_t *pr, qboolean located, int x, int y, const 
 	pr->y = y;
 	pr->alpha = alpha;
 	pr->startTime = cls.realtime;
-	if ( text[0] == '@' ) {
+	if ( !located && text[0] == '@' ) {
 		pr->shader = re.RegisterShaderNoMip( text + 1 );
 		Q_strncpyz( pr->text, text + 1, sizeof( pr->text ) );
 	} else {
@@ -3061,23 +3074,23 @@ void URC_CenterPrint( const char *text, float alpha ) {
 	if ( !urc_initialised ) {
 		return;
 	}
-	URC_SetPrint( &urc_centerprint, qfalse, 320, 160, text, alpha );
+	URC_SetPrint( qfalse, 320, 160, text, alpha );
 }
 
 void URC_LocationPrint( int x, int y, const char *text, float alpha ) {
 	if ( !urc_initialised ) {
 		return;
 	}
-	URC_SetPrint( &urc_locprint, qtrue, x, y, text, alpha );
+	URC_SetPrint( qtrue, x, y, text, alpha );
 }
 
 static void URC_DrawPrint( urcPrint_t *pr ) {
 	int			elapsed;
 	float		alpha;
-	vec4_t		color;
+	vec4_t		color, shadow;
 	urcFont_t	*font;
-	const char	*line;
-	float		y;
+	float		r[4];
+	int			horz, vert;
 
 	if ( !pr->active ) {
 		return;
@@ -3087,15 +3100,25 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 		pr->active = qfalse;
 		return;
 	}
-	alpha = pr->alpha;
-	if ( elapsed < URC_PRINT_FADEIN ) {
-		alpha *= elapsed / (float)URC_PRINT_FADEIN;
-	} else if ( elapsed > URC_PRINT_HOLD ) {
-		alpha *= ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE;
+	// retail (0x419480, 0x419770): the print's alpha scales the fades only,
+	// and the time between them is drawn opaque
+	if ( elapsed < URC_PRINT_FADE ) {
+		alpha = 1.0f - ( URC_PRINT_FADE - elapsed ) / (float)URC_PRINT_FADE * pr->alpha;
+	} else if ( elapsed > URC_PRINT_TIME - URC_PRINT_FADE ) {
+		alpha = ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE * pr->alpha;
+	} else {
+		alpha = 1.0f;
+	}
+	if ( alpha < 0 ) {
+		alpha = 0;
+	} else if ( alpha > 1 ) {
+		alpha = 1;
 	}
 	Vector4Set( color, 1, 1, 1, alpha );
 	if ( pr->shader ) {
-		float	w = 256, h = 128;		// the image's own size is not known here
+		// the picture at its own size, centred (0x419480: the renderer's
+		// width and height of the image); "GAME SAVED" is 256 x 64
+		float	w = re.GetShaderWidth( pr->shader ), h = re.GetShaderHeight( pr->shader );
 
 		URC_DrawPicST( 320 - w * 0.5f, 240 - h * 0.5f, w, h, 0, 0, 1, 1, pr->shader, color );
 		return;
@@ -3104,32 +3127,41 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 	if ( !font ) {
 		return;
 	}
-	// retail captures: a centre print is centred on the screen, line by
-	// line; a location print's x is its left edge and its y is measured up
-	// from the bottom of the screen to the bottom of its first line, the
-	// other lines following below
+	// the text is placed in the screen's rectangle by PrintJustified
+	// (0x4b03c0), as one block: centred by its widest line, every line from
+	// the block's left edge. A centre print (0x419480) is centred both ways.
+	// A location print (0x419770) puts the block's top left at x and at y
+	// measured up from the bottom of the screen to the bottom of the first
+	// line (480 - y - the font's height), the rectangle keeping the screen's
+	// size; an x of -1 centres it across the screen instead, a y of -1 down it.
+	// The text is drawn twice, black one unit down and right, then white
+	// (retail's unit there is a screen pixel)
+	r[0] = r[1] = 0;
+	r[2] = 640;
+	r[3] = 480;
+	horz = URC_JUSTIFY_CENTER;
+	vert = URC_JUSTIFY_MIDDLE;
 	if ( pr->located ) {
-		y = 480 - pr->y - font->height;
-	} else {
-		int		lines = 1;
-
-		for ( line = pr->text ; *line ; line++ ) {
-			lines += ( *line == '\n' );
+		horz = URC_JUSTIFY_LEFT;
+		vert = URC_JUSTIFY_TOP;
+		if ( pr->x == -1 ) {
+			horz = URC_JUSTIFY_CENTER;
+		} else {
+			r[0] = pr->x;
 		}
-		y = 240 - lines * font->height * 0.5f;
-	}
-	for ( line = pr->text ; *line ; ) {
-		float	w = URC_StringWidth( font, line );
-
-		URC_DrawString( font, pr->located ? pr->x : 320 - w * 0.5f, y, line, color );
-		y += font->height;
-		while ( *line && *line != '\n' ) {
-			line++;
-		}
-		if ( *line == '\n' ) {
-			line++;
+		if ( pr->y == -1 ) {
+			vert = URC_JUSTIFY_MIDDLE;
+		} else {
+			r[1] = 480 - pr->y - URC_FontHeight( font );
 		}
 	}
+	Vector4Set( shadow, 0, 0, 0, alpha );
+	r[0] += 1;
+	r[1] += 1;
+	URC_PrintJustified( font, r, horz, vert, pr->text, shadow );
+	r[0] -= 1;
+	r[1] -= 1;
+	URC_PrintJustified( font, r, horz, vert, pr->text, color );
 }
 
 /*
@@ -3878,6 +3910,15 @@ void URC_Draw( void ) {
 		return;
 	}
 
+	// the print, centre or located ("GAME SAVED" is one), is drawn by the
+	// retail desktop's own Draw (0x419ba0, then 0x4193f0, the print at
+	// 0x419480 or 0x419770), and UIWidget::Display (0x49ef30) draws a widget
+	// before its children, every menu and the HUD among them: so the prints are
+	// under the menus, and the main menu, which covers the screen, hides them
+	if ( clc.state == CA_ACTIVE ) {
+		URC_DrawPrint( &urc_print );
+	}
+
 	// the widget under the cursor, and its hover sound on arrival
 	{
 		int		hover = URC_WidgetUnderCursor();
@@ -3911,11 +3952,6 @@ void URC_Draw( void ) {
 	URC_DrawPopup();
 	URC_DrawPressKey();
 	INV_Draw();
-
-	if ( clc.state == CA_ACTIVE ) {
-		URC_DrawPrint( &urc_centerprint );
-		URC_DrawPrint( &urc_locprint );
-	}
 
 	// ui_drawcoords (fakk2.exe 0x4982a3): with the cursor up, its place as
 	// "x:y" ten units right of it and ten above, in the interface's font
@@ -4617,8 +4653,7 @@ void URC_Init( void ) {
 
 	urc_numFonts = 0;
 	urc_stackDepth = 0;
-	Com_Memset( &urc_centerprint, 0, sizeof( urc_centerprint ) );
-	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
+	Com_Memset( &urc_print, 0, sizeof( urc_print ) );
 	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
 	urc_loadingShader = re.RegisterShaderNoMip( URC_LOADING_SHADER );
 	urc_ritualShader = re.RegisterShaderNoMip( URC_RITUAL_SHADER );

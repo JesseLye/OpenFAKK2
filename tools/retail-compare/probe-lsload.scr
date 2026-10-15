@@ -1,0 +1,14 @@
+// Crash repro (2026-10-15): loads the player's "Starting Julie's House" autosave and
+// opens the main menu and then the load/save menu over it, as escape and the menu's
+// load/save button do. Before the fix the main menu's first frame crashed in the
+// renderer (FixRenderCommandList, tr_shader.c; docs/known-differences.md). It needs the
+// crashed session's save, config_fakkhouse0004.* (.sav, .ssv, .spv, .tga), in the
+// sandbox's save folder, build\sandbox\home\fakk\save; it crashed with the rebuilt and
+// the retail gamex86.dll alike. A loaded game makes no autosave, so the menu is chained
+// behind frame waits; the screenshot shows the saved games listed.
+//   .claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse
+probe:
+waitforplayer
+wait 2
+stuffcmd "loadgame fakkhouse0004; wait 3000; pushmenu main; wait 100; pushmenu loadsave; wait 300; screenshot; wait 1200; echo loadsave menu up; pendingevents"
+end

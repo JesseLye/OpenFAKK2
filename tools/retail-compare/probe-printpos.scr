@@ -1,0 +1,27 @@
+// Where the prints go (0x419480, 0x419770, through PrintJustified 0x4b03c0) and their
+// black shadow one pixel down and right: a two-line centre print (centred as a block,
+// both lines from its left edge), then location prints with x -1 (centred across), y -1
+// (centred down) and both. Each print is shot 1.5 s in, inside its opaque time; a new
+// print follows each shot, as retail's own "Wrote screenshots/..." takes the print's place.
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-printpos -Map zoo -MaskNotify
+probe:
+waitforplayer
+wait 2
+centerprint "SHORT\nA MUCH LONGER LINE"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.5
+locprint -1 100 "CENTRED ACROSS"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.5
+locprint 40 -1 "MIDDLE DOWN"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.5
+locprint -1 -1 "BOTH WAYS"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "quit"
+end

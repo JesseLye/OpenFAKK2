@@ -62,6 +62,9 @@ void Sys_GLimpInit( void );
 void Sys_PlatformInit( void );
 void Sys_PlatformExit( void );
 void Sys_SigHandler( int signal ) Q_NO_RETURN;
+#ifdef _WIN32
+void Sys_CrashReport( void );
+#endif
 void Sys_ErrorDialog( const char *error );
 void Sys_AnsiColorPrint( const char *msg );
 

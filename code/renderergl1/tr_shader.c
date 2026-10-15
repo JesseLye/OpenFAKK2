@@ -2219,16 +2219,28 @@ Arnout: this is a nasty issue. Shaders can be registered after drawsurfaces are 
 but before the frame is rendered. This will, for the duration of one frame, cause drawsurfaces
 to be rendered with bad shaders. To fix this, need to go through all render commands and fix
 sortedIndex.
+
+The walk stops at the end of the commands queued so far (used): the list is
+only ended with RC_END_OF_LIST when it is issued, so past that are the
+remains of earlier, longer frames. Reading those, the walk could land inside
+an old command and take one of its fields for a draw surfaces command; the
+menus register their pictures in the middle of a frame (cl_urc.c), and after
+a saved game was loaded the main menu's first frame crashed so. It also steps
+over every kind of command, where it used to stop at the first screenshot,
+video frame, colour mask or depth clear and leave the draw surfaces after it.
 ==============
 */
 static void FixRenderCommandList( int newShader ) {
-	renderCommandList_t	*cmdList = &backEndData->commands;
-
-	if( cmdList ) {
-		const void *curCmd = cmdList->cmds;
+	if ( backEndData ) {
+		renderCommandList_t	*cmdList = &backEndData->commands;
+		const void	*curCmd = cmdList->cmds;
+		const void	*end = cmdList->cmds + cmdList->used;
 
 		while ( 1 ) {
 			curCmd = PADP(curCmd, sizeof(void *));
+			if ( curCmd >= end ) {
+				return;
+			}
 
 			switch ( *(const int *)curCmd ) {
 			case RC_SET_COLOR:
@@ -2277,6 +2289,18 @@ static void FixRenderCommandList( int newShader ) {
 				curCmd = (const void *)(sb_cmd + 1);
 				break;
 				}
+			case RC_SCREENSHOT:
+				curCmd = (const void *)((const screenshotCommand_t *)curCmd + 1);
+				break;
+			case RC_VIDEOFRAME:
+				curCmd = (const void *)((const videoFrameCommand_t *)curCmd + 1);
+				break;
+			case RC_COLORMASK:
+				curCmd = (const void *)((const colorMaskCommand_t *)curCmd + 1);
+				break;
+			case RC_CLEARDEPTH:
+				curCmd = (const void *)((const clearDepthCommand_t *)curCmd + 1);
+				break;
 			case RC_END_OF_LIST:
 			default:
 				return;
