@@ -182,6 +182,110 @@ static void RB_SurfaceSprite( void ) {
 
 
 /*
+==============
+RB_SurfaceSpriteModel
+
+FAKK2: a .spr model's sprite, built as the retail renderer builds it
+(fakk2.exe 0x491790). The quad is the shader's image, scaled by the shader's
+spriteScale and the entity's scale and centred on the entity. The shader's
+spriteGen lays it out:
+
+  parallel           facing the viewer
+  parallel_oriented  facing the viewer, turned by the roll in the entity's axes
+  oriented           in the plane of the entity's left and up axes
+  parallel_upright   facing the viewer about the world's vertical; not drawn
+                     when the view is within a degree of straight up or down
+
+The crosshair is "oriented" (scripts/beau.shader). The game turns it to the
+surface its trace hit, so it lies on that surface.
+==============
+*/
+static void RB_SurfaceSpriteModel( const model_t *mod ) {
+	const refEntity_t	*e = &backEnd.currentEntity->e;
+	const shader_t		*sh = mod->spriteShader;
+	vec3_t				*viewAxis = backEnd.viewParms.or.axis;
+	vec3_t				left, up, normal;
+	vec3_t				corners[4];
+	float				scale, halfWidth, halfHeight;
+	float				ang, s, c;
+	int					i, ndx;
+	static const float	st[4][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } };
+
+	switch ( sh->spriteGen ) {
+	case SPRITE_PARALLEL_ORIENTED:
+		ang = atan2( e->axis[1][2], e->axis[1][1] );
+		s = sin( ang );
+		c = cos( ang );
+		for ( i = 0 ; i < 3 ; i++ ) {
+			left[i] = c * viewAxis[1][i] + s * viewAxis[2][i];
+			up[i] = c * viewAxis[2][i] - s * viewAxis[1][i];
+		}
+		break;
+	case SPRITE_ORIENTED:
+		VectorCopy( e->axis[1], left );
+		VectorCopy( e->axis[2], up );
+		break;
+	case SPRITE_PARALLEL_UPRIGHT:
+		if ( viewAxis[0][2] > 0.999848 || viewAxis[0][2] < -0.999848 ) {
+			return;
+		}
+		left[0] = viewAxis[0][1];
+		left[1] = -viewAxis[0][0];
+		left[2] = 0;
+		VectorNormalize( left );
+		VectorSet( up, 0, 0, 1 );
+		break;
+	default:	// SPRITE_PARALLEL
+		VectorCopy( viewAxis[2], up );
+		if ( backEnd.viewParms.isMirror ) {
+			VectorCopy( viewAxis[1], left );
+		} else {
+			VectorScale( viewAxis[1], -1, left );
+		}
+		break;
+	}
+
+	// the texture's left edge is on the -left side, its top on the +up side
+	scale = sh->spriteScale * e->scale;
+	halfWidth = mod->spriteWidth * 0.5f;
+	halfHeight = mod->spriteHeight * 0.5f;
+	VectorScale( left, scale * halfWidth, left );
+	VectorScale( up, scale * halfHeight, up );
+
+	VectorAdd( e->origin, up, corners[0] );
+	VectorSubtract( corners[0], left, corners[0] );
+	VectorAdd( e->origin, up, corners[1] );
+	VectorAdd( corners[1], left, corners[1] );
+	VectorSubtract( e->origin, up, corners[2] );
+	VectorSubtract( corners[2], left, corners[2] );
+	VectorSubtract( e->origin, up, corners[3] );
+	VectorAdd( corners[3], left, corners[3] );
+
+	RB_CHECKOVERFLOW( 4, 6 );
+
+	ndx = tess.numVertexes;
+	VectorSubtract( vec3_origin, viewAxis[0], normal );
+	for ( i = 0 ; i < 4 ; i++ ) {
+		VectorCopy( corners[i], tess.xyz[ndx + i] );
+		VectorCopy( normal, tess.normal[ndx + i] );
+		tess.texCoords[ndx + i][0][0] = tess.texCoords[ndx + i][1][0] = st[i][0];
+		tess.texCoords[ndx + i][0][1] = tess.texCoords[ndx + i][1][1] = st[i][1];
+		* ( unsigned int * ) &tess.vertexColors[ndx + i] = * ( unsigned int * ) e->shaderRGBA;
+	}
+
+	tess.indexes[tess.numIndexes + 0] = ndx + 2;
+	tess.indexes[tess.numIndexes + 1] = ndx + 1;
+	tess.indexes[tess.numIndexes + 2] = ndx;
+	tess.indexes[tess.numIndexes + 3] = ndx + 2;
+	tess.indexes[tess.numIndexes + 4] = ndx + 3;
+	tess.indexes[tess.numIndexes + 5] = ndx + 1;
+
+	tess.numVertexes += 4;
+	tess.numIndexes += 6;
+}
+
+
+/*
 =============
 RB_SurfacePolychain
 =============
@@ -1053,8 +1157,17 @@ Entities that have a single procedurally generated surface
 ====================
 */
 static void RB_SurfaceEntity( surfaceType_t *surfType ) {
+	model_t	*mod;
+
 	switch( backEnd.currentEntity->e.reType ) {
 	case RT_SPRITE:
+		// FAKK2: a .spr model drawn with its own shader (R_AddEntitySurfaces)
+		mod = R_GetModelByHandle( backEnd.currentEntity->e.hModel );
+		if ( backEnd.currentEntity->e.hModel && mod->type == MOD_SPRITE
+			&& tess.shader == mod->spriteShader ) {
+			RB_SurfaceSpriteModel( mod );
+			break;
+		}
 		RB_SurfaceSprite();
 		break;
 	case RT_BEAM:

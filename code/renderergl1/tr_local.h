@@ -351,6 +351,15 @@ typedef struct {
 	float	depthForOpaque;
 } fogParms_t;
 
+// FAKK2: a shader's "spriteGen", the plane a .spr sprite is drawn in. The
+// values are the retail renderer's own (fakk2.exe 0x4773c6)
+typedef enum {
+	SPRITE_PARALLEL,			// facing the viewer
+	SPRITE_PARALLEL_ORIENTED,	// facing the viewer, turned by the entity's roll
+	SPRITE_ORIENTED,			// in the plane of the entity's left and up axes
+	SPRITE_PARALLEL_UPRIGHT		// facing the viewer about the world's vertical
+} spriteGen_t;
+
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
@@ -379,6 +388,7 @@ typedef struct shader_s {
 	skyParms_t	sky;
 	fogParms_t	fogParms;
 	float		spriteScale;			// FAKK2: a sprite's size relative to its image, 0 = 1
+	spriteGen_t	spriteGen;			// FAKK2: how a .spr sprite's quad is laid out
 
 	float		portalRange;			// distance to fog out at
 
@@ -851,6 +861,8 @@ typedef struct model_s {
 	md3Header_t	*md3[MD3_MAX_LODS];	// only if type == MOD_MESH
 	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM | MOD_TIKI)
 	shader_t	*spriteShader;	// only if type == MOD_SPRITE
+	float		spriteWidth;	// the sprite shader's image size, only if type == MOD_SPRITE
+	float		spriteHeight;
 
 	int			 numLods;
 } model_t;
@@ -1522,6 +1534,7 @@ void RE_DrawBox( float x, float y, float w, float h );
 int RE_GetShaderWidth( qhandle_t hShader );
 int RE_GetShaderHeight( qhandle_t hShader );
 float R_SpriteRadius( shader_t *sh, float scale );
+image_t *R_ShaderFirstImage( shader_t *sh );
 float RE_ModelRadius( qhandle_t handle );
 float RE_Noise( float x, float y, float z, float t );
 void RE_RenderScene( const refdef_t *fd );
