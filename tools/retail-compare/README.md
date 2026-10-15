@@ -190,6 +190,14 @@ sound; play a tone of known level through it first if in doubt. The probes put
   should end up in the right ear.
 - `probe-music`: swamp1's soundtrack on `zoo`, which is otherwise silent (`-Music 0.6`).
 
+`save-load.ps1 -Map <map>` checks saved games against themselves rather than against
+retail: it plays the map with `probe-save`, which saves the game three seconds after the
+player enters and reads every entity two seconds later, then starts a second server with
+`+loadgame probesave`. The game archives its script threads, so the probe resumes in the
+second run and takes the same readings at the same game time; the script compares the two
+runs as `compare-player.ps1` compares retail with ours. See "Saved games" in
+`docs/known-differences.md` for what it found.
+
 ## The client and the map viewer
 
     tools\retail-compare\run-client.ps1 -Run "+viewmap zoo +wait 30 +screenshotJPEG +wait 5 +quit"

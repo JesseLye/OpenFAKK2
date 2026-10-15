@@ -402,10 +402,15 @@ SV_SpawnServer
 
 Change the server to a new map, taking all connected
 clients along with it.
-This is NOT called for map_restart
+
+FAKK2: with loadGame, the level is read from the saved game being loaded
+(sv_save.c) instead of being spawned from the map, as the retail
+SV_SpawnServer (0x445e90) does; if the game module cannot read it the map is
+spawned as usual. A spawned level then reads the player's persistent data,
+which gamemap wrote when the previous level ended.
 ================
 */
-void SV_SpawnServer( char *server, qboolean killBots ) {
+void SV_SpawnServer( char *server, qboolean killBots, qboolean loadGame ) {
 	int			i;
 	int			checksum;
 	qboolean	isBot;
@@ -423,6 +428,9 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 
 	Com_Printf ("------ Server Initialization ------\n");
 	Com_Printf ("Server: %s\n",server);
+
+	// a level change's pending autosave belongs to the level it left
+	SV_CancelAutoSave();
 
 	// if not running a dedicated server CL_MapLoading will connect the client to the server
 	// also print some status stuff
@@ -530,19 +538,33 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	// to load during actual gameplay
 	sv.state = SS_LOADING;
 
-	// spawn the level's entities
-	SV_GameSpawnEntities( server );
+	// a saved level resumes at its own time, and has settled already
+	if ( loadGame ) {
+		sv.time = SV_LoadedMapTime();
+		loadGame = SV_ArchiveLevelFile( qtrue );
+		if ( !loadGame ) {
+			sv.time = 0;
+		}
+	}
+
+	if ( !loadGame ) {
+		// spawn the level's entities
+		SV_GameSpawnEntities( server );
+
+		// the player's inventory and the like from the previous level
+		SV_ArchivePersistantFile( qtrue );
+
+		// run a few frames to allow everything to settle
+		for (i = 0;i < 3; i++)
+		{
+			SV_GameRunFrame( 100 );
+			sv.time += 100;
+			svs.time += 100;
+		}
+	}
 
 	// don't allow a map_restart if game is modified
 	sv_gametype->modified = qfalse;
-
-	// run a few frames to allow everything to settle
-	for (i = 0;i < 3; i++)
-	{
-		SV_GameRunFrame( 100 );
-		sv.time += 100;
-		svs.time += 100;
-	}
 
 	// create a baseline for more efficient communications
 	SV_CreateBaseline ();
@@ -644,6 +666,8 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	SV_Heartbeat_f();
 
 	Hunk_SetMark();
+
+	SV_ResetSaveName();
 
 #ifndef DEDICATED
 	if ( com_dedicated->integer ) {

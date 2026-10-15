@@ -1749,6 +1749,8 @@ typedef struct {
 	int y;
 	int width;
 	int height;
+	int outWidth;	// FAKK2: the size the picture is scaled to
+	int outHeight;
 	char *fileName;
 	qboolean jpeg;
 } screenshotCommand_t;

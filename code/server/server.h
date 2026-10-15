@@ -374,7 +374,7 @@ void SV_SetUserinfo( int index, const char *val );
 void SV_GetUserinfo( int index, char *buffer, int bufferSize );
 
 void SV_ChangeMaxClients( void );
-void SV_SpawnServer( char *server, qboolean killBots );
+void SV_SpawnServer( char *server, qboolean killBots, qboolean loadGame );
 void SV_MapBaseName( const char *map, char *out, int outSize );
 
 
@@ -400,6 +400,19 @@ void SV_DropClient( client_t *drop, const char *reason );
 void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK );
 void SV_ClientThink (client_t *cl, usercmd_t *cmd);
 qboolean SV_ClientEnterStalled( const client_t *cl );
+
+//
+// sv_save.c
+//
+#define	SAVE_CURRENT	"current"	// the save name of the level being played
+
+void		SV_AddSaveCommands( void );
+void		SV_ResetSaveName( void );
+qboolean	SV_ArchivePersistantFile( qboolean loading );
+qboolean	SV_ArchiveLevelFile( qboolean loading );
+int			SV_LoadedMapTime( void );
+void		SV_AutoSaveFrame( int msec );
+void		SV_CancelAutoSave( void );
 
 //
 // sv_testplayer.c
@@ -445,6 +458,11 @@ float		SV_SoundLength( const char *path );
 byte		*SV_SoundAmplitudes( const char *name, int *number_of_amplitudes );
 qboolean	SV_GameLoaded( void );
 void		SV_GameSpawnEntities( const char *mapname );
+qboolean	SV_GameReadLevel( const char *filename );
+void		SV_GameWriteLevel( const char *filename, qboolean autosave );
+qboolean	SV_GameLevelArchiveValid( const char *filename );
+void		SV_GameWritePersistant( const char *filename );
+qboolean	SV_GameReadPersistant( const char *filename );
 void		SV_GameRunFrame( int frameMsec );
 const char	*SV_GameClientConnect( int clientNum, qboolean firstTime );
 void		SV_GameClientBegin( int clientNum, usercmd_t *cmd );

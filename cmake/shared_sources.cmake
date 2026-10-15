@@ -54,6 +54,7 @@ set(SERVER_SOURCES
     ${SOURCE_DIR}/server/sv_init.c
     ${SOURCE_DIR}/server/sv_main.c
     ${SOURCE_DIR}/server/sv_net_chan.c
+    ${SOURCE_DIR}/server/sv_save.c
     ${SOURCE_DIR}/server/sv_snapshot.c
     ${SOURCE_DIR}/server/sv_testplayer.c
     ${SOURCE_DIR}/server/sv_world.c

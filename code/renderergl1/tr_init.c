@@ -408,12 +408,54 @@ byte *RB_ReadPixels(int x, int y, int width, int height, size_t *offset, int *pa
 	return buffer;
 }
 
-/* 
-================== 
+/*
+==================
+RB_ScaleScreenshot
+
+FAKK2: a saved game's picture is the whole screen squeezed into 256 x 256.
+Each picture pixel averages the screen pixels it covers.
+==================
+*/
+static void RB_ScaleScreenshot( const byte *in, int inWidth, int inHeight, byte *out, int outWidth, int outHeight )
+{
+	int		x, y, xx, yy, x0, x1, y0, y1, c, count;
+	int		sum[3];
+
+	for ( y = 0 ; y < outHeight ; y++ ) {
+		y0 = y * inHeight / outHeight;
+		y1 = ( y + 1 ) * inHeight / outHeight;
+		if ( y1 <= y0 ) {
+			y1 = y0 + 1;
+		}
+		for ( x = 0 ; x < outWidth ; x++ ) {
+			x0 = x * inWidth / outWidth;
+			x1 = ( x + 1 ) * inWidth / outWidth;
+			if ( x1 <= x0 ) {
+				x1 = x0 + 1;
+			}
+			sum[0] = sum[1] = sum[2] = 0;
+			count = 0;
+			for ( yy = y0 ; yy < y1 ; yy++ ) {
+				for ( xx = x0 ; xx < x1 ; xx++ ) {
+					for ( c = 0 ; c < 3 ; c++ ) {
+						sum[c] += in[( yy * inWidth + xx ) * 3 + c];
+					}
+					count++;
+				}
+			}
+			for ( c = 0 ; c < 3 ; c++ ) {
+				out[( y * outWidth + x ) * 3 + c] = sum[c] / count;
+			}
+		}
+	}
+}
+
+/*
+==================
 RB_TakeScreenshot
-================== 
-*/  
-void RB_TakeScreenshot(int x, int y, int width, int height, char *fileName)
+==================
+*/
+void RB_TakeScreenshot(int x, int y, int width, int height, int outWidth, int outHeight, char *fileName)
 {
 	byte *allbuf, *buffer;
 	byte *srcptr, *destptr;
@@ -460,6 +502,28 @@ void RB_TakeScreenshot(int x, int y, int width, int height, char *fileName)
 
 	memcount = linelen * height;
 
+	if ( outWidth > 0 && outHeight > 0 && ( outWidth != width || outHeight != height ) ) {
+		byte	*scaled;
+
+		scaled = ri.Hunk_AllocateTempMemory( outWidth * outHeight * 3 + 18 );
+		Com_Memcpy( scaled, buffer, 18 );
+		scaled[12] = outWidth & 255;
+		scaled[13] = outWidth >> 8;
+		scaled[14] = outHeight & 255;
+		scaled[15] = outHeight >> 8;
+		RB_ScaleScreenshot( allbuf + offset, width, height, scaled + 18, outWidth, outHeight );
+		memcount = outWidth * outHeight * 3;
+
+		if(glConfig.deviceSupportsGamma)
+			R_GammaCorrect(scaled + 18, memcount);
+
+		ri.FS_WriteFile(fileName, scaled, memcount + 18);
+
+		ri.Hunk_FreeTempMemory(scaled);
+		ri.Hunk_FreeTempMemory(allbuf);
+		return;
+	}
+
 	// gamma correct
 	if(glConfig.deviceSupportsGamma)
 		R_GammaCorrect(allbuf + offset, memcount);
@@ -505,17 +569,17 @@ const void *RB_TakeScreenshotCmd( const void *data ) {
 	if (cmd->jpeg)
 		RB_TakeScreenshotJPEG( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
 	else
-		RB_TakeScreenshot( cmd->x, cmd->y, cmd->width, cmd->height, cmd->fileName);
+		RB_TakeScreenshot( cmd->x, cmd->y, cmd->width, cmd->height, cmd->outWidth, cmd->outHeight, cmd->fileName);
 	
 	return (const void *)(cmd + 1);	
 }
 
 /*
 ==================
-R_TakeScreenshot
+R_TakeScreenshotScaled
 ==================
 */
-void R_TakeScreenshot( int x, int y, int width, int height, char *name, qboolean jpeg ) {
+static void R_TakeScreenshotScaled( int x, int y, int width, int height, int outWidth, int outHeight, char *name, qboolean jpeg ) {
 	static char	fileName[MAX_OSPATH]; // bad things if two screenshots per frame?
 	screenshotCommand_t	*cmd;
 
@@ -529,9 +593,20 @@ void R_TakeScreenshot( int x, int y, int width, int height, char *name, qboolean
 	cmd->y = y;
 	cmd->width = width;
 	cmd->height = height;
+	cmd->outWidth = outWidth;
+	cmd->outHeight = outHeight;
 	Q_strncpyz( fileName, name, sizeof(fileName) );
 	cmd->fileName = fileName;
 	cmd->jpeg = jpeg;
+}
+
+/*
+==================
+R_TakeScreenshot
+==================
+*/
+void R_TakeScreenshot( int x, int y, int width, int height, char *name, qboolean jpeg ) {
+	R_TakeScreenshotScaled( x, y, width, height, width, height, name, jpeg );
 }
 
 /* 
@@ -659,8 +734,12 @@ screenshot
 screenshot [silent]
 screenshot [levelshot]
 screenshot [filename]
+screenshot <path> <width> <height>
 
 Doesn't print the pacifier message if there is a second arg
+
+FAKK2: the last form is the client's saveshot (a saved game's picture): the
+whole screen scaled to the size given, written to the path as given.
 ================== 
 */  
 void R_ScreenShot_f (void) {
@@ -671,6 +750,17 @@ void R_ScreenShot_f (void) {
 	if ( !strcmp( ri.Cmd_Argv(1), "levelshot" ) ) {
 		R_LevelShot();
 		return;
+	}
+
+	if ( ri.Cmd_Argc() == 4 ) {
+		int		outWidth = atoi( ri.Cmd_Argv( 2 ) );
+		int		outHeight = atoi( ri.Cmd_Argv( 3 ) );
+
+		if ( outWidth > 0 && outHeight > 0 && outWidth <= 4096 && outHeight <= 4096 ) {
+			Q_strncpyz( checkname, ri.Cmd_Argv( 1 ), sizeof( checkname ) );
+			R_TakeScreenshotScaled( 0, 0, glConfig.vidWidth, glConfig.vidHeight, outWidth, outHeight, checkname, qfalse );
+			return;
+		}
 	}
 
 	if ( !strcmp( ri.Cmd_Argv(1), "silent" ) ) {

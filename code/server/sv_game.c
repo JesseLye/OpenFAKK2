@@ -441,13 +441,6 @@ static int SV_GameFSSeek( fileHandle_t f, long offset, int origin ) {
 	return FS_Seek( f, offset, origin );
 }
 
-static const char *SV_GameArchiveFileName( const char *filename, const char *extension ) {
-	static char	name[MAX_QPATH];
-
-	Com_sprintf( name, sizeof( name ), "save/%s.%s", filename, extension );
-	return name;
-}
-
 static void SV_GameSendConsoleCommand( const char *text ) {
 	Cbuf_ExecuteText( EXEC_APPEND, text );
 }
@@ -1054,7 +1047,7 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->FS_FTell = FS_FTell;
 	import->FS_FSeek = SV_GameFSSeek;
 	import->FS_Flush = FS_Flush;
-	import->GetArchiveFileName = SV_GameArchiveFileName;
+	import->GetArchiveFileName = Com_GetArchiveFileName;	// as the retail table has it (0x42eba0)
 	import->SendConsoleCommand = SV_GameSendConsoleCommand;
 	import->DebugGraph = SV_GameDebugGraph;
 
@@ -1181,25 +1174,57 @@ static void *SV_LoadGameLibrary( char *loadedFrom, int loadedFromSize ) {
 
 /*
 ===============
-SV_GameSpawnEntities
+SV_GameResetModelIndexes
 
-The inline models take the first model config strings, "*1" at index 1 and
-so on, as the retail engine's SV_ClearWorld registers them (fakk2.exe
-0x448810). A brush entity's model index is its inline model number, so this
-is what keeps the game from taking a brush entity for a definition with that
-index; it is also the index 1 the game assumes for the world and uses for
-beams.
+Before a level's entities are spawned or read from a saved game, the inline
+models take the first model config strings, "*1" at index 1 and so on, as
+the retail engine's SV_ClearWorld registers them (fakk2.exe 0x448810). A
+brush entity's model index is its inline model number, so this is what keeps
+the game from taking a brush entity for a definition with that index; it is
+also the index 1 the game assumes for the world and uses for beams.
 ===============
 */
-void SV_GameSpawnEntities( const char *mapname ) {
+static void SV_GameResetModelIndexes( void ) {
 	int		i;
 
 	Com_Memset( sv_tikis, 0, sizeof( sv_tikis ) );
 	for ( i = 1 ; i < CM_NumInlineModels() ; i++ ) {
 		SV_FindIndex( va( "*%i", i ), CS_MODELS, MAX_MODELS, qtrue );
 	}
+}
 
+void SV_GameSpawnEntities( const char *mapname ) {
+	SV_GameResetModelIndexes();
 	ge->SpawnEntities( mapname, CM_EntityString(), sv.time );
+}
+
+/*
+===============
+SV_GameReadLevel
+
+A saved level replaces spawning the map's entities: the game rebuilds every
+entity from the archive, registering its models and sounds as it goes.
+===============
+*/
+qboolean SV_GameReadLevel( const char *filename ) {
+	SV_GameResetModelIndexes();
+	return ge->ReadLevel( filename );
+}
+
+void SV_GameWriteLevel( const char *filename, qboolean autosave ) {
+	ge->WriteLevel( filename, autosave );
+}
+
+qboolean SV_GameLevelArchiveValid( const char *filename ) {
+	return ge->LevelArchiveValid( filename );
+}
+
+void SV_GameWritePersistant( const char *filename ) {
+	ge->WritePersistant( filename );
+}
+
+qboolean SV_GameReadPersistant( const char *filename ) {
+	return ge->ReadPersistant( filename );
 }
 
 qboolean SV_GameLoaded( void ) {
@@ -1275,8 +1300,9 @@ void SV_InitGameProgs( void ) {
 		Com_Error( ERR_FATAL, "%s is game API version %i, expected %i", path, version, GAME_API_VERSION );
 	}
 
-	// clear all gentity pointers that might still be set from a previous session
-	for ( i = 0 ; i < sv_maxclients->integer ; i++ ) {
+	// clear all gentity pointers that might still be set from a previous session;
+	// loadgame can load the module before any server has started
+	for ( i = 0 ; svs.clients && i < sv_maxclients->integer ; i++ ) {
 		svs.clients[i].gentity = NULL;
 	}
 

@@ -257,9 +257,10 @@ typedef struct {
 static urcBindList_t	urc_bindList;
 static qhandle_t		urc_emptyKeyShader, urc_pressKeyShader;
 
-// the saved games (FakkLoadGameClass), from save/*.ssv
+// the saved games (FakkLoadGameClass), from save/<config>_*.ssv
 typedef struct {
-	char		file[MAX_QPATH];		// save/<name>.ssv
+	char		file[MAX_QPATH];		// save/<config>_<name>.ssv
+	char		name[64];				// <name>, as its header has it
 	char		comment[64];
 	int			mapTime;				// milliseconds
 	int			time;					// when it was saved
@@ -286,6 +287,7 @@ static void URC_PlaySound( const char *name );
 static void URC_DrawPopup( void );
 
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
+static qboolean		urc_saveShot;		// drawing a saved game's picture
 
 static qboolean		urc_hudOn = qtrue;		// "ui_hud", a command in retail (0x40e010) setting 0x4df7b8
 static cvar_t		*ui_drawcoords;			// UI_Init (0x40e9df)
@@ -1808,11 +1810,13 @@ THE SAVED GAMES
 
 UIFAKKLoadGameClass, a UIListCtrl. Its columns (0x414710): "Location"
 four tenths of its width, "Elapased Time" (retail's spelling) two tenths,
-"Date & Time" four tenths. Its rows (0x4147d0) come from save/*.ssv: a
-header of the time it was saved, the map time in milliseconds and the
-location (64 characters), shown as the location, H:MM:SS and ctime of
-the save time; they are sorted newest first and the first is selected.
-The selected game's picture, save/<name>.tga, or
+"Date & Time" four tenths. Its rows (0x4147d0) come from the saved games'
+headers, save/<config>_*.ssv (Com_GetArchiveFileName, sv_save.c): the time
+it was saved, the map time in milliseconds, the location (64 characters),
+the map and the save's name (64 each), shown as the location, H:MM:SS and
+ctime of the save time; they are sorted newest first and the first is
+selected. Loading and deleting go by the save's name.
+The selected game's picture, save/<config>_<name>.tga, or
 textures/menu/no_saved_games.tga when there is none, becomes the
 material of the menu's "LoadSaveShot" label (0x415390).
 
@@ -1867,7 +1871,12 @@ static void URC_SaveShowShot( void ) {
 
 static void URC_LoadSaves( void ) {
 	char	**files;
+	char	prefix[MAX_QPATH];
 	int		numFiles, i;
+
+	// save/<config>_<name>.ssv, as Com_GetArchiveFileName names them
+	COM_StripExtension( Com_ConfigName(), prefix, sizeof( prefix ) );
+	Q_strcat( prefix, sizeof( prefix ), "_" );
 
 	urc_numSaves = 0;
 	files = FS_ListFiles( "save", ".ssv", &numFiles );
@@ -1876,6 +1885,10 @@ static void URC_LoadSaves( void ) {
 		byte			header[200];
 		urcSave_t		*s;
 
+		// another config's games are not listed
+		if ( Q_stricmpn( files[i], prefix, strlen( prefix ) ) ) {
+			continue;
+		}
 		Com_Memset( header, 0, sizeof( header ) );
 		if ( FS_FOpenFileRead( va( "save/%s", files[i] ), &f, qtrue ) <= 0 || !f ) {
 			continue;
@@ -1887,6 +1900,7 @@ static void URC_LoadSaves( void ) {
 		s->time = LittleLong( ( (int *)header )[0] );
 		s->mapTime = LittleLong( ( (int *)header )[1] );
 		Q_strncpyz( s->comment, (char *)header + 8, sizeof( s->comment ) );
+		Q_strncpyz( s->name, (char *)header + 136, sizeof( s->name ) );
 	}
 	FS_FreeFileList( files );
 	qsort( urc_saves, urc_numSaves, sizeof( urc_saves[0] ), URC_SaveCompare );
@@ -3643,6 +3657,22 @@ void URC_Draw( void ) {
 	URC_DrawLoading();
 	URC_DrawFade();
 
+	// a saved game's picture shows the game and its HUD, not the menus
+	// (saveshot; the retail UI's draw, 0x4193f0, checks the same flag)
+	if ( urc_saveShot ) {
+		for ( i = 0 ; i < urc_numMenus ; i++ ) {
+			urcMenu_t	*menu = &urc_menus[i];
+			int			k;
+
+			for ( k = 0 ; k < urc_stackDepth && urc_stack[k] != i ; k++ ) {
+			}
+			if ( menu->visible && k == urc_stackDepth ) {
+				URC_DrawMenu( menu, qfalse );
+			}
+		}
+		return;
+	}
+
 	// the widget under the cursor, and its hover sound on arrival
 	{
 		int		hover = URC_WidgetUnderCursor();
@@ -4080,7 +4110,6 @@ removegame deletes the selected one's files from the home directory.
 */
 static void URC_WidgetCommand_f( void ) {
 	const char	*cmd;
-	char		base[MAX_QPATH];
 	urcSave_t	*s;
 
 	if ( Cmd_Argc() < 3 ) {
@@ -4099,16 +4128,10 @@ static void URC_WidgetCommand_f( void ) {
 		return;
 	}
 	s = &urc_saves[urc_saveSelected - 1];
-	COM_StripExtension( COM_SkipPath( s->file ), base, sizeof( base ) );
 	if ( !Q_stricmp( cmd, "loadgame" ) ) {
-		Cbuf_AddText( va( "loadgame %s\n", base ) );
+		Cbuf_AddText( va( "loadgame %s\n", s->name ) );
 	} else if ( !Q_stricmp( cmd, "removegame" ) ) {
-		static const char	*exts[] = { "ssv", "sav", "spv", "tga" };
-		int					i;
-
-		for ( i = 0 ; i < ARRAY_LEN( exts ) ; i++ ) {
-			FS_Remove_HomeData( va( "save/%s.%s", base, exts[i] ) );
-		}
+		Com_WipeSaveGame( s->name );
 		URC_LoadSaves();
 	}
 }
@@ -4365,6 +4388,17 @@ static void URC_CheckRestart_f( void ) {
 		Cbuf_AddText( "snd_restart\n" );
 	} else if ( vid ) {
 		Cbuf_AddText( "vid_restart\n" );
+	}
+}
+
+void URC_SetSaveShot( qboolean on ) {
+	urc_saveShot = on;
+}
+
+// a game was saved: the load and save menu lists it at once
+void URC_SavesChanged( void ) {
+	if ( urc_saveWidget >= 0 ) {
+		URC_LoadSaves();
 	}
 }
 
