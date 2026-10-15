@@ -171,7 +171,8 @@ typedef enum {
 	AGEN_PORTAL,
 	AGEN_CONST,
 	AGEN_SKY_ALPHA,				// the scene's sky alpha
-	AGEN_ONE_MINUS_SKY_ALPHA
+	AGEN_ONE_MINUS_SKY_ALPHA,
+	AGEN_FARPLANE_FOG			// FAKK2: distance over the far plane distance
 } alphaGen_t;
 
 typedef enum {
@@ -186,7 +187,8 @@ typedef enum {
 	CGEN_WAVEFORM,			// programmatically generated
 	CGEN_LIGHTING_DIFFUSE,
 	CGEN_FOG,				// standard fog
-	CGEN_CONST				// fixed color
+	CGEN_CONST,				// fixed color
+	CGEN_FARPLANE_FOG		// FAKK2: the far plane's colour, alpha as AGEN_FARPLANE_FOG
 } colorGen_t;
 
 typedef enum {
@@ -399,6 +401,14 @@ typedef struct shader_s {
 
 	int			numUnfoggedPasses;
 	shaderStage_t	*stages[MAX_SHADER_STAGES];		
+
+	// FAKK2: what is drawn under a far plane (see FinishShader): the stages,
+	// faded by distance where their blend allows, then a pass of the far
+	// plane's colour blended in by distance; a shader of one lightingDiffuse
+	// stage is fogged with OpenGL's fog instead
+	int			numFarplanePasses;
+	shaderStage_t	*farplaneStages[MAX_SHADER_STAGES + 1];
+	qboolean	canUseGLFog;
 
 	void		(*optimalStageIteratorFunc)( void );
 
@@ -1113,7 +1123,7 @@ extern	cvar_t	*r_farplane;			// FAKK2: a far plane of this distance instead of t
 extern	cvar_t	*r_farplane_color;		// FAKK2: its colour, "r g b"
 extern	cvar_t	*r_farplane_nocull;		// FAKK2: don't cull at the far plane
 extern	cvar_t	*r_farplane_nofog;		// FAKK2: don't fog towards the far plane
-extern	cvar_t	*r_useglfog;			// FAKK2: fog with OpenGL's fog rather than vertex colours
+extern	cvar_t	*r_useglfog;			// FAKK2: shaders of one lightingDiffuse stage (models) take OpenGL's fog rather than the far plane pass
 extern	cvar_t	*r_drawworld;			// disable/enable world rendering
 extern	cvar_t	*r_speeds;				// various levels of information display
 extern  cvar_t	*r_detailTextures;		// enables/disables detail texturing stages
@@ -1345,6 +1355,8 @@ typedef struct shaderCommands_s
 	shader_t	*shader;
 	double		shaderTime;
 	int			fogNum;
+	qboolean	farplaneFog;	// FAKK2: drawing the shader's far plane stages
+	float		farplaneFogFactor[SHADER_MAX_VERTEXES];	// each vertex's distance over the far plane distance, at most 1
 
 	int			dlightBits;	// or together of all vertexDlightBits
 
@@ -1568,6 +1580,10 @@ void	RB_CalcScaleTexCoords( const float scale[2], float *dstTexCoords );
 void	RB_CalcTurbulentTexCoords( const waveForm_t *wf, float *dstTexCoords );
 void	RB_CalcTransformTexCoords( const texModInfo_t *tmi, float *dstTexCoords );
 void	RB_CalcModulateColorsByFog( unsigned char *dstColors );
+void	RB_CalcFarplaneFogFactors( void );
+void	RB_CalcModulateColorsByFarplaneFog( unsigned char *colors );
+void	RB_CalcModulateAlphasByFarplaneFog( unsigned char *colors );
+void	RB_CalcModulateRGBAsByFarplaneFog( unsigned char *colors );
 void	RB_CalcModulateAlphasByFog( unsigned char *dstColors );
 void	RB_CalcModulateRGBAsByFog( unsigned char *dstColors );
 void	RB_CalcWaveAlpha( const waveForm_t *wf, unsigned char *dstColors );

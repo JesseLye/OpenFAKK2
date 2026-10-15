@@ -28,6 +28,7 @@ static char *s_shaderText;
 // the shader is parsed into these global variables, then copied into
 // dynamically allocated memory if it is valid.
 static	shaderStage_t	stages[MAX_SHADER_STAGES];
+static	shaderStage_t	farplaneFogStage;		// FAKK2: the pass added under a far plane
 static	qboolean		stageIsSecondBundle[MAX_SHADER_STAGES];	// FAKK2: parsed after a "nextbundle"
 static	shader_t		shader;
 static	texModInfo_t	texMods[MAX_SHADER_STAGES][TR_MAX_TEXMODS];
@@ -2289,7 +2290,16 @@ static shader_t *GeneratePermanentShader( void ) {
 			newShader->stages[i]->bundle[b].texMods = ri.Hunk_Alloc( size, h_low );
 			Com_Memcpy( newShader->stages[i]->bundle[b].texMods, stages[i].bundle[b].texMods, size );
 		}
+		// FAKK2: the far plane list shares the stages
+		newShader->farplaneStages[i] = newShader->stages[i];
 	}
+	if ( newShader->numFarplanePasses > newShader->numUnfoggedPasses ) {
+		// FAKK2: and ends with the far plane's pass
+		newShader->farplaneStages[i] = ri.Hunk_Alloc( sizeof( farplaneFogStage ), h_low );
+		*newShader->farplaneStages[i] = farplaneFogStage;
+		i++;
+	}
+	newShader->numFarplanePasses = i;
 
 	SortNewShader();
 
@@ -2609,6 +2619,37 @@ static shader_t *FinishShader( void ) {
 	// compute number of passes
 	//
 	shader.numUnfoggedPasses = stage;
+
+	//
+	// FAKK2: what is drawn under a far plane (fakk2.exe FinishShader
+	// 0x478a60): the same stages, faded by distance where their blend allows
+	// it (adjustColorsForFog, as for fog volumes), then a pass of the far
+	// plane's colour blended in by distance (a white image, the colour and
+	// alpha from the far plane, src_alpha / one_minus_src_alpha, the last
+	// stage's depth bits). A shader whose first stage blends and fades gets
+	// no pass: it fades out instead. A shader of one lightingDiffuse stage
+	// without an alphaGen (models) is fogged with OpenGL's fog when
+	// r_useglfog.
+	//
+	shader.numFarplanePasses = stage;
+	shader.canUseGLFog = ( stage == 1 && stages[0].rgbGen == CGEN_LIGHTING_DIFFUSE
+		&& stages[0].alphaGen == AGEN_IDENTITY );
+	if ( stage < MAX_SHADER_STAGES
+		&& !( ( stages[0].stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
+			&& stages[0].adjustColorsForFog != ACFF_NONE ) ) {
+		Com_Memset( &farplaneFogStage, 0, sizeof( farplaneFogStage ) );
+		farplaneFogStage.active = qtrue;
+		farplaneFogStage.bundle[0].image[0] = tr.whiteImage;
+		farplaneFogStage.bundle[0].tcGen = TCGEN_IDENTITY;
+		farplaneFogStage.rgbGen = CGEN_FARPLANE_FOG;
+		farplaneFogStage.alphaGen = AGEN_FARPLANE_FOG;
+		farplaneFogStage.stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+		if ( stage > 0 ) {
+			farplaneFogStage.stateBits |= stages[stage - 1].stateBits
+				& ( GLS_DEPTHMASK_TRUE | GLS_DEPTHTEST_DISABLE | GLS_DEPTHFUNC_EQUAL );
+		}
+		shader.numFarplanePasses = stage + 1;
+	}
 
 	// fogonly shaders don't have any normal passes
 	if (stage == 0 && !shader.isSky)

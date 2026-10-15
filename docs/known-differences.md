@@ -732,15 +732,30 @@ What is implemented, and on what basis:
   buffer to the colour times `identityLight` for a view with a far plane that is not a
   portal view, which is what shows wherever nothing is drawn (`swamp1` has no sky
   surfaces at all) and which covers the sky portal's view, drawn before — so under a far
-  plane a map's sky is fog. Retail enables `GL_FOG` per shader through a state
-  bit in `GL_State` (`0x470ad0`) that `RB_BeginSurface` (`0x47c510`) sets only for
-  shaders flagged in `FinishShader` (`0x478a60`: a single stage of one `rgbGen` and no
-  `alphaGen`) when `r_useglfog` is on, and fogs everything else by vertex colour from
-  distance over the far plane distance (`0x494910`). Not followed yet: OpenFAKK2 fogs
-  every shader with OpenGL's fog except the sky and 2D drawing, and `r_useglfog 0`
-  turns fog off rather than switching to vertex colours. The map viewer takes the far
-  plane from worldspawn's keys directly, with the game's defaults (none, black, culling
-  on); a level script's later changes to it are not seen there.
+  plane a map's sky is fog. What a surface draws under the far plane follows
+  `RB_BeginSurface` (`0x47c510`) and `FinishShader` (`0x478a60`). A shader of one
+  `lightingDiffuse` stage with no `alphaGen` (models) is drawn with `GL_FOG` on, through
+  a state bit in `GL_State` (`0x470ad0`), when `r_useglfog` (retail default 1) is on.
+  Every other shader draws a second stage list that `FinishShader` builds: its stages,
+  their colours faded by each vertex's distance from the viewer over the far plane
+  distance (`0x494910`, at most 1) where the stage's blend allows it
+  (`adjustColorsForFog`, as for fog volumes; `ComputeColors` `0x47d400`), then a pass of
+  a white image in the far plane's colour (`rgbGen` 16, `0x4948a0`) with that distance
+  for alpha, blended `src_alpha one_minus_src_alpha` with the last stage's depth bits. A
+  shader whose first stage blends and fades gets no pass and fades out instead, and no
+  fog volume applies as well (`tess.fogNum` is 9999). The pass uses the colour times
+  `identityLight`, as the clear and `GL_FOG_COLOR` do (retail uses the raw colour there;
+  the same at the default overbright). Neither 2D drawing nor the sky under a far plane
+  that does not cull is fogged; a sky under one that culls keeps OpenGL's fog here
+  (retail hands its sky iterator the far plane list; not read). Before this, OpenFAKK2
+  fogged every shader with OpenGL's fog, and on the Intel driver the world came out
+  unfogged, with the far plane's cull edge in plain view on `swamp1`. Checked on
+  `swamp1` from the player's start against the retail picture: the sky, the far tree
+  and the far bank sample the same colours (within one step of 255), the water fades
+  into the far plane without an edge; models stay fogged with `r_useglfog 0` too. The
+  map viewer takes the far plane from worldspawn's keys directly, with the game's
+  defaults (none, black, culling on); a level script's later changes to it are not seen
+  there.
 
 Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
