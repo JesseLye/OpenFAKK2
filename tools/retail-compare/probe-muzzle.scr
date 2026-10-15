@@ -1,0 +1,57 @@
+// Muzzle flashes, for the real client on zoo, where the player starts at
+// (-2352 1568 0) looking down +x. Spawns tools/retail-compare/fx/test_muzzle.tik (the
+// flash sprite and model held still) ahead of her, then fires the uzi straight ahead
+// and screenshots it in bursts through two cameras close to her right hand, one
+// beside the barrel and one ahead of it; copy the fx tiks into each engine's
+// fakk/models first.
+probe:
+waitforplayer
+wait 2
+spawn test_muzzle.tik origin "-2150 1568 160" targetname "fxmuz"
+wait 0.1
+$fxmuz anim idle
+wait 1
+stuffcmd "screenshot"
+wait 1
+spawn Camera targetname "camside" origin "-2310 1480 50" angles "5 90 0"
+spawn Camera targetname "camfront" origin "-2250 1530 55" angles "5 160 0"
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+wait 3
+cuecamera $camside
+wait 1
+stuffcmd "+attackright"
+wait 0.3
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 1
+cuecamera $camfront
+wait 1
+stuffcmd "+attackright"
+wait 0.3
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+wait 0.13
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 1
+stuffcmd "quit"
+end

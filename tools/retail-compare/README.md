@@ -81,10 +81,16 @@ skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zo
 - `probe-fx-guns` (chaingun, uzi, hand gun), `probe-fx-range` (crossbow, flamethrower,
   soul sucker) and `probe-fx-melee` (electric sword, axe, chain sword, flashbang, gas
   sling) sweep the other weapons.
+- `probe-muzzle` fires the uzi through two script cameras beside and ahead of Julie's
+  hand and shoots its muzzle burst, smoke and shells in bursts, after a shot of
+  `fx\test_muzzle.tik` (the flash sprite and model held still); `probe-muzz2` does the
+  chaingun, hand gun, shotgun and rocket launcher through the side camera, and
+  `probe-muzz3` the hand gun alone with a shot every server frame. A flash lives 0.05 s,
+  so which shots catch one varies from run to run.
 - `probe-fx-expl` spawns the flashbang's, gas pod's and soul sucker's explosion models.
-  `probe-sprites` and `probe-fx-order` spawn the test models in `fx\` (still sprites,
-  the fade rules, overlapping sprites); copy `fx\*.tik` into each engine's
-  `fakk\models` first. A model spawned by a script does not start its animation, so the
+  `probe-sprites`, `probe-fx-order` and `probe-muzzle` spawn the test models in `fx\`
+  (still sprites, the fade rules, overlapping sprites, muzzle flashes); copy `fx\*.tik`
+  into each engine's `fakk\models` first. A model spawned by a script does not start its animation, so the
   probes name it and send `anim idle`.
 
 A dual-handed weapon's primary fire is `+attackleft` and its alternate `+attackright`
