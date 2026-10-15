@@ -1664,9 +1664,22 @@ What is implemented, and on what basis:
   hand gun's test light over the same floor: ours drew no light at all (4.5 in red
   against 3.3 without the light) and now differs by 2.2 and 1.9. Still open:
   `nodlight` is honoured nowhere, as in retail, and the GL2
-  renderer keeps Quake III's tests. Of FAKK2's light types `additive` is honoured and
-  the lens flare bits give the light a lens flare (next); retail picks a different
-  blend for an additive light (`0x47d32b`), which has not been read or followed.
+  renderer keeps Quake III's tests. Of FAKK2's light types the lens flare bits give
+  the light a lens flare (next), and `additive` (bit 4, from a TIKI light's type or an
+  entity's `rendereffects +additivedynamiclight`) picks the blend: retail tests that bit
+  in the light's type (`0x47d32b`) and draws an ordinary light with `GL_State(0x823)`
+  and an additive one with `GL_State(0x824)`. Its `GL_State` (`0x470ad0`) makes those
+  `glBlendFunc(GL_DST_COLOR, GL_ONE)` and `glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE)`,
+  both with `glDepthFunc(GL_EQUAL)` (retail's depth-equal bit is `0x800`, Quake III's
+  `0x20000`). So an additive light adds its colour scaled by how dark the surface
+  already is, rather than modulated by it; Quake III's `GL_ONE, GL_ONE`, which this
+  port had, added it in full and lit the floor too bright. `probe-dladd` holds the
+  ordinary test light and then an additive one (`fx\test_dladd.tik`) over `zoo`'s
+  floor: the additive shot differed from retail by 4.0, 3.6 and 2.3 per channel and
+  now by 2.2, 2.0 and 2.3, as the ordinary one does, and what it adds over the
+  ordinary light matches cell by cell (7.35 and 7.68 in red against retail's 7.45 and
+  7.82). A TIKI emitter's `dlight` reads its first type as a number (the client game
+  module's `DynamicLight`), so `additive` written there is 0 on both games; `4` works.
   Swipes are drawn (see "Weapon effects").
 - **Debug lines**: the game module's (`G_DebugLine`: `cam show`, the AI's node display,
   `csys_draw`) and the client game module's are drawn as `fakk2.exe` draws them. The

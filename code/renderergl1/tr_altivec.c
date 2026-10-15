@@ -203,7 +203,7 @@ void ProjectDlightTexture_altivec( void ) {
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
 		// where they aren't rendered
 		if ( dl->additive ) {
-			GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+			GL_State( GLS_SRCBLEND_ONE_MINUS_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
 		}
 		else {
 			GL_State( GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );

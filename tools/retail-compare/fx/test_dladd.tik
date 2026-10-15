@@ -1,0 +1,30 @@
+TIKI
+// Additive dynamic light test (probe-dladd.scr): test_dlight.tik's light (the hand gun's
+// flash colour and radius) with the additive type, held, with no model. The emitter
+// "dlight" reads its first type as a number (cg_commands.cpp DynamicLight), so the
+// word "additive" there parses as 0; 4 is additive.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      originemitter testlight
+         (
+         dlight 1 1 0.1 175 4
+         )
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+   }
