@@ -1,0 +1,15 @@
+// "ui_checkrestart" on zoo, as the options menu's Ok button runs it: latch r_picmip (a
+// video latch) under options, check and pop on one line; the restart runs after the line.
+// Retail's script does not go on after a restart, so its run ends at -Secs. probe-rsnd
+// does the same with s_loadas8bit (a sound latch) under advancedoptions. Compare the logs
+// from the ==== marker; then remove r_picmip and s_loadas8bit from both sandboxes'
+// config.cfg.
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ==== check; pushmenu options; set r_picmip 1; ui_checkrestart; popmenu 0"
+wait 5
+stuffcmd "echo ==== after; r_picmip"
+wait 1
+stuffcmd "quit"
+end

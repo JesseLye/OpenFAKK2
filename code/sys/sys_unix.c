@@ -680,6 +680,82 @@ FILE *Sys_Mkfifo( const char *ospath )
 
 /*
 ==================
+Sys_ChangeDir
+==================
+*/
+qboolean Sys_ChangeDir( const char *path )
+{
+	return chdir( path ) == 0;
+}
+
+/*
+==================
+Sys_FindFiles
+
+The entries of the current directory that match, with the attributes Windows
+would give them: a directory, a file the user cannot write (read-only), a dot
+file (hidden). "*.*" matches everything, as on Windows.
+==================
+*/
+sysFindFile_t *Sys_FindFiles( const char *pattern, int *numFiles )
+{
+	DIR				*fdir;
+	struct dirent	*d;
+	struct stat		st;
+	sysFindFile_t	*list;
+	char			filter[MAX_OSPATH];
+	int				count, n;
+
+	*numFiles = 0;
+	Q_strncpyz( filter, strcmp( pattern, "*.*" ) ? pattern : "*", sizeof( filter ) );
+
+	if ( ( fdir = opendir( "." ) ) == NULL ) {
+		return NULL;
+	}
+	count = 0;
+	while ( ( d = readdir( fdir ) ) != NULL ) {
+		if ( Com_Filter( filter, d->d_name, qfalse ) ) {
+			count++;
+		}
+	}
+	if ( !count ) {
+		closedir( fdir );
+		return NULL;
+	}
+
+	list = Z_Malloc( count * sizeof( *list ) );
+	n = 0;
+	rewinddir( fdir );
+	while ( n < count && ( d = readdir( fdir ) ) != NULL ) {
+		if ( !Com_Filter( filter, d->d_name, qfalse ) || stat( d->d_name, &st ) == -1 ) {
+			continue;
+		}
+		list[n].attrib = 0;
+		if ( S_ISDIR( st.st_mode ) ) {
+			list[n].attrib |= SYS_FIND_SUBDIR;
+		}
+		if ( !( st.st_mode & S_IWUSR ) ) {
+			list[n].attrib |= SYS_FIND_READONLY;
+		}
+		if ( d->d_name[0] == '.' && strcmp( d->d_name, "." ) && strcmp( d->d_name, ".." ) ) {
+			list[n].attrib |= SYS_FIND_HIDDEN;
+		}
+		list[n].writeTime = st.st_mtime;
+		list[n].size = (unsigned int)st.st_size;
+		Q_strncpyz( list[n].name, d->d_name, sizeof( list[n].name ) );
+		n++;
+	}
+	closedir( fdir );
+	if ( !n ) {
+		Z_Free( list );
+		return NULL;
+	}
+	*numFiles = n;
+	return list;
+}
+
+/*
+==================
 Sys_Cwd
 ==================
 */

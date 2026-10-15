@@ -36,6 +36,7 @@ typedef struct {
 int			cmd_wait;
 cmd_t		cmd_text;
 byte		cmd_text_buf[MAX_CMD_BUFFER];
+static int	cmd_aliasCount;		// FAKK2: alias expansions since the buffer last ran
 
 
 //=============================================================================
@@ -181,6 +182,9 @@ void Cbuf_Execute (void)
 	// breaking it for semicolon or newline.
 	qboolean in_star_comment = qfalse;
 	qboolean in_slash_comment = qfalse;
+
+	cmd_aliasCount = 0;		// FAKK2 (Cbuf_Execute 0x42c5a8)
+
 	while (cmd_text.cursize)
 	{
 		if ( cmd_wait > 0 ) {
@@ -325,7 +329,135 @@ Just prints the rest of the line to the console
 */
 void Cmd_Echo_f (void)
 {
-	Com_Printf ("%s\n", Cmd_Args());
+	int		i;
+
+	// FAKK2 (fakk2.exe 0x42c780): each word followed by a space
+	for ( i = 1 ; i < Cmd_Argc() ; i++ ) {
+		Com_Printf( "%s ", Cmd_Argv( i ) );
+	}
+	Com_Printf( "\n" );
+}
+
+/*
+=============================================================================
+
+						CONSOLE ALIASES
+
+FAKK2's engine has Quake II's console aliases (fakk2.exe 0x42c8a0): a name
+that stands for a line of commands. A command line whose first word is no
+command but an alias has the alias's text put in front of the command buffer
+(Cmd_ExecuteString 0x42cf0b), at most 16 times between two runs of the buffer;
+they are written to the config file.
+
+=============================================================================
+*/
+
+#define	MAX_ALIAS_NAME		32
+#define	ALIAS_LOOP_COUNT	16
+
+typedef struct cmdalias_s {
+	struct cmdalias_s	*next;
+	char				name[MAX_ALIAS_NAME];
+	char				*value;
+} cmdalias_t;
+
+static cmdalias_t	*cmd_alias;
+
+/*
+============
+Cmd_SetAlias
+
+Makes or replaces an alias; the value is kept as given (0x42c7c0)
+============
+*/
+void Cmd_SetAlias( const char *name, const char *value ) {
+	cmdalias_t	*a;
+
+	if ( strlen( name ) >= MAX_ALIAS_NAME ) {
+		Com_Printf( "Alias name is too long\n" );
+		return;
+	}
+
+	for ( a = cmd_alias ; a ; a = a->next ) {
+		if ( !strcmp( name, a->name ) ) {
+			Z_Free( a->value );
+			break;
+		}
+	}
+	if ( !a ) {
+		a = Z_Malloc( sizeof( *a ) );
+		a->next = cmd_alias;
+		cmd_alias = a;
+	}
+	Q_strncpyz( a->name, name, sizeof( a->name ) );
+	a->value = CopyString( value );
+
+	cvar_modifiedFlags |= CVAR_ARCHIVE;		// the config file holds them
+}
+
+/*
+============
+Cmd_Alias_f
+
+alias: lists them; alias <name> [words...]: makes one of the words joined by
+spaces, as a line of its own
+============
+*/
+static void Cmd_Alias_f( void ) {
+	char		value[MAX_STRING_CHARS];
+	cmdalias_t	*a;
+	int			i;
+
+	if ( Cmd_Argc() == 1 ) {
+		Com_Printf( "Current alias commands:\n" );
+		for ( a = cmd_alias ; a ; a = a->next ) {
+			Com_Printf( "%s : %s\n", a->name, a->value );
+		}
+		return;
+	}
+
+	value[0] = 0;
+	for ( i = 2 ; i < Cmd_Argc() ; i++ ) {
+		Q_strcat( value, sizeof( value ), Cmd_Argv( i ) );
+		if ( i != Cmd_Argc() - 1 ) {
+			Q_strcat( value, sizeof( value ), " " );
+		}
+	}
+	Q_strcat( value, sizeof( value ), "\n" );
+	Cmd_SetAlias( Cmd_Argv( 1 ), value );
+}
+
+/*
+============
+Cmd_WriteAliases
+
+The config file's lines that make the aliases again (0x42cab0)
+============
+*/
+void Cmd_WriteAliases( fileHandle_t f ) {
+	cmdalias_t	*a;
+	char		value[MAX_STRING_CHARS];
+	size_t		len;
+
+	for ( a = cmd_alias ; a ; a = a->next ) {
+		Q_strncpyz( value, a->value, sizeof( value ) );
+		len = strlen( value );
+		if ( len ) {
+			value[len - 1] = 0;		// the line's end
+		}
+		FS_Printf( f, "alias %s \"%s\"\n", a->name, value );
+	}
+}
+
+static cmdalias_t *Cmd_FindAlias( const char *name ) {
+	cmdalias_t	*a;
+
+	for ( a = cmd_alias ; a ; a = a->next ) {
+		if ( !Q_stricmp( name, a->name ) ) {
+			return a;
+		}
+	}
+	return NULL;
 }
 
 
@@ -789,6 +921,20 @@ void	Cmd_ExecuteString( const char *text ) {
 		}
 	}
 	
+	// FAKK2: then the console aliases
+	{
+		cmdalias_t	*a = Cmd_FindAlias( cmd_argv[0] );
+
+		if ( a ) {
+			if ( ++cmd_aliasCount == ALIAS_LOOP_COUNT ) {
+				Com_Printf( "ALIAS_LOOP_COUNT\n" );
+				return;
+			}
+			Cbuf_InsertText( a->value );
+			return;
+		}
+	}
+
 	// check cvars
 	if ( Cvar_Command() ) {
 		return;
@@ -867,5 +1013,6 @@ void Cmd_Init (void) {
 	Cmd_SetCommandCompletionFunc( "vstr", Cvar_CompleteCvarName );
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
+	Cmd_AddCommand ("alias", Cmd_Alias_f);
 }
 

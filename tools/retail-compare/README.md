@@ -113,6 +113,40 @@ brings up the weapon bar and then the main menu over it (the menu pauses the gam
 shots and the quit are chained client commands with frame waits; `capture.ps1`'s warning
 that it does not end with `stuffcmd "quit"` is expected); `probe-shot-*` shoot the intro
 at fixed times. `probe-load` takes one shot after entry and quits: does a map load.
+`probe-ambient` spawns a box and a statue on `zoo`, lit from the light grid, before a
+script camera (`r_ambientScale`). `probe-wgroup` saves the green sword as weapon group 3
+on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`). `probe-fps`
+frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`
+and remove the archived `fps` from both sandboxes' `config.cfg` afterwards.
+`probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
+on `zoo`; copy that tik into both sandboxes' `fakk\models` first.
+`probe-hay` frames the hay (`tcMod macro`) and the slime pool (`rgbGen colorwave`) on
+`creeperpens` from two script cameras.
+`probe-dot` frames the suck juice pool on `swamp2` (`alphaGen oneMinusDot`, an `rgbGen`
+after `nextBundle`).
+`probe-dlines` draws the `csys_draw` axes (game debug lines) from inside a box on `zoo`,
+depth tested and then with `r_debuglines_depthmask 1`; remove that archived cvar from both
+sandboxes' `config.cfg` afterwards. `probe-llines` frames Julie (lit from a light cube) on
+`zoo` with `r_light_lines 1` and `r_light_sun_line 1`, then `r_light_nolight 1`; check
+both sandboxes' `config.cfg` for them afterwards.
+`probe-skel` draws Julie's skeleton on `zoo` (`r_showskel 1`), then sets `r_place_sunflare 1`
+and prints `r_sunflare`, the point it wrote, to the log.
+`probe-tiki` runs `tiki` and `tikilist` on `zoo` for their log output, between `====`
+markers; compare the two logs' sections.
+`probe-shadows` frames Julie's feet on `zoo` with `cg_shadows 2` (stencil, which retail
+cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
+`probe-fogvol` frames `cemetery`'s blood and water entrance fogs from three script cameras,
+40 seconds in (after the level's own cameras), each cued twice. `probe-uihud` takes `zoo`
+with the HUD and after `ui_hud 0`. `probe-dialog` brings up a `dialog` on `zoo`; retail
+crashes on quitting with it open, which the capture survives. `probe-tlist` does the same
+with `ui_testlist`; retail shows only the first floating window of a run. `probe-vidmode`
+runs `vidmode 4` on `zoo` and shoots at 800x600; remove `r_mode` from both sandboxes'
+`config.cfg` afterwards. `probe-resetcv` prints two of the GameCamera menu's cvars before and
+after `ui_resetcvars`; compare the logs (it takes no screenshot).
+`probe-restart` and `probe-rsnd` latch `r_picmip` and `s_loadas8bit` under their menus and run
+`ui_checkrestart`; compare the logs from the `==== check` marker (retail's script stops after
+the restart, so pass `-Secs 60`), then remove both cvars from both sandboxes' `config.cfg`.
+`probe-popmenu` prints `cg_cameradist` after `popmenu 1` and `popmenu 0` under GameCamera.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

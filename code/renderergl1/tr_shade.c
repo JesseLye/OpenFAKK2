@@ -228,13 +228,27 @@ static void R_BindAnimatedImage( textureBundle_t *bundle ) {
 		return;
 	}
 
-	// it is necessary to do this messy calc to make sure animations line up
-	// exactly with waveforms of the same frequency
-	index = tess.shaderTime * bundle->imageAnimationSpeed * FUNCTABLE_SIZE;
-	index >>= FUNCTABLE_SIZE2;
+	// FAKK2 (fakk2.exe 0x47cf5b): a frameFromEntity bundle shows the frame the
+	// entity names, which the game's "shader frame" sets; an animMapOnce one
+	// stays on its last image instead of starting over
+	if ( bundle->frameFromEntity && backEnd.currentEntity ) {
+		index = backEnd.currentEntity->e.frame;
+		if ( index < 0 ) {
+			index = 0;
+		}
+	} else {
+		// it is necessary to do this messy calc to make sure animations line up
+		// exactly with waveforms of the same frequency
+		index = tess.shaderTime * bundle->imageAnimationSpeed * FUNCTABLE_SIZE;
+		index >>= FUNCTABLE_SIZE2;
 
-	if ( index < 0 ) {
-		index = 0;	// may happen with shader time offsets
+		if ( index < 0 ) {
+			index = 0;	// may happen with shader time offsets
+		}
+	}
+	if ( bundle->animMapOnce && index >= bundle->numImageAnimations ) {
+		GL_Bind( bundle->image[bundle->numImageAnimations - 1] );
+		return;
 	}
 
 	// Windows x86 doesn't load renderer DLL with 64 bit modulus
@@ -730,7 +744,10 @@ static void ComputeColors( shaderStage_t *pStage )
 			}
 			break;
 		case CGEN_WAVEFORM:
-			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors );
+			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors, NULL );
+			break;
+		case CGEN_COLORWAVE:
+			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors, pStage->constantColor );
 			break;
 		case CGEN_ENTITY:
 			RB_CalcColorFromEntity( ( unsigned char * ) tess.svars.colors );
@@ -769,6 +786,11 @@ static void ComputeColors( shaderStage_t *pStage )
 		for ( i = 0; i < tess.numVertexes; i++ ) {
 			tess.svars.colors[i][3] = tess.farplaneFogFactor[i] * 255;
 		}
+		break;
+	case AGEN_DOT:
+	case AGEN_ONE_MINUS_DOT:
+		RB_CalcDotAlpha( pStage->alphaGen == AGEN_ONE_MINUS_DOT, pStage->alphaMin, pStage->alphaMax,
+			( unsigned char * ) tess.svars.colors );
 		break;
 	case AGEN_SKY_ALPHA:
 	case AGEN_ONE_MINUS_SKY_ALPHA:
@@ -992,6 +1014,16 @@ static void ComputeTexCoords( shaderStage_t *pStage ) {
 
 			case TMOD_SCALE:
 				RB_CalcScaleTexCoords( pStage->bundle[b].texMods[tm].scale,
+									 ( float * ) tess.svars.texcoords[b] );
+				break;
+
+			case TMOD_MACRO:
+				RB_CalcMacroTexCoords( pStage->bundle[b].texMods[tm].scale,
+									 ( float * ) tess.svars.texcoords[b] );
+				break;
+
+			case TMOD_PARALLAX:
+				RB_CalcParallaxTexCoords( pStage->bundle[b].texMods[tm].scroll,
 									 ( float * ) tess.svars.texcoords[b] );
 				break;
 			

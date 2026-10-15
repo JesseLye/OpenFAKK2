@@ -1,0 +1,10 @@
+// "ui_resetcvars" on zoo: the GameCamera menu links cg_cameradist and three more; set
+// two off their defaults, print them, push the menu, reset, and print them again. Chained
+// client commands (a menu holds the probe's waits).
+probe:
+waitforplayer
+wait 2
+stuffcmd "set cg_cameradist 321; set cg_cameraheight 7; cg_cameradist; cg_cameraheight; pushmenu GameCamera; ui_resetcvars; cg_cameradist; cg_cameraheight; popmenu"
+wait 2
+stuffcmd "quit"
+end

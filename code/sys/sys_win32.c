@@ -425,6 +425,58 @@ FILE *Sys_Mkfifo( const char *ospath )
 
 /*
 ==============
+Sys_ChangeDir
+==============
+*/
+qboolean Sys_ChangeDir( const char *path ) {
+	return _chdir( path ) == 0;
+}
+
+/*
+==============
+Sys_FindFiles
+==============
+*/
+sysFindFile_t *Sys_FindFiles( const char *pattern, int *numFiles ) {
+	struct _finddata_t	findinfo;
+	intptr_t			findhandle;
+	sysFindFile_t		*list;
+	int					count, n;
+
+	*numFiles = 0;
+	findhandle = _findfirst( pattern, &findinfo );
+	if ( findhandle == -1 ) {
+		return NULL;
+	}
+	count = 0;
+	do {
+		count++;
+	} while ( _findnext( findhandle, &findinfo ) != -1 );
+	_findclose( findhandle );
+
+	list = Z_Malloc( count * sizeof( *list ) );
+	n = 0;
+	findhandle = _findfirst( pattern, &findinfo );
+	if ( findhandle != -1 ) {
+		do {
+			list[n].attrib = findinfo.attrib;
+			list[n].writeTime = findinfo.time_write;
+			list[n].size = findinfo.size;
+			Q_strncpyz( list[n].name, findinfo.name, sizeof( list[n].name ) );
+			n++;
+		} while ( n < count && _findnext( findhandle, &findinfo ) != -1 );
+		_findclose( findhandle );
+	}
+	if ( !n ) {
+		Z_Free( list );
+		return NULL;
+	}
+	*numFiles = n;
+	return list;
+}
+
+/*
+==============
 Sys_Cwd
 ==============
 */

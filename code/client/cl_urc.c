@@ -151,6 +151,7 @@ typedef struct {
 	int			lastStat;
 	int			statChangeTime;
 	qboolean	disabled;			// UIWidget's "disable" (0x49e670): hidden, out of the cursor's reach
+	char		linkSnapshot[MAX_CVAR_VALUE_STRING];	// the linked cvar's value when the menu came up (0x4a3a30)
 } urcWidget_t;
 
 typedef struct {
@@ -286,7 +287,8 @@ static void URC_DrawPopup( void );
 
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
-static cvar_t		*ui_hud;
+static qboolean		urc_hudOn = qtrue;		// "ui_hud", a command in retail (0x40e010) setting 0x4df7b8
+static cvar_t		*ui_drawcoords;			// UI_Init (0x40e9df)
 static cvar_t		*ui_urcdebug;
 static qhandle_t	urc_addFadeShader;
 
@@ -2584,10 +2586,32 @@ MENU STACK AND HUD
 =======================================================================
 */
 
+/*
+=================
+URC_SnapshotCvars
+
+What ui_checkrestart compares against: each linked cvar's value as the
+menu comes up (0x4a3a30, from the window manager's push, show and force,
+0x4a2e90, 0x4a3020, 0x4a3260).
+=================
+*/
+static void URC_SnapshotCvars( urcMenu_t *menu ) {
+	int		i;
+
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+
+		if ( w->linkcvar[0] ) {
+			Q_strncpyz( w->linkSnapshot, Cvar_VariableString( w->linkcvar ), sizeof( w->linkSnapshot ) );
+		}
+	}
+}
+
 static void URC_ShowMenu( urcMenu_t *menu ) {
 	if ( menu && !menu->visible ) {
 		menu->visible = qtrue;
 		menu->showTime = cls.realtime;
+		URC_SnapshotCvars( menu );
 	}
 }
 
@@ -2647,6 +2671,7 @@ void URC_PushMenu( const char *name ) {
 	}
 	urc_stack[urc_stackDepth++] = menu - urc_menus;
 	URC_ShowMenu( menu );
+	URC_SnapshotCvars( menu );		// also when it was shown already
 	URC_UpdateCatcher();
 	INV_Close();		// not retail's: its weapon bar stays over the menu (cl_inv.c)
 
@@ -2763,7 +2788,7 @@ bosshud while the boss-health stat is at least 1.
 static void URC_UpdateHud( void ) {
 	qboolean	on;
 
-	on = ui_hud->integer && clc.state == CA_ACTIVE && cl.snap.valid && !urc_stackDepth &&
+	on = urc_hudOn && clc.state == CA_ACTIVE && cl.snap.valid && !urc_stackDepth &&
 		!cl.snap.ps.stats[URC_STAT_CINEMATIC];
 	if ( !on ) {
 		URC_HideMenu( urc_healthhud );
@@ -2942,6 +2967,628 @@ static void URC_DrawFade( void ) {
 
 /*
 =================
+URC_DrawFps
+
+FAKK2's fps counter, drawn by the interface's root window over everything
+else (fakk2.exe 0x419160) while "fps" is on: three lines in facfont-20, one font
+height in from the left and ending at the bottom, the frame rate white above
+23.94, yellow above 18 and red below, then the 3D view's triangles and vertexes
+with the map lights in light cubes, then the whole frame's with the texels in
+use in millions. With "fps 1" and a game running, a frame rate under 18 plays
+sound/misc/lowframerate.wav at once and every four seconds until it is back
+above 19.8 (0x4241f3).
+=================
+*/
+static void URC_DrawFps( void ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	yellow = { 1, 1, 0, 1 };
+	static const vec4_t	red = { 1, 0, 0, 1 };
+	static qboolean		warned;
+	static int			nextWarning;
+	const urcFont_t		*font;
+	int					stats[6];
+	float				h;
+
+	if ( !com_fps->integer ) {
+		return;
+	}
+
+	if ( com_fps->integer == 1 && clc.state == CA_ACTIVE ) {
+		if ( com_fpsValue > 19.8f ) {
+			warned = qfalse;
+		} else {
+			if ( !warned && com_fpsValue < 18.0f ) {
+				nextWarning = 10000;
+				warned = qtrue;
+			}
+			if ( warned && cls.realtime > nextWarning ) {
+				nextWarning = cls.realtime + 4000;
+				S_StartLocalSound( S_RegisterSound( "sound/misc/lowframerate.wav", qfalse ), CHAN_MENU );
+			}
+		}
+	}
+
+	Com_Memset( stats, 0, sizeof( stats ) );
+	if ( re.GetFrameStats ) {
+		re.GetFrameStats( stats );
+	}
+	font = URC_LoadFont( "facfont-20" );		// the root window's (a retail capture's lines are 20 apart)
+	h = URC_FontHeight( font );
+	URC_DrawString( font, h, 480 - 3 * h, va( "FPS %4.1f", com_fpsValue ),
+		com_fpsValue > 23.94f ? white : com_fpsValue > 18.0f ? yellow : red );
+	URC_DrawString( font, h, 480 - 2 * h, va( "wt%5d wv%5d cl%d", stats[3], stats[4], stats[5] ), white );
+	URC_DrawString( font, h, 480 - h, va( "t%5d v%5d Mtex%5.2f", stats[0], stats[1], stats[2] * 1e-6f ), white );
+}
+
+/*
+=======================================================================
+
+FLOATING WINDOWS
+
+uilib's UIFloatingWindow (Create 0x4a1600, FrameInitialized 0x4a1700,
+Draw 0x4a19a0), which the "dialog" command makes (UIDialog, 0x4ab690).
+The window is filled with a widget's default background, 0.75 grey. Its
+title bar is the top 20 pixels: while the window is active, filled with
+its colour inside a raised edge (0x49a260) in that colour's light shade
+throughout, one pixel along the top and left and two along the bottom
+and right, its title white; inactive, the default background inside two
+thirds of it, the title black. The title is verdana-14 at 3, 3; the
+close box, 16x16 at w-18, 2, shows marlett's "r" and the minimise box
+at w-36, 2 its "0", both in the title's colour. The children are laid
+out in the frame 2, 20, w-4, h-22.
+
+They do not bring the cursor up: with it up (+togglemouse, ui_showmouse
+or a menu) a click raises and activates the window under it, the title
+bar drags it, the close box closes it and the minimise box folds it to
+its title bar and back.
+
+=======================================================================
+*/
+
+#define URC_MAX_WINDOWS		8
+#define URC_TITLE_HEIGHT	20
+#define URC_TITLE_FONT		"verdana-14"	// UIFloatingWindow's Create (0x4a1600)
+#define URC_BOX_FONT		"marlett"
+#define URC_BOX_SIZE		16
+#define URC_DIALOG_BUTTON_W	64				// UIDialog's FrameInitialized (0x4ab890)
+#define URC_DIALOG_BUTTON_H	32
+#define URC_DIALOG_MARGIN	6				// 0x4d633c
+
+typedef enum {
+	WIN_DIALOG,
+	WIN_TESTLIST
+} urcWindowKind_t;
+
+typedef enum {
+	WINPART_NONE, WINPART_TITLE, WINPART_CLOSE, WINPART_MINIMIZE, WINPART_OK, WINPART_CANCEL, WINPART_CLIENT
+} urcWindowPart_t;
+
+typedef struct {
+	urcWindowKind_t	kind;
+	char			title[64];
+	float			rect[4];
+	vec4_t			color;				// the title bar's while active
+	qboolean		minimized;
+	// a dialog: the label's cvar, the Ok button's command, and the label's,
+	// Ok's and Cancel's materials, which take the place of their text
+	char			cvar[64];
+	char			command[256];
+	qhandle_t		material[3];
+	// a list: the first row shown, the selected row (1.., 0 for none), what
+	// the left button holds on its scroll bar and where on the thumb
+	int				top, selected;
+	urcScrollPart_t	held;
+	float			grab;
+} urcWindow_t;
+
+static urcWindow_t		urc_windows[URC_MAX_WINDOWS];	// bottom to top
+static int				urc_numWindows;
+static int				urc_activeWindow = -1;
+static int				urc_windowPress = -1;		// the window whose button or box the left button holds
+static urcWindowPart_t	urc_windowPressPart;
+static int				urc_windowDrag = -1;		// the window whose title bar it holds
+static float			urc_windowGrab[2];
+
+static const vec4_t		urc_windowBack = { 0.75f, 0.75f, 0.75f, 1 };	// UIWidget's default background
+
+qboolean URC_HasWindows( void ) {
+	return urc_initialised && urc_numWindows > 0;
+}
+
+// the frame the children are laid out in
+static void URC_WindowClient( const urcWindow_t *win, float r[4] ) {
+	r[0] = win->rect[0] + 2;
+	r[1] = win->rect[1] + URC_TITLE_HEIGHT;
+	r[2] = win->rect[2] - 4;
+	r[3] = win->rect[3] - URC_TITLE_HEIGHT - 2;
+}
+
+static void URC_WindowBox( const urcWindow_t *win, urcWindowPart_t part, float r[4] ) {
+	r[0] = win->rect[0] + win->rect[2] - ( part == WINPART_CLOSE ? 18 : 36 );
+	r[1] = win->rect[1] + 2;
+	r[2] = URC_BOX_SIZE;
+	r[3] = URC_BOX_SIZE;
+}
+
+// a dialog's Ok and Cancel: 64x32, 6 in from the client frame's bottom
+// left and bottom right
+static void URC_DialogButton( const urcWindow_t *win, urcWindowPart_t part, float r[4] ) {
+	float	c[4];
+
+	URC_WindowClient( win, c );
+	r[0] = c[0] + ( part == WINPART_CANCEL ? c[2] - URC_DIALOG_BUTTON_W - URC_DIALOG_MARGIN : URC_DIALOG_MARGIN );
+	r[1] = c[1] + c[3] - URC_DIALOG_BUTTON_H - URC_DIALOG_MARGIN;
+	r[2] = URC_DIALOG_BUTTON_W;
+	r[3] = URC_DIALOG_BUTTON_H;
+}
+
+static qboolean URC_PointIn( const float r[4], float x, float y ) {
+	return x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
+}
+
+static float URC_WindowHeight( const urcWindow_t *win ) {
+	return win->minimized ? URC_TITLE_HEIGHT : win->rect[3];
+}
+
+// the part of a window a point is on
+static urcWindowPart_t URC_WindowPartAt( const urcWindow_t *win, float x, float y ) {
+	float	r[4];
+
+	Vector4Set( r, win->rect[0], win->rect[1], win->rect[2], URC_WindowHeight( win ) );
+	if ( !URC_PointIn( r, x, y ) ) {
+		return WINPART_NONE;
+	}
+	URC_WindowBox( win, WINPART_CLOSE, r );
+	if ( URC_PointIn( r, x, y ) ) {
+		return WINPART_CLOSE;
+	}
+	if ( win->kind != WIN_DIALOG ) {
+		URC_WindowBox( win, WINPART_MINIMIZE, r );
+		if ( URC_PointIn( r, x, y ) ) {
+			return WINPART_MINIMIZE;
+		}
+	}
+	if ( y < win->rect[1] + URC_TITLE_HEIGHT ) {
+		return WINPART_TITLE;
+	}
+	if ( win->kind == WIN_DIALOG ) {
+		URC_DialogButton( win, WINPART_OK, r );
+		if ( URC_PointIn( r, x, y ) ) {
+			return WINPART_OK;
+		}
+		URC_DialogButton( win, WINPART_CANCEL, r );
+		if ( URC_PointIn( r, x, y ) ) {
+			return WINPART_CANCEL;
+		}
+	}
+	return WINPART_CLIENT;
+}
+
+static int URC_WindowAt( float x, float y ) {
+	int		i;
+
+	for ( i = urc_numWindows - 1 ; i >= 0 ; i-- ) {
+		if ( URC_WindowPartAt( &urc_windows[i], x, y ) != WINPART_NONE ) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static urcWindow_t *URC_NewWindow( urcWindowKind_t kind, const char *title, float x, float y, float w, float h, const vec4_t color ) {
+	urcWindow_t	*win;
+
+	if ( urc_numWindows == URC_MAX_WINDOWS ) {
+		Com_Printf( "Too many windows\n" );
+		return NULL;
+	}
+	win = &urc_windows[urc_numWindows++];
+	Com_Memset( win, 0, sizeof( *win ) );
+	win->kind = kind;
+	Q_strncpyz( win->title, title, sizeof( win->title ) );
+	Vector4Set( win->rect, x, y, w, h );
+	Vector4Copy( color, win->color );
+	return win;
+}
+
+static void URC_CloseWindow( int index ) {
+	if ( index < 0 || index >= urc_numWindows ) {
+		return;
+	}
+	memmove( &urc_windows[index], &urc_windows[index + 1], ( urc_numWindows - index - 1 ) * sizeof( urc_windows[0] ) );
+	urc_numWindows--;
+	if ( urc_activeWindow == index ) {
+		urc_activeWindow = -1;
+	} else if ( urc_activeWindow > index ) {
+		urc_activeWindow--;
+	}
+	urc_windowPress = urc_windowDrag = -1;
+}
+
+static void URC_CloseAllWindows( void ) {
+	urc_numWindows = 0;
+	urc_activeWindow = urc_windowPress = urc_windowDrag = -1;
+}
+
+// to the top, and active (0x498c10); returns its new index
+static int URC_ActivateWindow( int index ) {
+	urcWindow_t	win = urc_windows[index];
+
+	memmove( &urc_windows[index], &urc_windows[index + 1], ( urc_numWindows - index - 1 ) * sizeof( urc_windows[0] ) );
+	urc_windows[urc_numWindows - 1] = win;
+	urc_activeWindow = urc_numWindows - 1;
+	return urc_activeWindow;
+}
+
+// a dialog's Ok or Cancel: raised in the default background, its text
+// (a held button's a pixel down and right) or its material
+static void URC_DrawDialogButton( const urcWindow_t *win, int index, urcWindowPart_t part, const char *text, qhandle_t material ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	vec4_t				colors[4];
+	float				r[4];
+
+	URC_DialogButton( win, part, r );
+	URC_BorderColors( urc_windowBack, colors );
+	URC_Draw3DBox( r, qfalse, colors, 1 );
+	if ( material ) {
+		URC_DrawPicST( r[0], r[1], r[2], r[3], 0, 0, 1, 1, material, white );
+		return;
+	}
+	if ( urc_windowPress == index && urc_windowPressPart == part && URC_WindowPartAt( win, urc_cursorX, urc_cursorY ) == part ) {
+		r[0] += 1;
+		r[1] += 1;
+	}
+	URC_PrintJustified( URC_LoadFont( URC_DEFAULT_FONT ), r, URC_JUSTIFY_CENTER, URC_JUSTIFY_MIDDLE, text, white );
+}
+
+// a dialog's label: its cvar's value centred over the client frame (its
+// frame, 0x4ab8f4). Retail's line of text lands 6 pixels above that frame's
+// centre in a capture, as if it were 12 shorter; where that comes from was
+// not found, so the text is centred over the frame less 12 at the bottom.
+static void URC_DrawDialog( const urcWindow_t *win, int index ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	float				c[4];
+
+	URC_WindowClient( win, c );
+	if ( win->material[0] ) {
+		URC_DrawPicST( c[0], c[1], c[2], c[3], 0, 0, 1, 1, win->material[0], white );
+	} else {
+		c[3] -= 12;
+		URC_PrintJustified( URC_LoadFont( URC_DEFAULT_FONT ), c, URC_JUSTIFY_CENTER, URC_JUSTIFY_MIDDLE, Cvar_VariableString( win->cvar ), white );
+	}
+	URC_DrawDialogButton( win, index, WINPART_OK, "Ok", win->material[1] );
+	URC_DrawDialogButton( win, index, WINPART_CANCEL, "Cancel", win->material[2] );
+}
+
+/*
+=================
+The test list
+
+ui_testlist (0x40d950): a UIListCtrl (0x4ac830) over the client frame in
+verdana-12, its colour white, with the columns "Name" 100, "Ping" 64 and
+"IP" 64 wide and a hundred times the rows ("Item 1", "123", "1"),
+("Item 2", "60", "2"), ("Item 3", "-5", "3"). It is drawn as the load
+list is (0x4ace40): the headers 16 tall, 0.3 grey inside white lines, their
+titles white at 2, 2; a row per font height in the list's colours, white
+on white here, so retail's rows cannot be seen; the selected row black on
+white; the scroll bar down the right.
+=================
+*/
+#define URC_TESTLIST_ROWS	300
+
+static const char	*urc_testColumns[3] = { "Name", "Ping", "IP" };
+static const int	urc_testWidths[3] = { 100, 64, 64 };
+static const char	*urc_testCells[3][3] = { { "Item 1", "123", "1" }, { "Item 2", "60", "2" }, { "Item 3", "-5", "3" } };
+
+static int URC_TestListPage( const float c[4] ) {
+	int		rows = (int)( ( c[3] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) );
+
+	return rows < 1 ? 1 : rows;
+}
+
+static void URC_TestListClamp( urcWindow_t *win ) {
+	float	c[4];
+	int		page;
+
+	URC_WindowClient( win, c );
+	page = URC_TestListPage( c );
+	if ( win->top > URC_TESTLIST_ROWS - page ) {
+		win->top = URC_TESTLIST_ROWS - page;
+	}
+	if ( win->top < 0 ) {
+		win->top = 0;
+	}
+}
+
+static void URC_DrawTestList( const urcWindow_t *win, int index ) {
+	static const vec4_t	headerFill = { 0.3f, 0.3f, 0.3f, 1 };
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	black = { 0, 0, 0, 1 };
+	urcFont_t			*font = URC_LoadFont( URC_DEFAULT_FONT );
+	float				c[4], r[4], saved[4], x, y, rowH = URC_FontHeight( font );
+	int					col, i;
+
+	URC_WindowClient( win, c );
+	URC_PushClip( c, saved );
+	URC_Box( c[0], c[1], c[2], c[3], white, 1 );
+
+	x = 0;
+	for ( col = 0 ; col < 3 ; col++ ) {
+		Vector4Set( r, c[0] + x, c[1], urc_testWidths[col] + 1, URC_SAVE_HEADER );
+		URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+		URC_DrawString( font, r[0] + 2, r[1] + 2, urc_testColumns[col], white );
+		x += urc_testWidths[col];
+	}
+	Vector4Set( r, c[0] + x, c[1], c[2] - x + 1, URC_SAVE_HEADER );
+	URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+
+	for ( i = win->top, y = URC_SAVE_HEADER ; i < URC_TESTLIST_ROWS && y <= c[3] ; i++, y += rowH ) {
+		const float	*text = i + 1 == win->selected ? black : white;
+
+		x = 0;
+		for ( col = 0 ; col < 3 ; col++ ) {
+			URC_DrawString( font, c[0] + x, c[1] + y, urc_testCells[i % 3][col], text );
+			x += urc_testWidths[col];
+		}
+	}
+
+	URC_DrawScrollBar( c, URC_TESTLIST_ROWS, URC_TestListPage( c ), win->top,
+		urc_windowPress == index ? win->held : SCROLL_NONE, 1 );
+	URC_PopClip( saved );
+}
+
+// a click in the test list: its scroll bar, or a row to select
+static void URC_TestListClick( urcWindow_t *win ) {
+	float	c[4];
+	int		page, row;
+
+	URC_WindowClient( win, c );
+	page = URC_TestListPage( c );
+	win->held = URC_ScrollPart( c, URC_TESTLIST_ROWS, page, win->top, urc_cursorX, urc_cursorY );
+	switch ( win->held ) {
+	case SCROLL_UP: win->top--; break;
+	case SCROLL_DOWN: win->top++; break;
+	case SCROLL_PAGEUP: win->top -= page; break;
+	case SCROLL_PAGEDOWN: win->top += page; break;
+	case SCROLL_THUMB:
+		{
+			float	sr[4], ty, th;
+
+			URC_ScrollRect( c, sr );
+			URC_ScrollThumb( sr, URC_TESTLIST_ROWS, page, win->top, &ty, &th );
+			win->grab = urc_cursorY - ( sr[1] + ty );
+		}
+		break;
+	default:
+		if ( urc_cursorX < c[0] + c[2] - URC_SCROLL_WIDTH && urc_cursorY >= c[1] + URC_SAVE_HEADER ) {
+			row = win->top + (int)( ( urc_cursorY - c[1] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) ) + 1;
+			if ( row >= 1 && row <= URC_TESTLIST_ROWS ) {
+				win->selected = row;
+			}
+		}
+		break;
+	}
+	URC_TestListClamp( win );
+}
+
+static void URC_DrawWindow( int index ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	black = { 0, 0, 0, 1 };
+	const urcWindow_t	*win = &urc_windows[index];
+	urcFont_t			*boxFont = URC_LoadFont( URC_BOX_FONT );
+	vec4_t				colors[4], fill, edge, text;
+	float				x = win->rect[0], y = win->rect[1], w = win->rect[2], h = URC_WindowHeight( win );
+	float				th = h < URC_TITLE_HEIGHT ? h : URC_TITLE_HEIGHT;
+	float				r[4], saved[4];
+
+	Vector4Set( r, x, y, w, h );
+	URC_PushClip( r, saved );
+	URC_Box( x, y, w, h, urc_windowBack, 1 );
+
+	if ( index == urc_activeWindow ) {
+		URC_BorderColors( win->color, colors );
+		Vector4Copy( win->color, fill );
+		Vector4Copy( colors[2], edge );
+		Vector4Copy( white, text );
+	} else {
+		URC_BorderColors( urc_windowBack, colors );
+		Vector4Copy( urc_windowBack, fill );
+		Vector4Copy( colors[0], edge );
+		Vector4Copy( black, text );
+	}
+	URC_Box( x, y, w, th, fill, 1 );
+	URC_Box( x, y, w, 1, edge, 1 );
+	URC_Box( x, y, 1, th, edge, 1 );
+	URC_Box( x + w - 2, y, 2, th, edge, 1 );
+	URC_Box( x, y + th - 2, w, 2, edge, 1 );
+	URC_DrawString( URC_LoadFont( URC_TITLE_FONT ), x + 3, y + 3, win->title, text );
+	URC_WindowBox( win, WINPART_CLOSE, r );
+	URC_PrintJustified( boxFont, r, URC_JUSTIFY_CENTER, URC_JUSTIFY_MIDDLE, "r", text );
+	if ( win->kind != WIN_DIALOG ) {
+		URC_WindowBox( win, WINPART_MINIMIZE, r );
+		URC_PrintJustified( boxFont, r, URC_JUSTIFY_CENTER, URC_JUSTIFY_MIDDLE, "0", text );
+	}
+
+	if ( !win->minimized ) {
+		switch ( win->kind ) {
+		case WIN_DIALOG:
+			URC_DrawDialog( win, index );
+			break;
+		case WIN_TESTLIST:
+			URC_DrawTestList( win, index );
+			break;
+		}
+	}
+	URC_PopClip( saved );
+}
+
+static void URC_DrawWindows( void ) {
+	int		i;
+
+	for ( i = 0 ; i < urc_numWindows ; i++ ) {
+		URC_DrawWindow( i );
+	}
+}
+
+/*
+=================
+URC_WindowKey
+
+The mouse buttons over the windows, with the cursor up; returns whether
+the windows took the key.
+=================
+*/
+static qboolean URC_WindowKey( int key, qboolean down ) {
+	urcWindowPart_t	part;
+	int				i;
+
+	// the wheel scrolls a list under the cursor
+	if ( ( key == K_MWHEELUP || key == K_MWHEELDOWN ) && down ) {
+		i = URC_WindowAt( urc_cursorX, urc_cursorY );
+		if ( i < 0 ) {
+			return qfalse;
+		}
+		if ( urc_windows[i].kind == WIN_TESTLIST && !urc_windows[i].minimized ) {
+			urc_windows[i].top += key == K_MWHEELUP ? -1 : 1;
+			URC_TestListClamp( &urc_windows[i] );
+		}
+		return qtrue;
+	}
+	if ( key != K_MOUSE1 ) {
+		return qfalse;
+	}
+	if ( !down ) {
+		i = urc_windowPress;
+		urc_windowDrag = urc_windowPress = -1;
+		if ( i >= 0 && i < urc_numWindows && urc_windows[i].held != SCROLL_NONE ) {
+			urc_windows[i].held = SCROLL_NONE;
+			return qtrue;
+		}
+		if ( i < 0 || i >= urc_numWindows || URC_WindowPartAt( &urc_windows[i], urc_cursorX, urc_cursorY ) != urc_windowPressPart ) {
+			return qfalse;
+		}
+		switch ( urc_windowPressPart ) {
+		case WINPART_OK:
+			// UIDialog's Ok (0x4ac120 sets the command): the command, then
+			// the dialog goes, as with Cancel and the close box
+			Cbuf_AddText( va( "%s\n", urc_windows[i].command ) );
+			URC_CloseWindow( i );
+			break;
+		case WINPART_CANCEL:
+		case WINPART_CLOSE:
+			URC_CloseWindow( i );
+			break;
+		case WINPART_MINIMIZE:
+			urc_windows[i].minimized = !urc_windows[i].minimized;
+			break;
+		default:
+			break;
+		}
+		return qtrue;
+	}
+
+	i = URC_WindowAt( urc_cursorX, urc_cursorY );
+	if ( i < 0 ) {
+		return qfalse;
+	}
+	i = URC_ActivateWindow( i );
+	part = URC_WindowPartAt( &urc_windows[i], urc_cursorX, urc_cursorY );
+	switch ( part ) {
+	case WINPART_TITLE:
+		urc_windowDrag = i;
+		urc_windowGrab[0] = urc_cursorX - urc_windows[i].rect[0];
+		urc_windowGrab[1] = urc_cursorY - urc_windows[i].rect[1];
+		break;
+	case WINPART_CLOSE:
+	case WINPART_MINIMIZE:
+	case WINPART_OK:
+	case WINPART_CANCEL:
+		urc_windowPress = i;
+		urc_windowPressPart = part;
+		break;
+	case WINPART_CLIENT:
+		if ( urc_windows[i].kind == WIN_TESTLIST ) {
+			URC_TestListClick( &urc_windows[i] );
+			if ( urc_windows[i].held != SCROLL_NONE ) {
+				urc_windowPress = i;
+				urc_windowPressPart = part;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	return qtrue;
+}
+
+// a window dragged by its title bar follows the cursor, a list's thumb
+// the cursor's height
+static void URC_WindowMouseMove( void ) {
+	if ( urc_windowDrag >= 0 && urc_windowDrag < urc_numWindows ) {
+		urc_windows[urc_windowDrag].rect[0] = urc_cursorX - urc_windowGrab[0];
+		urc_windows[urc_windowDrag].rect[1] = urc_cursorY - urc_windowGrab[1];
+	}
+	if ( urc_windowPress >= 0 && urc_windowPress < urc_numWindows && urc_windows[urc_windowPress].held == SCROLL_THUMB ) {
+		urcWindow_t	*win = &urc_windows[urc_windowPress];
+		float		c[4];
+
+		URC_WindowClient( win, c );
+		win->top = URC_ScrollTopAt( c, URC_TESTLIST_ROWS, URC_TestListPage( c ), urc_cursorY - win->grab );
+	}
+}
+
+/*
+=================
+URC_Dialog_f
+
+dialog <title> <cvar> <command> [width] [height] [label material] [ok
+material] [cancel material] (fakk2.exe 0x423250, the window 0x40cf10): a
+dialog of 300x200 by default, centred on the screen, its label showing
+the cvar, Ok running the command; the materials take the place of the
+label's and the buttons' text. It comes up active.
+=================
+*/
+static void URC_Dialog_f( void ) {
+	static const vec4_t	color = { 0.1f, 0.1f, 0.1f, 1 };
+	urcWindow_t			*win;
+	int					w, h, i;
+
+	if ( Cmd_Argc() < 4 ) {
+		Com_Printf( "usage: dialog title cvar_name command [width] [height]\n" );
+		return;
+	}
+	w = Cmd_Argc() > 4 ? atoi( Cmd_Argv( 4 ) ) : 300;
+	h = Cmd_Argc() > 5 ? atoi( Cmd_Argv( 5 ) ) : 200;
+	win = URC_NewWindow( WIN_DIALOG, Cmd_Argv( 1 ), ( 640 - w ) >> 1, ( 480 - h ) >> 1, w, h, color );
+	if ( !win ) {
+		return;
+	}
+	Q_strncpyz( win->cvar, Cmd_Argv( 2 ), sizeof( win->cvar ) );
+	Q_strncpyz( win->command, Cmd_Argv( 3 ), sizeof( win->command ) );
+	for ( i = 0 ; i < 3 ; i++ ) {
+		if ( Cmd_Argc() > 6 + i && Cmd_Argv( 6 + i )[0] ) {
+			win->material[i] = re.RegisterShaderNoMip( Cmd_Argv( 6 + i ) );
+		}
+	}
+	URC_ActivateWindow( win - urc_windows );
+}
+
+/*
+=================
+URC_TestList_f
+
+ui_testlist (fakk2.exe 0x40d950): "Test list control", 400x300 at 20, 20,
+coloured 0.1 grey, holding the test list; it is not made active.
+=================
+*/
+static void URC_TestList_f( void ) {
+	static const vec4_t	color = { 0.1f, 0.1f, 0.1f, 1 };
+
+	URC_NewWindow( WIN_TESTLIST, "Test list control", 20, 20, 400, 300, color );
+}
+
+/*
+=================
 URC_Draw
 
 After the game's scene and the map viewer, before the console.
@@ -3025,6 +3672,7 @@ void URC_Draw( void ) {
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
 		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1 );
 	}
+	URC_DrawWindows();
 	URC_DrawPopup();
 	URC_DrawPressKey();
 	INV_Draw();
@@ -3033,6 +3681,16 @@ void URC_Draw( void ) {
 		URC_DrawPrint( &urc_centerprint );
 		URC_DrawPrint( &urc_locprint );
 	}
+
+	// ui_drawcoords (fakk2.exe 0x4982a3): with the cursor up, its place as
+	// "x:y" ten units right of it and ten above, in the interface's font
+	if ( ui_drawcoords->integer && ( urc_stackDepth || cl_mouseShown ) ) {
+		static const vec4_t	white = { 1, 1, 1, 1 };
+
+		URC_DrawString( URC_LoadFont( URC_DEFAULT_FONT ), urc_cursorX + 10, urc_cursorY - 10,
+			va( "%d:%d", (int)urc_cursorX, (int)urc_cursorY ), white );
+	}
+	URC_DrawFps();
 }
 
 /*
@@ -3251,6 +3909,10 @@ void URC_KeyEvent( int key, qboolean down ) {
 	float	rect[4];
 	int		i;
 
+	// the floating windows over everything, with the cursor up
+	if ( urc_numWindows && ( urc_stackDepth || cl_mouseShown ) && URC_WindowKey( key, down ) ) {
+		return;
+	}
 	if ( !urc_stackDepth ) {
 		return;
 	}
@@ -3404,6 +4066,7 @@ void CL_MouseAbsEvent( int x, int y ) {
 		URC_SliderSet( &urc_widgets[urc_dragSlider], rect );
 	}
 	URC_ListDragThumb();
+	URC_WindowMouseMove();
 }
 
 /*
@@ -3615,11 +4278,103 @@ void URC_PlayAliasSound( const char *name ) {
 	URC_PlaySound( name );
 }
 
+/*
+=================
+URC_Hud_f
+
+ui_hud [1|0] (fakk2.exe 0x40e010): the HUD menus on or off.
+=================
+*/
+static void URC_Hud_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: ui_hud [1|0]\n" );
+		return;
+	}
+	urc_hudOn = atoi( Cmd_Argv( 1 ) ) != 0;
+}
+
+/*
+=================
+URC_ResetCvars_f
+
+ui_resetcvars (fakk2.exe 0x40d8f0, 0x4a44c0, 0x4a3da0): every cvar a
+widget of the menu on top links to goes back to its default.
+=================
+*/
+static void URC_ResetCvars_f( void ) {
+	urcMenu_t	*menu;
+	int			i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		const char	*name = urc_widgets[menu->firstWidget + i].linkcvar;
+
+		if ( name[0] ) {
+			Cvar_Reset( name );
+		}
+	}
+}
+
+/*
+=================
+URC_CheckRestart_f
+
+ui_checkrestart (fakk2.exe 0x40d6a0, 0x4a44f0, 0x4a3cb0): when a cvar a
+widget of the menu on top links to has a latched value other than the
+one it had as the menu came up, restart what applies it: retail runs
+vid_restart for a CVAR_LATCH cvar, else snd_restart for a sound latch,
+the video taking precedence. Here snd_restart restarts the video as
+well, so a sound latch asks for it and the video alone for vid_restart.
+Retail first brings its console window ("FAKK2 Console") and mini
+console up or down by ui_console and ui_minicon; those windows are not
+made here.
+=================
+*/
+static void URC_CheckRestart_f( void ) {
+	urcMenu_t	*menu;
+	qboolean	vid = qfalse, snd = qfalse;
+	int			i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+		const char	*latched;
+		int			flags;
+
+		if ( !w->linkcvar[0] ) {
+			continue;
+		}
+		latched = Cvar_LatchedString( w->linkcvar );
+		if ( !latched || !Q_stricmp( latched, w->linkSnapshot ) ) {
+			continue;
+		}
+		flags = Cvar_Flags( w->linkcvar );
+		if ( flags & CVAR_SOUND_LATCH ) {
+			snd = qtrue;
+		} else if ( flags & CVAR_LATCH ) {
+			vid = qtrue;
+		}
+	}
+	if ( snd ) {
+		Cbuf_AddText( "snd_restart\n" );
+	} else if ( vid ) {
+		Cbuf_AddText( "vid_restart\n" );
+	}
+}
+
 void URC_Init( void ) {
-	ui_hud = Cvar_Get( "ui_hud", "1", CVAR_ARCHIVE );
+	ui_drawcoords = Cvar_Get( "ui_drawcoords", "0", 0 );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
 	Cvar_Get( "shortversion", "1.02", CVAR_ROM );	// the main menu's version label; the game data's version
 	Cvar_Get( "ui_newvidmode", "-1", 0 );			// UI_Init (0x40ea46); see URC_UpdateCatcher
+	Cvar_Get( "ui_console", "0", CVAR_ARCHIVE );		// UI_Init (0x40ea31, 0x40e9f0): the console and mini console
+	Cvar_Get( "ui_minicon", "0", CVAR_ARCHIVE );		// windows, which are not made here (ui_checkrestart)
 
 	urc_numFonts = 0;
 	urc_stackDepth = 0;
@@ -3641,6 +4396,11 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "centerprint", URC_CenterPrint_f );
 	Cmd_AddCommand( "locationprint", URC_LocationPrint_f );
 	Cmd_AddCommand( "widgetcommand", URC_WidgetCommand_f );
+	Cmd_AddCommand( "ui_hud", URC_Hud_f );
+	Cmd_AddCommand( "dialog", URC_Dialog_f );
+	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
+	Cmd_AddCommand( "ui_resetcvars", URC_ResetCvars_f );
+	Cmd_AddCommand( "ui_checkrestart", URC_CheckRestart_f );
 	urc_initialised = qtrue;
 	urc_lastState = -1;
 }
@@ -3660,8 +4420,14 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "listmenus" );
 	Cmd_RemoveCommand( "loadmenu" );
 	Cmd_RemoveCommand( "centerprint" );
+	Cmd_RemoveCommand( "ui_hud" );
 	Cmd_RemoveCommand( "locationprint" );
 	Cmd_RemoveCommand( "widgetcommand" );
+	Cmd_RemoveCommand( "dialog" );
+	Cmd_RemoveCommand( "ui_testlist" );
+	Cmd_RemoveCommand( "ui_resetcvars" );
+	Cmd_RemoveCommand( "ui_checkrestart" );
+	URC_CloseAllWindows();		// their materials die with the renderer
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer
 	urc_loadingShader = 0;

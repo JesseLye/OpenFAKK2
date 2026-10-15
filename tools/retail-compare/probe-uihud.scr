@@ -1,0 +1,19 @@
+// ui_hud, the retail client's command: on zoo, a shot with the HUD, then one after
+// "ui_hud 0" (the HUD menus hidden), then "ui_hud 1" again before quitting.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname hudcam origin "-2310 1568 56" angles "8 0 0"
+wait .2
+cuecamera $hudcam
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "ui_hud 0"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "ui_hud 1"
+wait .5
+stuffcmd "quit"
+end

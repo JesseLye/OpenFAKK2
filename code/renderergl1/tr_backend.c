@@ -742,6 +742,12 @@ RB_SetGL2D
 ================
 */
 void	RB_SetGL2D (void) {
+	// FAKK2: the fps counter's "world" counts are what was drawn before the
+	// frame first turned to 2D (fakk2.exe takes them after the 3D view, 0x47a6f0)
+	if ( !backEnd.worldPcTaken ) {
+		backEnd.worldPc = backEnd.pc;
+		backEnd.worldPcTaken = qtrue;
+	}
 	backEnd.projection2D = qtrue;
 	RB_SetFog( qfalse );
 
@@ -1134,6 +1140,12 @@ const void	*RB_SwapBuffers( const void *data ) {
 	// texture swapping test
 	if ( r_showImages->integer ) {
 		RB_ShowImages();
+	}
+
+	// FAKK2's fps counter: the texels the frame bound (R_PerformanceCounters
+	// hands it on with the next frame's)
+	if ( r_fps->integer ) {
+		backEnd.texelsUsed = R_SumOfUsedImages();
 	}
 
 	cmd = (const swapBuffersCommand_t *)data;

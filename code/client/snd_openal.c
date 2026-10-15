@@ -2995,10 +2995,10 @@ qboolean S_AL_Init( soundInterface_t *si )
 	// FAKK2: each sound carries its own distances (snd_info.c), so there are
 	// no s_alMinDistance, s_alMaxDistance, s_alRolloff or s_alGraceDistance
 
-	s_alDriver = Cvar_Get( "s_alDriver", ALDRIVER_DEFAULT, CVAR_ARCHIVE | CVAR_LATCH | CVAR_PROTECTED );
+	s_alDriver = Cvar_Get( "s_alDriver", ALDRIVER_DEFAULT, CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH | CVAR_PROTECTED );
 
-	s_alInputDevice = Cvar_Get( "s_alInputDevice", "", CVAR_ARCHIVE | CVAR_LATCH );
-	s_alDevice = Cvar_Get("s_alDevice", "", CVAR_ARCHIVE | CVAR_LATCH);
+	s_alInputDevice = Cvar_Get( "s_alInputDevice", "", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );
+	s_alDevice = Cvar_Get("s_alDevice", "", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH);
 
 	// Load QAL
 	if( !QAL_Init( s_alDriver->string ) )
@@ -3128,7 +3128,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 	// !!! FIXME: some of these alcCaptureOpenDevice() values should be cvars.
 	// !!! FIXME: add support for capture device enumeration.
 	// !!! FIXME: add some better error reporting.
-	s_alCapture = Cvar_Get( "s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	s_alCapture = Cvar_Get( "s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );
 	if (!s_alCapture->integer)
 	{
 		Com_Printf("OpenAL capture support disabled by user ('+set s_alCapture 1' to enable)\n");

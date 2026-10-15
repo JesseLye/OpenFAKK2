@@ -308,9 +308,6 @@ game_export_t	*ge;
 static void			*gameLibrary;
 static game_import_t	gameImport;
 
-// debug line storage the game writes into directly
-static debugline_t	*sv_debugLines;
-static int			sv_numDebugLines;
 
 // read when snapshots are built
 int					sv_farPlaneSquared;
@@ -388,7 +385,7 @@ static void SV_GameFree( void *block ) {
 
 // game cvar flags that mean the same thing to the engine
 #define	GAME_CVAR_SHARED_FLAGS	0x07ff
-// "latch until the sound system restarts"; the nearest engine behaviour is a plain latch
+// "latch until the sound system restarts"
 #define	GAME_CVAR_SOUND_LATCH	0x1000
 
 static cvar_t *SV_GameCvar( const char *var_name, const char *value, int flags ) {
@@ -396,7 +393,7 @@ static cvar_t *SV_GameCvar( const char *var_name, const char *value, int flags )
 
 	engineFlags = flags & GAME_CVAR_SHARED_FLAGS;
 	if ( flags & GAME_CVAR_SOUND_LATCH ) {
-		engineFlags |= CVAR_LATCH;
+		engineFlags |= CVAR_LATCH | CVAR_SOUND_LATCH;
 	}
 	return Cvar_Get( var_name, value, engineFlags );
 }
@@ -1137,8 +1134,8 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->SoundAmplitudes = SV_SoundAmplitudes;
 
 	import->CalcCRC = SV_GameCalcCRC;
-	import->DebugLines = &sv_debugLines;
-	import->numDebugLines = &sv_numDebugLines;
+	import->DebugLines = &com_debugLines;
+	import->numDebugLines = &com_numDebugLines;
 	import->LocateGameData = SV_LocateGameData;
 	import->SetFarPlane = SV_GameSetFarPlane;
 	import->SetSkyPortal = SV_GameSetSkyPortal;

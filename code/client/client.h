@@ -398,6 +398,7 @@ extern	cvar_t	*m_pitch;
 extern	cvar_t	*m_yaw;
 extern	cvar_t	*m_forward;
 extern	cvar_t	*m_side;
+extern	cvar_t	*m_up;
 extern	cvar_t	*m_filter;
 
 extern	cvar_t	*j_pitch;
@@ -521,6 +522,7 @@ void URC_BeginLoading( void );
 void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
 qboolean URC_HasMenus( void );
+qboolean URC_HasWindows( void );
 qboolean URC_IsFullscreen( void );
 void URC_PushMenu( const char *name );
 void URC_PopMenu( void );
@@ -549,6 +551,12 @@ void CL_ReadPackets (void);
 
 void CL_WritePacket( void );
 void IN_CenterView (void);
+
+// FAKK2: the camera offset the client game module reads (get_camera_offset)
+extern qboolean	in_cameraLook;
+extern vec3_t	cl_cameraOffset;
+extern qboolean	cl_cameraResetView;
+extern qboolean	cl_mouseShown;		// FAKK2: the cursor in the game (+togglemouse)
 
 void CL_VerifyCode( void );
 

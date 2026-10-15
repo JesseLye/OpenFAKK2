@@ -470,6 +470,10 @@ void	Cmd_TokenizeStringIgnoreQuotes( const char *text_in );
 // breaks the string up into arg tokens.
 
 void	Cmd_ExecuteString( const char *text );
+
+// FAKK2's console aliases (Quake II's)
+void	Cmd_SetAlias( const char *name, const char *value );
+void	Cmd_WriteAliases( fileHandle_t f );
 // Parses a single line of text into arguments and tries to execute it
 // as if it was typed at the console
 
@@ -538,6 +542,7 @@ void	Cvar_VariableStringBuffer( const char *var_name, char *buffer, int bufsize 
 // returns an empty string if not defined
 
 int	Cvar_Flags(const char *var_name);
+const char *Cvar_LatchedString( const char *var_name );	// FAKK2: NULL when nothing is latched
 // returns CVAR_NONEXISTENT if cvar doesn't exist or the flags of that particular CVAR.
 
 void	Cvar_CommandCompletion( void(*callback)(const char *s) );
@@ -841,6 +846,7 @@ int			Com_Filter(char *filter, char *name, int casesensitive);
 int			Com_FilterPath(char *filter, char *name, int casesensitive);
 int			Com_RealTime(qtime_t *qtime);
 qboolean	Com_SafeMode( void );
+const char	*Com_ConfigName( void );
 void		Com_RunAndTimeServerPacket(netadr_t *evFrom, msg_t *buf);
 
 qboolean	Com_IsVoipTarget(uint8_t *voipTargets, int voipTargetsSize, int clientNum);
@@ -875,6 +881,9 @@ extern	cvar_t	*com_altivec;
 extern	cvar_t	*com_standalone;
 extern	cvar_t	*com_basegame;
 extern	cvar_t	*com_homepath;
+extern	cvar_t	*com_dropsim;
+extern	cvar_t	*com_fps;
+extern	float	com_fpsValue;		// frames a second over the last 16, while com_fps is on
 
 // both client and server must agree to pause
 extern	cvar_t	*cl_paused;		// FAKK2: the cvar is called paused
@@ -900,6 +909,9 @@ extern	int		time_frontend;
 extern	int		time_backend;		// renderer backend time
 
 extern	int		com_frameTime;
+
+extern	debugline_t	*com_debugLines;
+extern	int			com_numDebugLines;
 
 extern	qboolean	com_errorEntered;
 extern	qboolean	com_fullyInitialized;
@@ -1144,6 +1156,26 @@ char	*Sys_DefaultHomeStatePath(void);
 const char *Sys_Dirname( char *path );
 const char *Sys_Basename( char *path );
 char *Sys_ConsoleInput(void);
+
+// FAKK2's console "cd" and "dir" work on the operating system's directories, as
+// Windows' _chdir and _findfirst see them; the attributes are Windows' _A_* bits
+#define SYS_FIND_READONLY	0x01
+#define SYS_FIND_HIDDEN		0x02
+#define SYS_FIND_SYSTEM		0x04
+#define SYS_FIND_SUBDIR		0x10
+#define SYS_FIND_ARCHIVE	0x20
+
+typedef struct {
+	int				attrib;			// SYS_FIND_*
+	time_t			writeTime;
+	unsigned int	size;
+	char			name[MAX_OSPATH];
+} sysFindFile_t;
+
+qboolean		Sys_ChangeDir( const char *path );		// qfalse with errno set
+// the current directory's entries matching a wildcard pattern ("*.*" is all);
+// Z_Free the list; NULL when nothing matches
+sysFindFile_t	*Sys_FindFiles( const char *pattern, int *numFiles );
 
 char **Sys_ListFiles( const char *directory, const char *extension, char *filter, int *numfiles, qboolean wantsubs );
 void	Sys_FreeFileList( char **list );

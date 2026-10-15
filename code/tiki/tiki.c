@@ -89,6 +89,7 @@ typedef struct {
 
 typedef struct {
 	char				alias[48];
+	char				file[TIKI_MAX_NAME];		// as the definition names it
 	char				fullname[TIKI_MAX_NAME];
 	int					flags;
 	int					crossblend;
@@ -98,6 +99,7 @@ typedef struct {
 	float				totalTime;
 	vec3_t				totalDelta;
 	tikiAnimFrame_t		*frames;
+	int					fileSize;	// the animation file's length, for "tiki" and "tikilist"
 
 	// vertex animations carry tag placements per frame: [tag][frame] of
 	// origin followed by three axis vectors
@@ -119,6 +121,7 @@ typedef struct {
 	int		numSkins;
 	int		flags;
 	float	damageMultiplier;
+	int		numTriangles;	// from the first animation or the skeleton, for "tiki"
 } tikiSurface_t;
 
 struct tiki_s {
@@ -130,6 +133,7 @@ struct tiki_s {
 	float				lodScale;
 	float				lodBias;
 	vec3_t				loadOrigin;
+	vec3_t				lightOffset;	// "lightoffset"
 	vec3_t				mins, maxs;
 	float				radius;
 	qboolean			radiusSet;
@@ -373,6 +377,7 @@ static qboolean TIKI_LoadTan( tiki_t *tiki, tikiAnim_t *anim, const byte *data, 
 				return qfalse;
 			}
 			Q_strncpyz( tiki->surfaces[i].name, (const char *)data + ofs + 4, MAX_QPATH );
+			tiki->surfaces[i].numTriangles = TIKI_ReadInt( data + ofs + 80 );
 			ofsEnd = TIKI_ReadInt( data + ofs + 100 );
 			if ( ofsEnd <= 0 ) {
 				Com_Printf( "WARNING: %s has a malformed surface\n", anim->fullname );
@@ -491,6 +496,7 @@ static qboolean TIKI_LoadSkb( tiki_t *tiki, const char *name ) {
 				break;
 			}
 			Q_strncpyz( tiki->surfaces[i].name, (const char *)data + ofs + 4, MAX_QPATH );
+			tiki->surfaces[i].numTriangles = TIKI_ReadInt( data + ofs + 68 );
 			ofsEnd = TIKI_ReadInt( data + ofs + 92 );
 			if ( ofsEnd <= 0 ) {
 				break;
@@ -717,6 +723,12 @@ static void TIKI_ParseSetup( tikiParse_t *parse, char **tokens, int numTokens ) 
 		tiki->loadOrigin[0] = atof( tokens[1] );
 		tiki->loadOrigin[1] = atof( tokens[2] );
 		tiki->loadOrigin[2] = atof( tokens[3] );
+	} else if ( !Q_stricmp( key, "lightoffset" ) && numTokens >= 4 ) {
+		// where the model is lit from, moved in its own axes (TIKI_ParseSetup,
+		// fakk2.exe 0x44c3eb; the renderer adds it at 0x48d0b2)
+		tiki->lightOffset[0] = atof( tokens[1] );
+		tiki->lightOffset[1] = atof( tokens[2] );
+		tiki->lightOffset[2] = atof( tokens[3] );
 	} else {
 		Com_DPrintf( "TIKI: unknown setup keyword '%s' in %s\n", key, tiki->name );
 	}
@@ -835,6 +847,7 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 				anim->weight = 1.0f;
 				anim->crossblend = TIKI_DEFAULT_CROSSBLEND_MS;
 				Q_strncpyz( anim->alias, tokens[0], sizeof( anim->alias ) );
+				Q_strncpyz( anim->file, tokens[1], sizeof( anim->file ) );
 				if ( tiki->path[0] ) {
 					Com_sprintf( anim->fullname, sizeof( anim->fullname ), "%s/%s", tiki->path, tokens[1] );
 				} else {
@@ -1022,6 +1035,7 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 			}
 		}
 		FS_FreeFile( buffer );
+		anim->fileSize = ok ? length : 0;
 
 		if ( !ok ) {
 			free( anim->frames );
@@ -1221,6 +1235,14 @@ void TIKI_Origin( const tiki_t *tiki, vec3_t origin ) {
 		VectorCopy( tiki->loadOrigin, origin );
 	} else {
 		VectorClear( origin );
+	}
+}
+
+void TIKI_LightOffset( const tiki_t *tiki, vec3_t offset ) {
+	if ( tiki ) {
+		VectorCopy( tiki->lightOffset, offset );
+	} else {
+		VectorClear( offset );
 	}
 }
 
@@ -1941,4 +1963,247 @@ orientation_t TIKI_Tag_Orientation( const tiki_t *tiki, int animnum, int framenu
 
 	TIKI_AnimStateFrame( &st, animnum, framenum, scale, bone_tag, bone_quat );
 	return TIKI_Tag_OrientationEx( tiki, &st, tagnum );
+}
+
+/*
+===========================================================================
+
+Console commands
+
+The retail client's tiki, tikilist and cachealltikis (fakk2.exe 0x421430,
+0x451e00, 0x452490), printed as retail prints them. Retail's sizes are those
+of its own structures; here an animation is counted at its file's length,
+as retail counts it, and a definition at what this module keeps for it.
+
+===========================================================================
+*/
+
+static int QDECL TIKI_CompareAnimAliases( const void *a, const void *b ) {
+	return Q_stricmp( ( *(const tikiAnim_t * const *)a )->alias, ( *(const tikiAnim_t * const *)b )->alias );
+}
+
+/*
+===============
+TIKI_PrintInfo
+
+What "tiki" prints (0x451f30): the animations by alias, the surfaces with
+their triangles and skins, the tags or the bones, and the totals. Retail
+prints a vertex-animated surface's triangle count twice, as its vertex
+count too.
+===============
+*/
+static void TIKI_PrintInfo( const tiki_t *tiki ) {
+	const tikiAnim_t	**sorted;
+	int					totalSize = 0, totalFrames = 0, totalTris = 0;
+	int					i, j;
+	qboolean			skeletal = tiki->boneParents != NULL;
+
+	Com_Printf( "MODEL: %s\n", tiki->name );
+	Com_Printf( "Total Anims: %i\n", tiki->numAnims );
+
+	sorted = TIKI_Alloc( ( tiki->numAnims ? tiki->numAnims : 1 ) * sizeof( *sorted ) );
+	for ( i = 0 ; i < tiki->numAnims ; i++ ) {
+		sorted[i] = &tiki->anims[i];
+	}
+	qsort( (void *)sorted, tiki->numAnims, sizeof( *sorted ), TIKI_CompareAnimAliases );
+	for ( i = 0 ; i < tiki->numAnims ; i++ ) {
+		const tikiAnim_t	*anim = sorted[i];
+
+		Com_Printf( "   %s -> %s : Frames %d Time %.2f Size %i Delta %.2f %.2f %.2f\n", anim->alias, anim->file,
+			anim->numFrames, anim->totalTime, anim->fileSize, anim->totalDelta[0], anim->totalDelta[1], anim->totalDelta[2] );
+		totalSize += anim->fileSize;
+		totalFrames += anim->numFrames;
+	}
+	free( (void *)sorted );
+
+	Com_Printf( "Surfaces:  %i\n", tiki->numSurfaces );
+	for ( i = 0 ; i < tiki->numSurfaces ; i++ ) {
+		const tikiSurface_t	*surf = &tiki->surfaces[i];
+
+		if ( skeletal ) {
+			Com_Printf( "  Surface %s Triangles %i skins", surf->name, surf->numTriangles );
+		} else {
+			Com_Printf( "  Surface %s Vertices %i Triangles %i skins", surf->name, surf->numTriangles, surf->numTriangles );
+		}
+		for ( j = 0 ; j < surf->numSkins ; j++ ) {
+			Com_Printf( " %s", surf->shader[j] );
+		}
+		Com_Printf( "\n" );
+		totalTris += surf->numTriangles;
+	}
+
+	if ( skeletal ) {
+		Com_Printf( "Bones:  %i\n", tiki->numTags );
+		for ( i = 0 ; i < tiki->numTags ; i++ ) {
+			Com_Printf( "  %d : %s -> %d\n", i, tiki->tagNames[i], tiki->boneParents[i] );
+		}
+	} else {
+		Com_Printf( "Tags:  %i\n", tiki->numTags );
+		for ( i = 0 ; i < tiki->numTags ; i++ ) {
+			Com_Printf( "  %s\n", tiki->tagNames[i] );
+		}
+	}
+
+	Com_Printf( "\n" );
+	Com_Printf( "Total Triangles:  %i\n", totalTris );
+	Com_Printf( "\n" );
+	Com_Printf( "Total Anims Size: %i\n", totalSize );
+	Com_Printf( "\n" );
+	Com_Printf( "Total Number of Frames: %i\n", totalFrames );
+}
+
+/*
+===============
+TIKI_Info_f
+
+tiki <name>: the name goes under models/ and gets .tik unless it has them
+(0x421430).
+===============
+*/
+void TIKI_Info_f( void ) {
+	char		name[MAX_QPATH];
+	const char	*arg;
+	tiki_t		*tiki;
+
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "usage: tiki tikiname\n" );
+		return;
+	}
+	arg = Cmd_Argv( 1 );
+	if ( Q_stricmpn( arg, "models/", 7 ) ) {
+		Com_sprintf( name, sizeof( name ), "models/%s", arg );
+	} else {
+		Q_strncpyz( name, arg, sizeof( name ) );
+	}
+	COM_DefaultExtension( name, sizeof( name ), ".tik" );
+
+	tiki = TIKI_Register( name );
+	if ( !tiki ) {
+		Com_Printf( "TIKI_GetTiki: handle -1 out of range\n" );
+		Com_Printf( "ModelInfo: model not found.\n" );
+		return;
+	}
+	TIKI_PrintInfo( tiki );
+}
+
+static int TIKI_Size( const tiki_t *tiki ) {
+	int		size = sizeof( *tiki ) + tiki->animCapacity * sizeof( tikiAnim_t );
+	int		i;
+
+	size += tiki->numTags * MAX_QPATH;
+	if ( tiki->boneParents ) {
+		size += tiki->numTags * ( sizeof( int ) + sizeof( qboolean ) );
+	}
+	for ( i = 0 ; i < tiki->numAnims ; i++ ) {
+		const tikiAnim_t	*anim = &tiki->anims[i];
+
+		size += anim->numFrames * sizeof( tikiAnimFrame_t );
+		size += anim->numTags * anim->numFrames * 12 * sizeof( float );
+		size += anim->numFrames * anim->numBones * 8 * sizeof( short );
+	}
+	return size;
+}
+
+/*
+===============
+TIKI_AnimListedBefore
+
+Whether an earlier animation in the list's walk loaded the same file, which
+tikilist counts once.
+===============
+*/
+static qboolean TIKI_AnimListedBefore( const tiki_t *tiki, int animnum ) {
+	const tiki_t	*other;
+	int				j;
+
+	for ( other = tiki_list ; other ; other = other->next ) {
+		for ( j = 0 ; j < other->numAnims ; j++ ) {
+			if ( other == tiki && j == animnum ) {
+				return qfalse;
+			}
+			if ( other->anims[j].fileSize && !Q_stricmp( other->anims[j].fullname, tiki->anims[animnum].fullname ) ) {
+				return qtrue;
+			}
+		}
+	}
+	return qfalse;
+}
+
+/*
+===============
+TIKI_List_f
+
+tikilist (0x451e00): every animation file loaded, once, then every
+definition, with their sizes and the totals.
+===============
+*/
+void TIKI_List_f( void ) {
+	const tiki_t	*tiki;
+	int				totalAnims = 0, totalTikis = 0, numAnims = 0, numTikis = 0;
+	int				i;
+
+	Com_Printf( "==============\n" );
+	Com_Printf( "= Animations =\n" );
+	Com_Printf( "==============\n" );
+	for ( tiki = tiki_list ; tiki ; tiki = tiki->next ) {
+		for ( i = 0 ; i < tiki->numAnims ; i++ ) {
+			const tikiAnim_t	*anim = &tiki->anims[i];
+
+			if ( !anim->fileSize || TIKI_AnimListedBefore( tiki, i ) ) {
+				continue;
+			}
+			Com_Printf( "A %6d : %s\n", anim->fileSize, anim->fullname );
+			totalAnims += anim->fileSize;
+			numAnims++;
+		}
+	}
+	Com_Printf( "Total Anim: %i\n\n", totalAnims );
+
+	Com_Printf( "=========\n" );
+	Com_Printf( "= Tikis =\n" );
+	Com_Printf( "=========\n" );
+	for ( tiki = tiki_list ; tiki ; tiki = tiki->next ) {
+		int		size;
+
+		if ( !tiki->valid ) {
+			continue;
+		}
+		size = TIKI_Size( tiki );
+		Com_Printf( "T %6d : %s\n", size, tiki->name );
+		totalTikis += size;
+		numTikis++;
+	}
+	Com_Printf( "Total Tikis: %i\n\n", totalTikis );
+	Com_Printf( "Total Resident: %i\n", totalAnims + totalTikis );
+	Com_Printf( "Num Anims: %i\n", numAnims );
+	Com_Printf( "Num Tikis: %i\n", numTikis );
+}
+
+/*
+===============
+TIKI_CacheAll_f
+
+cachealltikis (0x452490): loads every definition under models/. Retail
+rewrites its binary cache of each as it goes (0x44d4d0); this module keeps
+no such cache, so here it loads them, which reports any that fail.
+===============
+*/
+void TIKI_CacheAll_f( void ) {
+	char	**list;
+	char	name[MAX_QPATH];
+	int		count, i;
+
+	list = FS_ListFiles( "models", ".tik", &count );
+	if ( !list || !count ) {
+		Com_Printf( "WARNING: no tiki files found\n" );
+		FS_FreeFileList( list );
+		return;
+	}
+	Com_Printf( "%i tiki files need to be cached\n", count );
+	for ( i = 0 ; i < count ; i++ ) {
+		Com_sprintf( name, sizeof( name ), "models/%s", list[i] );
+		Com_Printf( "...cacheing %s %4i of %4i\n", name, i, count );
+		TIKI_Register( name );
+	}
+	FS_FreeFileList( list );
 }

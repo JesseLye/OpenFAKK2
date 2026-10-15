@@ -26,6 +26,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../sys/sys_local.h"
 #include "../sys/sys_loadlib.h"
+#include "../qcommon/alias.h"
+#include "../tiki/tiki.h"
 
 #ifdef USE_MUMBLE
 #include "libmumblelink.h"
@@ -76,6 +78,7 @@ cvar_t	*cl_timedemo;
 cvar_t	*cl_timedemoLog;
 cvar_t	*cl_autoRecordDemo;
 cvar_t	*cl_aviFrameRate;
+cvar_t	*cl_avidemo;		// FAKK2: a screenshot every frame
 cvar_t	*cl_aviMotionJpeg;
 cvar_t	*cl_forceavidemo;
 
@@ -91,6 +94,7 @@ cvar_t	*m_pitch;
 cvar_t	*m_yaw;
 cvar_t	*m_forward;
 cvar_t	*m_side;
+cvar_t	*m_up;
 cvar_t	*m_filter;
 
 cvar_t	*j_pitch;
@@ -1470,7 +1474,7 @@ void CL_Disconnect( qboolean showMainMenu ) {
 	clc.state = CA_DISCONNECTED;
 
 	// allow cheats locally
-	Cvar_Set( "sv_cheats", "1" );
+	Cvar_Set( "cheats", "1" );
 
 	// not connected to a pure server anymore
 	cl_connectedToPureServer = qfalse;
@@ -1929,6 +1933,26 @@ CL_ResetPureClientAtServer
 */
 void CL_ResetPureClientAtServer( void ) {
 	CL_AddReliableCommand("vdr", qfalse);
+}
+
+/*
+=================
+CL_VidMode_f
+
+vidmode <modenum> (fakk2.exe 0x4223d0): retail switches the window to the
+mode in place (the renderer's 0xc987f8, then the client game and the
+interface lay themselves out again, 0x4223a0) and sets r_mode when that
+worked. The renderer here has no switch in place, so it sets r_mode and
+restarts the video.
+=================
+*/
+static void CL_VidMode_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: vidmode [modenum]\n" );
+		return;
+	}
+	Cvar_Set( "r_mode", va( "%d", atoi( Cmd_Argv( 1 ) ) ) );
+	Cbuf_AddText( "vid_restart\n" );
 }
 
 /*
@@ -3027,6 +3051,15 @@ void CL_Frame ( int msec ) {
 		VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
 	}
 
+	// FAKK2's cl_avidemo (CL_Frame, fakk2.exe 0x421f45), Quake III 1.32's: a
+	// screenshot every frame of a game, each frame 1/n of a second long
+	if ( cl_avidemo->integer > 0 ) {
+		if ( clc.state == CA_ACTIVE ) {
+			Cbuf_ExecuteText( EXEC_NOW, "screenshot silent\n" );
+		}
+		msec = 1000 / cl_avidemo->integer;
+	}
+
 	// if recording an avi, lock to a fixed fps
 	if ( CL_VideoRecording( ) && cl_aviFrameRate->integer && msec) {
 		// save the current screen
@@ -3324,6 +3357,8 @@ void CL_InitRef( void ) {
 	ri.CM_ClusterPVS = CM_ClusterPVS;
 	ri.CM_DrawDebugSurface = CM_DrawDebugSurface;
 	ri.CM_BoxTrace = CM_BoxTrace;
+	ri.DebugLines = &com_debugLines;
+	ri.numDebugLines = &com_numDebugLines;
 
 	ri.FS_ReadFile = FS_ReadFile;
 	ri.FS_FreeFile = FS_FreeFile;
@@ -3587,7 +3622,7 @@ void CL_Init( void ) {
 	cl_motd = Cvar_Get ("cl_motd", "1", 0);
 #endif
 
-	cl_timeout = Cvar_Get ("cl_timeout", "200", 0);
+	cl_timeout = Cvar_Get ("cl_timeout", "125", 0);	// FAKK2: the retail default
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
@@ -3601,6 +3636,7 @@ void CL_Init( void ) {
 	cl_timedemoLog = Cvar_Get ("cl_timedemoLog", "", CVAR_ARCHIVE);
 	cl_autoRecordDemo = Cvar_Get ("cl_autoRecordDemo", "0", CVAR_ARCHIVE);
 	cl_aviFrameRate = Cvar_Get ("cl_aviFrameRate", "25", CVAR_ARCHIVE);
+	cl_avidemo = Cvar_Get ("cl_avidemo", "0", 0);	// FAKK2 (0x42258f)
 	cl_aviMotionJpeg = Cvar_Get ("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
 	cl_forceavidemo = Cvar_Get ("cl_forceavidemo", "0", 0);
 
@@ -3619,7 +3655,7 @@ void CL_Init( void ) {
 	cl_run = Cvar_Get ("cl_run", "0", CVAR_ARCHIVE);
 	cl_sensitivity = Cvar_Get ("sensitivity", "5", CVAR_ARCHIVE);
 	cl_mouseAccel = Cvar_Get ("cl_mouseAccel", "0", CVAR_ARCHIVE);
-	cl_freelook = Cvar_Get( "cl_freelook", "1", CVAR_ARCHIVE );
+	cl_freelook = Cvar_Get( "freelook", "1", CVAR_ARCHIVE );	// FAKK2's name (fakk2.exe 0x42263c)
 
 	// 0: legacy mouse acceleration
 	// 1: new implementation
@@ -3651,6 +3687,7 @@ void CL_Init( void ) {
 	m_yaw = Cvar_Get ("m_yaw", "0.022", CVAR_ARCHIVE);
 	m_forward = Cvar_Get ("m_forward", "0.25", CVAR_ARCHIVE);
 	m_side = Cvar_Get ("m_side", "0.25", CVAR_ARCHIVE);
+	m_up = Cvar_Get ("m_up", "0", CVAR_ARCHIVE);		// FAKK2 (0x422705)
 #ifdef __APPLE__
 	// Input is jittery on OS X w/o this
 	m_filter = Cvar_Get ("m_filter", "1", CVAR_ARCHIVE);
@@ -3688,6 +3725,10 @@ void CL_Init( void ) {
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
 	// userinfo
+	// FAKK2 (CL_Init 0x422780): the controls menu's invert check box shows
+	// whether m_pitch is negative; the box sets m_pitch itself
+	Cvar_Set( "m_invert_pitch", m_pitch->value < 0 ? "1" : "0" );
+
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE );
 	cl_rate = Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("snaps", "20", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -3742,9 +3783,15 @@ void CL_Init( void ) {
 	//
 	Cmd_AddCommand ("cmd", CL_ForwardToServer_f);
 	Cmd_AddCommand ("configstrings", CL_Configstrings_f);
+	Cmd_AddCommand ("aliasdump", Alias_Dump);	// FAKK2: the global sound aliases (fakk2.exe 0x41c550)
 	Cmd_AddCommand ("clientinfo", CL_Clientinfo_f);
+	// FAKK2: the model definitions (fakk2.exe 0x42294e on)
+	Cmd_AddCommand ("tikilist", TIKI_List_f);
+	Cmd_AddCommand ("tiki", TIKI_Info_f);
+	Cmd_AddCommand ("cachealltikis", TIKI_CacheAll_f);
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
+	Cmd_AddCommand ("vidmode", CL_VidMode_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
@@ -3821,9 +3868,14 @@ void CL_Shutdown(char *finalmsg, qboolean disconnect, qboolean quit)
 
 	Cmd_RemoveCommand ("cmd");
 	Cmd_RemoveCommand ("configstrings");
+	Cmd_RemoveCommand ("aliasdump");
 	Cmd_RemoveCommand ("clientinfo");
+	Cmd_RemoveCommand ("tikilist");
+	Cmd_RemoveCommand ("tiki");
+	Cmd_RemoveCommand ("cachealltikis");
 	Cmd_RemoveCommand ("snd_restart");
 	Cmd_RemoveCommand ("vid_restart");
+	Cmd_RemoveCommand ("vidmode");
 	Cmd_RemoveCommand ("disconnect");
 	Cmd_RemoveCommand ("record");
 	Cmd_RemoveCommand ("demo");

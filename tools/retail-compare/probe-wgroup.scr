@@ -1,0 +1,27 @@
+// Weapon groups, for the real client on zoo: takes up the green sword, saves it as
+// weapon group 3 (saveweaps, CTRL+3 in default.cfg), holsters, and takes the group up
+// again with weapgroup3 (ALT+3), the alias saveweaps made. Lists the console aliases
+// and the ALT and CTRL bindings default.cfg gives. Shot 0 is after the holster, shot 1
+// after the group: the sword is back in Julie's right hand.
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_sword.tik"
+wait 0.5
+stuffcmd "use GreenSword right"
+wait 2
+stuffcmd "saveweaps 3"
+wait 0.5
+stuffcmd "alias"
+stuffcmd "altbindlist"
+stuffcmd "ctrlbindlist"
+stuffcmd "holster"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "weapgroup3"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

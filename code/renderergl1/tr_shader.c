@@ -421,7 +421,31 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 	//
 	// scale
 	//
-	else if ( !Q_stricmp( token, "scale" ) || !Q_stricmp( token, "macro" ) )
+	//
+	// FAKK2: macro <sSize> <tSize> (fakk2.exe 0x478476): coordinates from the
+	// world position, one texture across that many units
+	//
+	else if ( !Q_stricmp( token, "macro" ) )
+	{
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing scale parms in shader '%s' for macro definition\n", shader.name );
+			return;
+		}
+		tmi->scale[0] = 1.0 / atof( token );
+
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing scale parms in shader '%s' for macro definition\n", shader.name );
+			return;
+		}
+		tmi->scale[1] = 1.0 / atof( token );
+		tmi->type = TMOD_MACRO;
+		shader.needsNormal = qtrue;
+	}
+	else if ( !Q_stricmp( token, "scale" ) )
 	{
 		token = COM_ParseExt( text, qfalse );
 		if ( token[0] == 0 )
@@ -439,6 +463,28 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 		}
 		tmi->scale[1] = atof( token );
 		tmi->type = TMOD_SCALE;
+	}
+	//
+	// FAKK2: parallax <sRate> <tRate> (fakk2.exe 0x4783ed)
+	//
+	else if ( !Q_stricmp( token, "parallax" ) )
+	{
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing rate parms in shader '%s'\n", shader.name );
+			return;
+		}
+		tmi->scroll[0] = atof( token );
+
+		token = COM_ParseExt( text, qfalse );
+		if ( token[0] == 0 )
+		{
+			ri.Printf( PRINT_WARNING, "WARNING: missing rate parms in shader '%s'\n", shader.name );
+			return;
+		}
+		tmi->scroll[1] = atof( token );
+		tmi->type = TMOD_PARALLAX;
 	}
 	//
 	// scroll
@@ -654,6 +700,12 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			*nextBundle = qtrue;
 			break;
 		}
+		// FAKK2: frameFromEntity, the animMap image the entity's frame names
+		// (fakk2.exe 0x476c03; Ritual's shader manual's scripted animation)
+		else if ( !Q_stricmp( token, "frameFromEntity" ) )
+		{
+			stage->bundle[0].frameFromEntity = qtrue;
+		}
 		//
 		// map <name>
 		//
@@ -731,10 +783,16 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 		}
 		//
 		// animMap <frequency> <image1> .... <imageN>
+		// FAKK2: animMapOnce, the same but stopping on the last image
+		// (fakk2.exe 0x476d71)
 		//
-		else if ( !Q_stricmp( token, "animMap" ) )
+		else if ( !Q_stricmp( token, "animMap" ) || !Q_stricmp( token, "animMapOnce" ) )
 		{
 			int	totalImages = 0;
+
+			if ( !Q_stricmp( token, "animMapOnce" ) ) {
+				stage->bundle[0].animMapOnce = qtrue;
+			}
 
 			token = COM_ParseExt( text, qfalse );
 			if ( !token[0] )
@@ -950,12 +1008,16 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			}
 			else if ( !Q_stricmp( token, "colorwave" ) )
 			{
-				// a waveform scaling a colour; the colour is not applied yet
+				// FAKK2: a waveform scaling a colour (fakk2.exe 0x4763d7), kept
+				// as the stage's constant colour
 				vec3_t	color;
 
 				ParseVector( text, 3, color );
+				stage->constantColor[0] = (int)( color[0] * 255 );
+				stage->constantColor[1] = (int)( color[1] * 255 );
+				stage->constantColor[2] = (int)( color[2] * 255 );
 				ParseWaveForm( text, &stage->rgbWave );
-				stage->rgbGen = CGEN_WAVEFORM;
+				stage->rgbGen = CGEN_COLORWAVE;
 			}
 			else if ( !Q_stricmp( token, "fromEntity" ) || !Q_stricmp( token, "fromClient" ) )
 			{
@@ -1053,8 +1115,20 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			}
 			else if ( !Q_stricmp( token, "dot" ) || !Q_stricmp( token, "oneMinusDot" ) )
 			{
-				// view dependent alpha is not implemented; drawn opaque
-				stage->alphaGen = AGEN_IDENTITY;
+				// FAKK2: alphaGen dot|oneMinusDot [min] [max] (fakk2.exe 0x47689b,
+				// 0x47691a), from how squarely the surface faces the viewer
+				stage->alphaGen = !Q_stricmp( token, "dot" ) ? AGEN_DOT : AGEN_ONE_MINUS_DOT;
+				stage->alphaMin = 0;
+				stage->alphaMax = 1;
+				shader.needsNormal = qtrue;
+				token = COM_ParseExt( text, qfalse );
+				if ( token[0] ) {
+					stage->alphaMin = atof( token );
+					token = COM_ParseExt( text, qfalse );
+					if ( token[0] ) {
+						stage->alphaMax = atof( token );
+					}
+				}
 			}
 			else
 			{
@@ -1158,6 +1232,12 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 	//
 	// if cgen isn't explicitly specified, use either identity or identitylighting
 	//
+	// FAKK2: not after a nextbundle, where CGEN_BAD and AGEN_IDENTITY tell
+	// CollapseNextBundles that the part left the stage's own unchanged
+	if ( secondBundle ) {
+		stage->stateBits = depthMaskBits | blendSrcBits | blendDstBits | atestBits | depthFuncBits;
+		return qtrue;
+	}
 	if ( stage->rgbGen == CGEN_BAD ) {
 		if ( blendSrcBits == 0 ||
 			blendSrcBits == GLS_SRCBLEND_ONE || 
@@ -1908,61 +1988,12 @@ static void ComputeStageIteratorFunc( void )
 		return;
 	}
 
-	if ( r_ignoreFastPath->integer )
-	{
-		return;
-	}
-
-	//
-	// see if this can go into the vertex lit fast path
-	//
-	if ( shader.numUnfoggedPasses == 1 )
-	{
-		if ( stages[0].rgbGen == CGEN_LIGHTING_DIFFUSE )
-		{
-			if ( stages[0].alphaGen == AGEN_IDENTITY )
-			{
-				if ( stages[0].bundle[0].tcGen == TCGEN_TEXTURE )
-				{
-					if ( !shader.polygonOffset )
-					{
-						if ( !shader.multitextureEnv )
-						{
-							if ( !shader.numDeforms )
-							{
-								shader.optimalStageIteratorFunc = RB_StageIteratorVertexLitTexture;
-								return;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	//
-	// see if this can go into an optimized LM, multitextured path
-	//
-	if ( shader.numUnfoggedPasses == 1 )
-	{
-		if ( ( stages[0].rgbGen == CGEN_IDENTITY ) && ( stages[0].alphaGen == AGEN_IDENTITY ) )
-		{
-			if ( stages[0].bundle[0].tcGen == TCGEN_TEXTURE && 
-				stages[0].bundle[1].tcGen == TCGEN_LIGHTMAP )
-			{
-				if ( !shader.polygonOffset )
-				{
-					if ( !shader.numDeforms )
-					{
-						if ( shader.multitextureEnv )
-						{
-							shader.optimalStageIteratorFunc = RB_StageIteratorLightmappedMultitexture;
-						}
-					}
-				}
-			}
-		}
-	}
+	// FAKK2: no fast path. Quake III's vertex-lit and lightmapped ones would
+	// skip what only the generic path does for FAKK2 (the light cube of a
+	// "betterlighting" model, the far plane's fog passes, OpenGL's fog on
+	// models), and drew Julie black once r_ignoreFastPath took retail's
+	// default of 0; a fast path only saves time, so r_ignoreFastPath keeps its
+	// value and changes nothing in the picture
 }
 
 typedef struct {
@@ -2013,21 +2044,38 @@ two textures are multiplied in the texture units before the stage's own
 blend with the frame buffer. The parser reads the part after nextbundle
 as a stage of its own (ParseStage), which Quake III's collapse below only
 merges in first position and only for the blends it knows; every such
-pair is merged here, keeping the first part's blend. Without multitexture
-the second texture is dropped (the scripts put these under "if mtex").
-Returns the number of stages removed.
+pair is merged here, keeping the first part's blend. An rgbGen or alphaGen
+written after nextbundle replaces the first part's: retail's nextBundle
+(fakk2.exe 0x476bbc) only moves on to the next bundle, and both keywords
+write the stage's own fields (0x476353, 0x476654), so the last one wins.
+Without multitexture the second texture is dropped (the scripts put these
+under "if mtex"). Returns the number of stages removed.
 =================
 */
 static int CollapseNextBundles( void ) {
 	int		i, removed = 0;
 
 	for ( i = 0 ; i + 1 < MAX_SHADER_STAGES ; i++ ) {
+		shaderStage_t	*next = &stages[i + 1];
+
 		if ( !stages[i].active || !stageIsSecondBundle[i + 1] ) {
 			continue;
 		}
 		if ( qglActiveTextureARB && !stages[i].bundle[1].image[0] ) {
-			stages[i].bundle[1] = stages[i + 1].bundle[0];
+			stages[i].bundle[1] = next->bundle[0];
 			shader.multitextureEnv = GL_MODULATE;
+		}
+		if ( next->rgbGen != CGEN_BAD ) {
+			stages[i].rgbGen = next->rgbGen;
+			stages[i].rgbWave = next->rgbWave;
+			Com_Memcpy( stages[i].constantColor, next->constantColor, 3 );
+		}
+		if ( next->alphaGen != AGEN_IDENTITY ) {
+			stages[i].alphaGen = next->alphaGen;
+			stages[i].alphaWave = next->alphaWave;
+			stages[i].alphaMin = next->alphaMin;
+			stages[i].alphaMax = next->alphaMax;
+			stages[i].constantColor[3] = next->constantColor[3];
 		}
 		memmove( &stages[i + 1], &stages[i + 2], sizeof( stages[0] ) * ( MAX_SHADER_STAGES - i - 2 ) );
 		Com_Memset( &stages[MAX_SHADER_STAGES - 1], 0, sizeof( stages[0] ) );
@@ -2110,7 +2158,7 @@ static qboolean CollapseMultitexture( void ) {
 		return qfalse;
 	}
 
-	if ( stages[0].rgbGen == CGEN_WAVEFORM )
+	if ( stages[0].rgbGen == CGEN_WAVEFORM || stages[0].rgbGen == CGEN_COLORWAVE )
 	{
 		if ( memcmp( &stages[0].rgbWave,
 					 &stages[1].rgbWave,
@@ -2118,6 +2166,12 @@ static qboolean CollapseMultitexture( void ) {
 		{
 			return qfalse;
 		}
+	}
+	// FAKK2: colorwave stages collapse only with the same colour
+	if ( stages[0].rgbGen == CGEN_COLORWAVE && ( stages[1].rgbGen != CGEN_COLORWAVE ||
+		memcmp( stages[0].constantColor, stages[1].constantColor, 3 ) ) )
+	{
+		return qfalse;
 	}
 	if ( stages[0].alphaGen == AGEN_WAVEFORM )
 	{

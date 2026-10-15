@@ -1,0 +1,9 @@
+// "popmenu 1" on zoo: cg_cameradist is 321 as the GameCamera menu comes up, 99 while it is
+// up; popping with restore_cvars puts 321 back, "popmenu 0" keeps 99. Read the log.
+probe:
+waitforplayer
+wait 2
+stuffcmd "set cg_cameradist 321; pushmenu GameCamera; set cg_cameradist 99; popmenu 1; cg_cameradist; set cg_cameradist 321; pushmenu GameCamera; set cg_cameradist 99; popmenu 0; cg_cameradist; set cg_cameradist 120; quit"
+wait 5
+stuffcmd "quit"
+end

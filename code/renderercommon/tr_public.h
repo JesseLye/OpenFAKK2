@@ -35,6 +35,7 @@ typedef struct {
 	const char	*name;			// the .tik file's name, identifies the model
 	float		scale;			// applied to every vertex
 	vec3_t		origin;			// added after scaling
+	vec3_t		lightOffset;	// FAKK2 "lightoffset": moves where the model is lit from
 	const char	*path;			// directory the model's images are in
 	qboolean	skeletal;		// animations are .ska over a .skb skeleton, not .tan files
 	const char	*skelFile;		// the .skb file of a skeletal model
@@ -94,7 +95,8 @@ typedef struct {
 	void	(*AddRefEntityToScene)( const refEntity_t *re );
 	// FAKK2: a sprite; the entity's model names the shader and its scale the size
 	void	(*AddRefSpriteToScene)( const refEntity_t *re );
-	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+	// FAKK2: renderfx is the client game module's RF_ flags for the polys
+	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int renderfx );
 	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 	// type is a combination of dlighttype_t bits
 	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b, int type );
@@ -117,6 +119,9 @@ typedef struct {
 	void	(*SwipeBegin)( float thistime, float life, qhandle_t shader );
 	void	(*SwipePoint)( const vec3_t p1, const vec3_t p2, float time );
 	void	(*SwipeEnd)( void );
+	// FAKK2's fps counter: the last frame's triangles, vertexes, texels in use,
+	// triangles and vertexes of its 3D view, and map lights in light cubes
+	void	(*GetFrameStats)( int stats[6] );
 
 	// Draw images for cinematic rendering, pass as 32 bit rgba
 	void	(*DrawStretchRaw) (int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);
@@ -197,6 +202,10 @@ typedef struct {
 	// FAKK2: the world trace that hides a lens flare behind the world (tr_lensflare.c)
 	void	(*CM_BoxTrace)( trace_t *results, const vec3_t start, const vec3_t end,
 				vec3_t mins, vec3_t maxs, int model, int brushmask, int capsule );
+	// FAKK2: the game module's debug lines, which RE_DebugLine adds to and
+	// the renderer draws (tr_main.c)
+	debugline_t	**DebugLines;
+	int			*numDebugLines;
 
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existence

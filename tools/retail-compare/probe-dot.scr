@@ -1,0 +1,15 @@
+// "alphaGen oneMinusDot" and a "nextbundle" stage's own rgbGen on swamp2, from a
+// script camera: the suck juice pool (textures/swamps/suckjuice) seen at a slant.
+// Its last two stages move with alpha waves, so the two games' shots differ by
+// the waves' phase.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname juicecam origin "-200 3472 800" angles "35 0 0"
+wait .2
+cuecamera $juicecam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

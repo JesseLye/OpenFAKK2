@@ -1,0 +1,22 @@
+// Julie's precise shadows on zoo, from a script camera behind and above her: shot 0
+// with cg_shadows 2 (a stencil shadow volume), shot 1 with cg_shadows 3 (her model
+// squashed onto the floor under her). The default 1 is a mark the client game
+// module draws itself. Set back to 1 at the end; check both sandboxes' config.cfg.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname shcam origin "-2470 1568 110" angles "42 0 0"
+wait .2
+cuecamera $shcam
+stuffcmd "set cg_shadows 2"
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set cg_shadows 3"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set cg_shadows 1"
+wait .5
+stuffcmd "quit"
+end

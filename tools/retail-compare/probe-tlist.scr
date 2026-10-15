@@ -1,0 +1,8 @@
+// The retail client's "ui_testlist" on zoo: a floating window "Test list control" at
+// (20, 20), 400x300, holding a list of three columns and 300 rows. Chained client
+// commands.
+probe:
+waitforplayer
+wait 2
+stuffcmd "ui_testlist; wait 30; screenshot; wait 30; quit"
+end

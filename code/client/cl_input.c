@@ -66,9 +66,53 @@ void IN_MLookDown( void ) {
 	in_mlooking = qtrue;
 }
 
-// FAKK2's +cameralook (TAB): the retail client turns the camera about the
-// player with the mouse while it is held; not done here yet
+// FAKK2's +cameralook (TAB): while it is held the mouse turns only the camera
+// offset below, which the client game module turns its camera by
+// (CL_MouseMove, fakk2.exe 0x41e3fc)
 qboolean	in_cameraLook;
+
+// FAKK2: what the mouse has turned in all, pitch and yaw, read through the
+// client game module's get_camera_offset (0x41ff70), and centerview's word
+// that the camera should take the view's angles again (0x41de76)
+vec3_t		cl_cameraOffset;
+qboolean	cl_cameraResetView;
+
+// FAKK2: the cursor in the game (fakk2.exe 0xc9f2d8). While it is up the
+// mouse moves it rather than the view and its buttons skip their bindings
+// (CL_MouseEvent 0x41e100, CL_KeyEvent 0x41fad1); here it is the system
+// cursor, as for the menus.
+qboolean	cl_mouseShown;
+
+// the mouse buttons held when the cursor comes up are let go first
+static void IN_ReleaseMouseButtons( void ) {
+	int		k;
+
+	if ( cl_mouseShown ) {
+		return;
+	}
+	for ( k = K_MOUSE1 ; k <= K_MOUSE5 ; k++ ) {
+		if ( keys[k].down ) {
+			CL_KeyEvent( k, qfalse, 0 );
+		}
+	}
+}
+
+// +togglemouse (0x41d960); ui_showmouse and ui_hidemouse push and pop the
+// interface's mouse window (0x40d900, 0x40d920), which raises and clears the
+// same flag (0x41d9b0, 0x41da00)
+static void IN_ToggleMouse_f( void ) {
+	IN_ReleaseMouseButtons();
+	cl_mouseShown = !cl_mouseShown;
+}
+
+static void IN_ShowMouse_f( void ) {
+	IN_ReleaseMouseButtons();
+	cl_mouseShown = qtrue;
+}
+
+static void IN_HideMouse_f( void ) {
+	cl_mouseShown = qfalse;
+}
 
 void IN_CameraLookDown( void ) {
 	in_cameraLook = qtrue;
@@ -280,6 +324,7 @@ void IN_Button15Down(void) {IN_KeyDown(&in_buttons[15]);}
 void IN_Button15Up(void) {IN_KeyUp(&in_buttons[15]);}
 
 void IN_CenterView (void) {
+	cl_cameraResetView = qtrue;
 	cl.viewangles[PITCH] = -SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 }
 
@@ -521,9 +566,24 @@ void CL_MouseMove(usercmd_t *cmd)
 	mx *= cl.cgameSensitivity;
 	my *= cl.cgameSensitivity;
 
+	// FAKK2 (0x41e3fc): the camera offset always turns with the mouse, and
+	// while +cameralook is held nothing else does
+	cl_cameraOffset[PITCH] += m_pitch->value * my;
+	cl_cameraOffset[YAW] -= m_yaw->value * mx;
+	if ( in_cameraLook ) {
+		return;
+	}
+
 	// add mouse X/Y movement to cmd
 	if(in_strafe.active)
+	{
 		cmd->rightmove = ClampChar(cmd->rightmove + m_side->value * mx);
+		// FAKK2 (CL_MouseMove 0x41e43b): with strafe, the mouse's y moves
+		// forward here and up by m_up, and forward once more below, as retail
+		// does it
+		cmd->forwardmove = ClampChar(cmd->forwardmove - m_forward->value * my);
+		cmd->upmove = ClampChar(cmd->upmove - m_up->value * my);
+	}
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mx;
 
@@ -1003,14 +1063,18 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-sneak", IN_Button2Up);
 	Cmd_AddCommand ("+run", IN_Button3Down);
 	Cmd_AddCommand ("-run", IN_Button3Up);
-	Cmd_AddCommand ("+holsterweapon", IN_Button4Down);
-	Cmd_AddCommand ("-holsterweapon", IN_Button4Up);
+	Cmd_AddCommand ("+holster", IN_Button4Down);
+	Cmd_AddCommand ("-holster", IN_Button4Up);
 	Cmd_AddCommand ("+use", IN_Button5Down);
 	Cmd_AddCommand ("-use", IN_Button5Up);
 	// the retail client's camera look (TAB): the mouse turns the camera about
-	// the player; not done here, the key must not reach the server as chat
+	// the player
 	Cmd_AddCommand ("+cameralook", IN_CameraLookDown);
 	Cmd_AddCommand ("-cameralook", IN_CameraLookUp);
+	// the cursor in the game; retail registers no -togglemouse
+	Cmd_AddCommand ("+togglemouse", IN_ToggleMouse_f);
+	Cmd_AddCommand ("ui_showmouse", IN_ShowMouse_f);
+	Cmd_AddCommand ("ui_hidemouse", IN_HideMouse_f);
 	Cmd_AddCommand ("+button0", IN_Button0Down);
 	Cmd_AddCommand ("-button0", IN_Button0Up);
 	Cmd_AddCommand ("+button1", IN_Button1Down);
@@ -1096,12 +1160,15 @@ void CL_ShutdownInput(void)
 	Cmd_RemoveCommand("-sneak");
 	Cmd_RemoveCommand("+run");
 	Cmd_RemoveCommand("-run");
-	Cmd_RemoveCommand("+holsterweapon");
-	Cmd_RemoveCommand("-holsterweapon");
+	Cmd_RemoveCommand("+holster");
+	Cmd_RemoveCommand("-holster");
 	Cmd_RemoveCommand("+use");
 	Cmd_RemoveCommand("-use");
 	Cmd_RemoveCommand("+cameralook");
 	Cmd_RemoveCommand("-cameralook");
+	Cmd_RemoveCommand("+togglemouse");
+	Cmd_RemoveCommand("ui_showmouse");
+	Cmd_RemoveCommand("ui_hidemouse");
 	Cmd_RemoveCommand("+button0");
 	Cmd_RemoveCommand("-button0");
 	Cmd_RemoveCommand("+button1");

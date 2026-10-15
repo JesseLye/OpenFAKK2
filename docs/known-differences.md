@@ -85,13 +85,12 @@ Impact: unknown. Possibly none.
 
 ## Cvar differences
 
-From `cvarlist` after loading `zoo` on both engines. Only server-relevant ones are listed;
-retail also has about 70 client, sound and input cvars that OpenFAKK2 lacks until the
-client is ported.
+From `cvarlist` after loading `zoo` on both engines. Only server-relevant ones are listed
+here; the client's are under "Commands and cvars the retail engine has" below.
 
 | Cvar | Retail | OpenFAKK2 | Note |
 | --- | --- | --- | --- |
-| `cheats` | 1 after `map` | 0 | The game reads `cheats`. Quake III enables cheats only for `devmap` |
+| `cheats` | 1 after `map` | 1 after `map` | Now the same. Retail's engine names Quake III's `sv_cheats` `cheats` (`Cvar_Init` `0x42fb36`: "1", `ROM`, `SYSTEMINFO`), the name the game reads. Its `SV_Map_f` (`0x4420d0`) sets it before the spawn, only without `developer`: 1 for `devmap`, 0 for `map`; but the client's disconnect during the load (`0x420990`) sets it back to 1, so a local game always has cheats, with `developer` 0 too (a retail run of `+set developer 0 +map zoo` prints 1). OpenFAKK2 had kept Quake III's name and set 0 after the spawn |
 | `protocol` | 1 | 71 | ioquake3's value; the wire format is OpenFAKK2's own for now |
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
@@ -101,6 +100,171 @@ client is ported.
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
 | `paused` | 0 | 0 | Was ioquake3's `cl_paused`, renamed; `sv_paused` stays, read-only |
 | `cl_run` | 0 | 0 | Was 1 (Quake III's). Registered at `0x422626` with "0", `CVAR_ARCHIVE`; the run button (`0x41e540`) is set when `in_speed.active == (cl_run == 0)`. Julie walks with `+forward` alone until the player turns "always run" on; the shipped `default.cfg` binds only `SHIFT +speed` and sets no `cl_run` |
+
+## Commands and cvars the retail engine has
+
+Compared on 2026-10-15 by running `cmdlist` and `cvarlist` on `zoo` in the retail client
+and in OpenFAKK2's, and checked against Ritual's design documents (`tools\ritual-docs.ps1`).
+Retail writes only changed cvars to its `config.cfg`, and the sandbox's sets none of
+these, so the retail values are its registered defaults. Retail lists its commands before
+the client game module loads, so the module's own commands are not part of the
+comparison. What the game and client game modules register comes with Ritual's code in
+`code/fakk` and is not listed.
+
+Defaults: OpenFAKK2 registers retail's `r_picmip` 0 (Quake III's 1 loaded every
+texture at half size), `r_overBrightBits` 0, `r_ignoreFastPath` 0, `r_textureMode`
+`GL_LINEAR_MIPMAP_NEAREST`, `cl_timeout` 125 and `r_ambientScale` 0.5.
+`R_SetupEntityLighting` (`0x48ed10`) multiplies a model's ambient light from the grid by
+`r_ambientScale` (at `0x48f0b5`) and its directed light by `r_directedScale`, after
+averaging the samples and before the minimum light, as OpenFAKK2 does; with Quake III's
+0.6 a box and a statue spawned on `zoo` (`probe-ambient.scr`) came out 4 to 7 levels
+brighter than retail, with 0.5 they match within 1. Archived values a player already has
+in `config.cfg` stay. On purpose, `r_mode` stays -2 (the desktop's resolution) where
+retail's default is 3 (640x480). OpenFAKK2's renderer has no fast path: Quake III's would
+skip the light cube, the far plane's fog passes and OpenGL's fog on models, which only the
+generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
+(`probe-wgroup.scr`); the cvar keeps retail's default and changes nothing in the picture.
+
+Missing from OpenFAKK2, to be done:
+
+- Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
+  it waits on level of detail itself, below).
+- `S_UpdateEntity`'s velocity, which retail keeps per entity (`0x43ec90`) and hands to its
+  3D sound interface with the position (`0x45cf26`); neither of OpenFAKK2's sound
+  backends moves a sound by it. (`S_SetGlobalAmbientVolumeLevel` stores a level that
+  scales the looping sounds, `0x43ed10` and `0x45c528`, but the client game module never
+  calls it.)
+- The interface: `ui_minicon` (the mini console, advanced options), the console as a
+  window that can be moved (`ui_console`, `ui_consoleposition`, `ui_saveconsolepos`,
+  `ui_loadconsolepos`), and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
+  `viewspawnlist` (registered with them, `0x40e805`). The
+  development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
+  `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
+  `additem`.
+
+Being done elsewhere: saving and loading (`savegame`, `loadgame`, `autosavegame`,
+`loadbrokengame`, `saveshot`), carrying the player's state from level to level
+(`gamemap`), and the intro (`_intro`, `dointro`).
+
+Left out on purpose:
+
+- `cl_classlist`, `cl_classtree`, `cl_classevents`, `cl_dumpclassevents`,
+  `cl_dumpallclasses`, `cl_dumpevents`, `cl_eventhelp`, `cl_eventlist`,
+  `cl_pendingevents`, `cl_eventlimit`, `cl_eventstats`, `cl_showevents` and
+  `cl_timeevents` list and time the retail engine's own C++ classes and events, which
+  OpenFAKK2's engine does not have. (The client game module's `cg_` versions of these
+  work.)
+- What only served Miles, IPX, MIDI, DirectInput, SMP, Windows or the CD:
+  `s_milesdriver`, `s_speaker_type`, `s_khz`, `net_noipx`, `net_noudp`, `in_midi*`,
+  `midiinfo`, `in_debugjoystick`, `in_joyBallScale`, `r_glDriver`, `r_maskMinidriver`,
+  `r_smp`, `r_showSmp`, `r_ext_compress_textures`, `r_ext_gamma_control`,
+  `r_ext_texture_env_combine`, `r_fastdlights`, `r_stereo`, `win_*`, `sys_cpuid`,
+  `arch_*_version`, `fs_cdpath`, `fs_copyfiles`, `fs_restrict`, `cl_cdkey`, `cl_motd`,
+  `cl_updateInfoString`, `gamedll`, `cgamedll`, `viewlog`.
+- The demo loop's command strings (`cliff`, `fog`, `homes`, `pens`, `swamps`, `train`,
+  `loadmaps*`), which name demos the game does not ship.
+
+Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`,
+`sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
+`testmodel`, `nextframe`, `prevframe`, `nextskin`, `prevskin`), and list `twosided` as a
+TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477510`).
+
+## The console
+
+- **The configs run at startup** (`Com_Init` `0x42e14b`): `default.cfg`, `menu.cfg` (the
+  menus' defaults: `g_skill`, `cl_altbindings`, `cl_ctrlbindings`, the third-person
+  camera), the player's config, `localized.cfg` (the dialog texts) and `autoexec.cfg`;
+  only the player's config is skipped in safe mode. The `config` cvar names the player's
+  config, `config.cfg` when not set; it prints "Config: <name>" and is where the
+  configuration is written (`0x42e710`, `0x42e650`). Retail reads it with `exec`, which
+  adds `.cfg`, and writes it under the name as given, so `+set config foo` reads `foo.cfg`
+  and writes `foo`; ours does the same. Retail also kept the name in the registry for the
+  next start; ours does not. Quake III ran only `default.cfg`, its own config and
+  `autoexec.cfg`.
+- **Console aliases** are Quake II's (`alias` `0x42c8a0`): `alias` lists them,
+  `alias <name> [words]` makes one of the words joined by spaces as a line of its own
+  (names under 32 characters), and a command line whose first word is no command but an
+  alias runs it (`Cmd_ExecuteString` `0x42cf0b`: commands, then aliases, then cvars,
+  then the two game modules, then the server), at most 16 times between two runs of the
+  command buffer ("ALIAS_LOOP_COUNT"). The config file keeps them under its own heading
+  (`0x42cab0`); retail's config file has three headed parts, bindings, cvars and
+  aliases, and ours now has too. `aliasdump` (the client's, `0x41c550`) prints the
+  global sound alias list, as developer output (`0x41c460`).
+- **Weapon groups.** A key has an ALT and a CTRL binding besides its own (`altbind`,
+  `ctrlbind`, `unaltbind`, `unctrlbind`, `altbindlist`, `ctrlbindlist`, `0x41f900`), used
+  when it is pressed with ALT or CTRL held while `cl_altbindings` or `cl_ctrlbindings`
+  (advanced options, archived, 0) is on (`CL_KeyEvent` `0x41f9c0`); on release the button
+  commands of both it and the plain binding are let go. `unbindall` leaves them, and the
+  config file writes each key's `altbind` and `ctrlbind` after its `bind` (`0x41f790`).
+  `default.cfg` gives CTRL+n `saveweaps <n>` (`0x40e4a0`), which makes the console alias
+  `weapgroup<n>` take up the weapons held now (`0x40e380`: `use "<item>" dual`,
+  `dualwield "<left>" "<right>"`, `use "<item>" left|right`, or `holster`) and centre-prints
+  "Saved Weapon Group <n>", and ALT+n `weapgroup<n>`. `probe-wgroup.scr` saves the green
+  sword as group 3, holsters and runs `weapgroup3`: both games list the same alias and
+  bindings and the sword comes back. Pressing ALT or CTRL itself has not been tried in a
+  run (the harness cannot hold them); that path follows `0x41f9c0`.
+- **Sound settings** (`S_Init` `0x43e670`): `s_volume` defaults to 1.0 (Quake III's 0.8
+  before). `s_loadas8bit` (archived and latched, the advanced options' "Force 8-bit
+  Sound") keeps every sound at 8 bits in retail's own mixer (`0x440196`) and opens Miles'
+  output at 8 bits (`0x45b5e6`); OpenFAKK2 cuts each sound to 8 bits as it loads, for
+  either backend, which is the first of those; streamed sounds (dialog, music) are left at
+  16. `s_separation` (archived, 0.5) sets how far apart retail's own mixer puts the ears
+  (`0x43f2cc`) and the pan it gives a Miles sample (`0x45e8d0`), but with Miles' 3D
+  provider, which places the sounds itself, it changes nothing: `probe-sound-pan`
+  recorded on retail with 0.5 and with 0 gave the same levels at all fourteen bearings.
+  OpenFAKK2 registers it and leaves the panning alone.
+- **The `fps` counter** (archived, 0). `Com_Frame` (`0x42ea73`) takes the frame rate as 16
+  over the last 16 frames' times in seconds; the interface's root window draws, over
+  everything (`0x419160`), "FPS %4.1f" (white above 23.94, yellow above 18, red below),
+  "wt%5d wv%5d cl%d" and "t%5d v%5d Mtex%5.2f" in `facfont-20`, one font height in from
+  the left, the last line ending at the bottom. The numbers come from the renderer
+  (`0x47a710`, through a client import, `0x4220c0`): the frame's triangles (indexes over
+  3) and vertexes, those of its 3D view (copied when the root has drawn the scene,
+  `0x47a6f0`; here when the frame first turns to 2D), the map lights offered to light cubes
+  (`0x48e20f`), and the texels the frame bound, in millions. With `fps 1` and a game
+  running, a frame rate under 18 plays `sound/misc/lowframerate.wav` at once and every 4
+  seconds until it is back above 19.8 (`0x4241f3`). On `zoo` before a script camera
+  (`probe-fps.scr`) both games print `wt 431 wv 730 cl0` and `Mtex 0.37`; the totals are
+  549 and 954 here against 547 and 950 (the 2D layer), and the lines fall on the same
+  pixels.
+- **`cl_avidemo <n>`** (Ritual's "Dumping Demo AVI"; `CL_Frame` `0x421f45`, Quake III
+  1.32's): while a game runs, `screenshot silent` every frame, and every frame counts as
+  1/n of a second however long it took. ioquake3's `video` command is there as well.
+- **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
+  `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
+  the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`
+  (archived, 0). `m_invert_pitch` is no setting of its own: the client sets it from
+  `m_pitch`'s sign at startup (`0x422780`), and the controls menu's check box shows it and
+  sets `m_pitch` to -0.022 or 0.022. The holster button is `+holster` (button 4), as in
+  retail; OpenFAKK2 had called it `+holsterweapon`.
+- **`add`, `subtract` and `scale`** (`0x42f650`, `0x42f700`, `0x42f7b0`) change a cvar
+  by an amount, as `set` would set it (read-only and cheat cvars refuse), writing a
+  whole result as an integer.
+- **`com_dropsim`** (a cheat cvar, `0x42e3ce`) drops that share (0 to 1) of incoming
+  network packets, as Quake III 1.32's did (`Com_EventLoop` `0x42de63`); ioquake3's
+  `net_dropsim`, a percentage, is still there. Neither drops the loopback's packets.
+- **How the console prints**: a cvar as `"name" is:"value" default:"default"`
+  (`0x42f3ae`), and `echo` each word followed by a space (`0x42c780`). One script run
+  on both games (sums, alias listing, an alias, a loop of two aliases, `echo`) printed
+  the same lines.
+- **`cd` and `dir`** (`0x431b50`, `0x431cd0`, registered in `FS_Startup` with `path` and
+  `touchFile`) work on the operating system's directories, not the game's file system.
+  `fs_filedir` is where they start, the game directory's `maps` folder at first; `cd
+  <dir>` moves it, relative to it, and `cd` alone prints it. `dir` is a copy of the DOS
+  command: `[drive:][path][filename]`, `/A` with `DRHAS` and `-` (hidden and system files
+  are left out unless asked for), `/O` with `NSEDG` and `-` (up to five keys), any other
+  switch prints its help, and each line is the date (12-hour, `a`/`p`), the size
+  (`<dir>`, `k` or above a megabyte `m`) and the name. A name without wildcards that is a
+  directory lists that directory. OpenFAKK2's `dir` printed the same as retail's on the
+  same folder for the listing, `/OS`, `/O-N /AD`, `*.pk3`, an unknown switch and a name
+  that matches nothing. Ours lists the game's file system with `fdir` (Quake III's), which
+  retail does not have. Retail leaves the process in the listed directory when nothing
+  matches; ours goes back.
+- **`mapdir`**: with `developer` set, `map <name>` loads `maps/<mapdir>/<name>`
+  (`SV_Map_f` `0x4420f8`). `cd` sets `mapdir` to the part of the new directory below the
+  maps folder, but compares it with the folder as `FS_Startup` spells it, with a doubled
+  separator (`...\fakk\\maps\`, as retail's `fs_filedir` reads), which no directory name
+  has; so `cd` always clears `mapdir`, in retail too, and it has to be set by hand.
 
 ## Rules inferred, not read from the binary
 
@@ -131,8 +295,8 @@ corresponding retail code has not been examined.
   (`0x43ca60`). Two choices of OpenFAKK2's own: bones no animation of the state moves
   take the main animation's frame (retail leaves them zero), and an invalid request
   gives a zero origin with identity axes (retail returns all zeros from the plain
-  function and identity from the lerped one). Bone quaternions scale by 1/32768 as in
-  retail (the TIKI code used 1/32767).
+  function and identity from the lerped one). Bone quaternions scale by 1/32767, as
+  retail decodes them (`0x4d57dc`; see "Skeletal models" under the renderer).
 - **`Anim_AbsoluteDelta`** returns the same value as `Anim_Delta`.
 - **The delta-driven animation flag is never set.** Retail's cached definitions flag only
   four animations, all in the unused `oldjulie` model, and the keyword that sets the flag
@@ -398,7 +562,9 @@ Not read, done another way:
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
   tests a field of its print object), the print's fade (in over the first half second,
   out over the last), the `@shader` size (256x128), the stat-bar flash (half a second
-  after a change), and `ui_hud`, a command in retail, is a cvar here. The prints'
+  after a change). `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
+  prints the cursor's place, `x:y`, ten units right of it and ten above, in `verdana-12`
+  while a cursor is up (`0x4982a3`). The prints'
   places come from retail captures of the intro: a location print's x is its left edge
   and its y is measured up from the bottom of the screen to the bottom of its first
   line (`locprint 230 220` puts the quote's first line at y 241, left-aligned at
@@ -446,7 +612,33 @@ Not read, done another way:
   entry under the cursor is drawn white under black, `0x4bda90`, so it looks the
   same). Labels with a `linkcvar` show the value through their `linkstring` names;
   `ui_newvidmode`, which the resolution box shows, is set to `r_mode` when a menu comes
-  up and to -1 when the last goes (`0x40ab60`).
+  up and to -1 when the last goes (`0x40ab60`). `vidmode <n>` (`0x4223d0`) switches the
+  window to mode n in place (the renderer's `0xc987f8`, then the client game and the
+  interface lay themselves out again, `0x4223a0`) and sets `r_mode` when that worked;
+  OpenFAKK2's renderer has no switch in place, so it sets `r_mode` and runs
+  `vid_restart` (`probe-vidmode`: both end at 800x600 with `r_mode` 4).
+  `ui_resetcvars` (`0x40d8f0`, `0x4a44c0`, `0x4a3da0`) sets every cvar a widget of the
+  menu on top links to back to its default (`probe-resetcv`: the same values on both).
+  Retail takes one of two menus its window manager keeps (`+0x14`, else `+0x18`, which a
+  push sets, `0x4a2fd9`); OpenFAKK2 takes the top of its stack, and does nothing without one.
+  `ui_checkrestart` (`0x40d6a0`, `0x4a44f0`, `0x4a3cb0`), which the options and advanced
+  options menus' Ok buttons run, compares each linked cvar's latched value with its value
+  as the menu came up (`0x4a3a30`, on push, show and force) and queues `vid_restart` for a
+  `CVAR_LATCH` cvar, else `snd_restart` for a sound latch (retail's `0x1000`). The engine
+  now has `CVAR_SOUND_LATCH` (`0x4000`, with `CVAR_LATCH`) on the sound system's latched
+  cvars and the game's sound latches; since `snd_restart` here restarts the video too, a
+  sound latch asks for it and wins over the video. `probe-restart` (`r_picmip` under
+  options) restarts the video on both games; `probe-rsnd` (`s_loadas8bit` under advanced
+  options) restarts the video on retail, whose `s_loadas8bit` is a plain latch, and the
+  sound and video here, where only the sound system's restart applies it. Retail first
+  brings its console window and mini console up or down by `ui_console` and
+  `ui_minicon` (both registered now, archived, `0`); those windows are still missing.
+  Not followed yet: retail's `popmenu` takes `restore_cvars` (the shipped menus pass 0 or
+  1; without it retail prints its usage and pops anyway, `0x40bbd0`), and with 1 its pop
+  (`0x4a3420`) sets the linked cvars back to that same snapshot (`0x4a3c40`). Yet
+  `probe-popmenu` (set 321, push GameCamera, set 99, `popmenu 1`) leaves 99 on retail;
+  its `pushmenu` (`0x40bf90`) also pops in some states (`0x40c01d`), not worked out.
+  OpenFAKK2's `popmenu` ignores the argument.
 
   `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
   `ui/bind.scr` header pictures in the title colours) over a label per `binditem`
@@ -475,8 +667,9 @@ Not read, done another way:
   as retail's does (`0x460790`): the `gfxinfo` text with each extension on its own
   `GL_EXTENSIONS:` line, cut at 4096 bytes. The font scripts say `rgbGen identity`, but
   retail draws its text in the menus' colours, so the renderer gives `gfx/fonts/*`
-  stages the caller's colour. Not checked: how retail places the menus at other
-  resolutions (they are scaled to the window here). Not done: keyboard in menus beyond
+  stages the caller's colour. At other resolutions retail keeps the HUD at its size in
+  screen pixels (`probe-vidmode` at 800x600: the gauges stay as small as at 640x480);
+  OpenFAKK2 scales the HUD and the menus to the window. Not followed yet. Not done: keyboard in menus beyond
   Escape, the arrows in the load list
   and a waiting bind cell; Field and List editing; pulled-down lists' sounds; a pressed
   button's border; `ordernumber`. On purpose: the main menu's "Back to Game" button
@@ -487,6 +680,34 @@ Not read, done another way:
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
+- **Floating windows.** uilib's `UIFloatingWindow` (`Create` `0x4a1600`,
+  `FrameInitialized` `0x4a1700`, `Draw` `0x4a19a0`) is filled with a widget's default
+  background (0.75 grey) under a 20-pixel title bar: active, the window's colour inside a
+  raised edge in its light shade (one pixel at the top and left, two at the bottom and
+  right), the title white; inactive, the default background inside two thirds of it, the
+  title black. The title is `verdana-14` at 3, 3; the close box (16x16 at w-18, 2) shows
+  marlett's "r", the minimise box (w-36, 2) its "0"; the children sit in 2, 20, w-4,
+  h-22. `dialog <title> <cvar> <command> [width] [height] [materials]` (`0x423250`,
+  `0x40cf10`, `UIDialog` `0x4ab690`/`0x4ab890`) makes one 300x200 by default, centred,
+  coloured 0.1 grey and active: a `verdana-12` label showing the cvar over the client
+  frame, and raised 64x32 "Ok" and "Cancel" buttons 6 in from its bottom corners; the
+  three optional materials replace the label's, Ok's and Cancel's text
+  (`0x4abba0`/`0x4abc70`/`0x4abd40`). Ok runs the command; Ok, Cancel and the close
+  box close it. `probe-dialog` matches retail's to a mean of 0.15 over the window.
+  `ui_testlist` (`0x40d950`) makes "Test list control", 400x300 at 20, 20, inactive,
+  holding a `UIListCtrl` (`0x4ac830`) over its client frame drawn as the load list is:
+  columns "Name" 100, "Ping" 64 and "IP" 64 wide and a hundred times three rows,
+  white on white, so none can be seen; `probe-tlist` matches retail's to a mean of 0.05
+  below the console's notify lines. A click selects a row (black on white), the bar and
+  the wheel scroll it.
+  Retail's label line lands 6 pixels above the centre of its frame (as if 12 shorter),
+  for a reason not found; OpenFAKK2 copies the position. Windows do not bring the cursor
+  up; with it up (`+togglemouse`, `ui_showmouse`, a menu) a click raises and activates
+  the window under it, and its title bar drags it. Differences: retail centres and sizes
+  the window in screen pixels (`0xb12868`), OpenFAKK2 in the 640x480 units its menus
+  use, the same at 640x480; retail shows only the first floating window of a run and
+  crashes on quitting with one open, OpenFAKK2 shows them all; a `vid_restart` closes
+  them here.
 - **Pause.** The retail engine registers `paused` read-only (`Com_Init`, `0x42e0b0`) with
   a `pause` command (`0x42e060`) that toggles it, refusing to pause in deathmatch or
   without a local server. Its UI update (`0x40af50`) pauses the game when a menu is up
@@ -788,9 +1009,9 @@ Still different:
 
 ## The renderer and the map viewer
 
-None of this has been compared with the retail game's picture, and none of the retail
-renderer has been read. It follows the SDK headers, the data, and OpenMoHAA's renderer
-where noted.
+Each item below says what it was taken from: the retail renderer in `fakk2.exe` where an
+address is given, and a capture of the retail game's picture where one was compared;
+otherwise the SDK headers, the data, or OpenMoHAA's renderer.
 
 The map viewer (`viewmap <name>` in the client) draws what the map file says, with no
 server and no game module. That differs from the game in ways that are by design:
@@ -824,13 +1045,74 @@ What is implemented, and on what basis:
   parentheses, `rgbGen constant|colorwave|fromEntity|fromClient|global`,
   `alphaGen constant|fromEntity|fromClient|global|skyAlpha|oneMinusSkyAlpha`,
   `depthMask`, `noDepthTest`, `portalsky`, `skyParms full|half`, `tcMod macro|offset`,
-  animated textures of up to 64 frames. From the scripts' own usage. Approximations:
-  `tcMod macro` is a plain scale, `alphaGen dot|oneMinusDot` is opaque, `colorwave`
-  ignores its colour, `surfaceColor` and similar are ignored.
+  animated textures of up to 64 frames. From the scripts' own usage; `surfaceColor` and
+  similar are ignored. From `fakk2.exe`: `tcMod macro <s> <t>` (`0x478476`) takes the
+  coordinates from the vertex's world position on the axis plane its normal faces most
+  (Quake II's base axes, the table at `0x4fb844`), times 1/size and divided by the first
+  stage's image size (`0x495240`, `0x495330`); `alphaGen dot|oneMinusDot [min] [max]`
+  (`0x47689b`, `0x47691a`) is min + d (max - min), d the normal's dot product with the
+  direction to the viewer, at least 0, or (1 - d) squared, at most 1, for `oneMinusDot`
+  (`0x494120`, `0x494200`); `rgbGen colorwave <r> <g> <b> <wave>` (`0x4763d7`) scales the
+  colour by the wave (`0x4943e8`). `probe-hay` on `creeperpens` (the hay's two macro
+  stages, the slime pool's two colorwave stages) went from a mean of 15.7/13.1/11.0 and
+  27.5/8.1/16.0 against retail to 12.8/11.1/10.6 and 4.9/8.0/5.0; what is left is the
+  models' lighting and the slime wave's phase. `nextBundle` (`0x476bbc`) moves on to the
+  stage's next texture and goes on parsing the same stage, and `rgbGen` and `alphaGen`
+  write the stage's own fields (`0x476353`, `0x476654`), so one written after
+  `nextBundle` replaces the first texture's. `probe-dot` on `swamp2` frames the suck juice
+  pool, whose `oneMinusDot` stage was opaque blue and whose multitextured stage takes
+  `rgbGen constant 1 .7 0` after its `nextBundle`: blue went from a mean of 5.3 against
+  retail to 1.1, and over eight shots a quarter second apart the pool's red swings over
+  26 to 88 on ours and 32 to 77 on retail with the alpha waves, out of phase.
+  `tcMod parallax <s> <t>` (`0x4783ed`) moves the coordinates by the view's x and y times
+  the rates (`0x4951f0`); `animMapOnce` (`0x476d71`) is `animMap` stopping on its last
+  image, and `frameFromEntity` (`0x476c03`) shows the image the entity's frame names,
+  which the game's `shader frame` sets (`R_BindAnimatedImage` `0x47cf5b`). No retail
+  script uses these three.
+- **Shadows of `cg_shadows 2` and `3`** for the models the game flags for precise
+  shadows (`RF_SHADOW_PRECISE`: the player, the actors): as retail does for a TIKI
+  model's opaque surfaces (`0x4896a8`, `0x4896ea`; `0x486fec` for skeletal ones), 2
+  adds Quake III's stencil shadow volume when the model casts a shadow (`RF_SHADOW`) and
+  is not a depth hack, and 3 Quake III's projection onto the plane the client game
+  module found under it (`RF_SHADOW_PLANE`, the `projectionShadow` shader). The default
+  1 is a mark the client game module draws itself. `probe-shadows` on `zoo` gave
+  Julie's projected shadow as retail draws it; retail got no stencil buffer on the test
+  machine (its `r_colorbits` default is 16), so it drew no stencil shadow to compare,
+  and the volume darkens her legs as well, as Quake III's stencil shadows do.
+- **What a view leaves out** (`R_ViewLeavesOut`): an entity's or a poly's render flags
+  decide which views draw it as retail decides (`0x463fa2` for entities, `0x47b3f8` for
+  the client game module's polys, which now keep their flags): `RF_SKYENTITY` only in
+  the sky portal's view, and in a mirror or portal's view only what is flagged
+  `RF_PORTALENTITY` or `RF_DUALENTITY`, which the main view leaves out when it is
+  flagged for portals only; a poly flagged `RF_THIRD_PERSON` is left out of the main
+  view as an entity is. Neither game module sets the portal flags, so retail's mirrors
+  and portals show the world without entities; no shipped map has one.
 - **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
-  it. From the SDK's scene definition and flag descriptions, and OpenMoHAA.
+  it. From the SDK's scene definition and flag descriptions, and OpenMoHAA; the retail
+  renderer (`0x47bee0`) turns the camera the same way, the viewer's axes times the sky
+  axes. Its developer cvars: `r_skyportal 1` puts the camera at `r_skyportal_origin`
+  ("x y z", warning "Invalid sky portal origin" otherwise) and keeps the viewer's axes
+  as they are (`0x47bf76`).
+- **`r_drawsprites`** (cheat, 1): 0 leaves the scene's sprites out (`0x4643c0`, the
+  sprites the client game module adds as `.spr` models). `probe-sprites` with
+  `+set r_drawsprites 0` drew none of its sprites on either game.
+- **`r_customaspect`** (archived, latched, 1) is `r_mode -1`'s window aspect as it is
+  (`R_GetModeInfo`, `0x45fe58`), where Quake III divides the width over the height by
+  `r_customPixelAspect`, which retail does not have.
+- **The client's definition commands** print as retail's do (`tiki.c`): `tiki <name>`
+  (`0x421430`; `models/` and `.tik` added when missing) lists the animations sorted by
+  alias with their file, frames, time, file length and delta, the surfaces with their
+  triangles (a vertex-animated surface's count printed twice, as its vertex count too,
+  as retail does) and skins, the tags or the bones with their parents, and the totals
+  (`0x451f30`); `tikilist` (`0x451e00`) every animation file once with its length, then
+  every definition, with the totals. `probe-tiki` on `zoo` gave the same lines as retail
+  for `obj_statue`, Julie, the usage and a missing model, and the same 738 animations,
+  10992312 bytes and 156 definitions; a definition's own size counts this engine's
+  structures, not retail's. `cachealltikis` (`0x452490`) loads every `models/*.tik`
+  with retail's progress lines; retail also rewrites its binary cache of each
+  definition (`0x44d4d0`), which this engine does not keep.
 - **Models from `.tik` definitions**: the `.tan` file of the animation the entity asks
   for is loaded on first use, and the entity's frame and old frame are decoded and
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by
@@ -909,7 +1191,10 @@ What is implemented, and on what basis:
   the animation itself), when that lerp is not negative (the same branches of
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
-  bones. Level of detail is not applied in the renderer.
+  bones. Level of detail is not applied in the renderer. `r_showskel 1` (cheat) draws a
+  skeletal model's bones in place of its surfaces, once a frame: each bone's axes four
+  units long in red, green and blue and a cyan line from its parent (`0x495db3`,
+  `0x496042`); `probe-skel` gave Julie's skeleton pixel for pixel as retail's.
 - **Ritual fonts** (`fonts/<name>.RitualFont`, the `.urc` interface's and the prints'
   text): `RitFont`, `height`, `aspect`, 256 `indirections` and up to 256 `locations`
   `{ x y w h }` in pixels of a 256-wide image `256/aspect` high, registered as
@@ -974,8 +1259,16 @@ What is implemented, and on what basis:
   radius (`radius * 7500 / d^2`) and does not bend the light direction, directed light is
   held to 255 (scaling the ambient with it), and a `lightoffset` entity (a sentient
   flashing when hit) adds its colour to the ambient. A TIKI model is lit from the centre
-  of its frame's bounds, not its origin (`0x48cff0`). `r_debugLight 2` prints every
-  entity's light origin, ambient, directed light and direction.
+  of its frame's bounds, not its origin (`0x48cff0`): the bounds the animation file
+  stores for the frame (a `.tan` frame's at byte 0, a `.ska` frame's at byte 0), not
+  those of the vertexes, and a light cube's radius is the file's own frame radius (byte
+  60 of a `.tan` frame, 24 of a `.ska` frame) times the scales and a half, which the
+  vertex bounds had made about half as large. The centre is moved by the definition's
+  `lightoffset <x y z>` (setup section, `TIKI_ParseSetup` `0x44c3eb`; added at `0x48d0b2`
+  and scaled with the model). No retail model has one; `probe-lightoff.scr` with
+  `fx\test_lightoff.tik` (the statue lit from 168 units higher) gives the same dark
+  statue on both games, within half a level. `r_debugLight 2` prints every entity's light
+  origin, ambient, directed light and direction.
 - **Entity lights and the light cube** (`tr_entlight.c`). A model the game flags
   `betterlighting` (`RF_EXTRALIGHT`: the player and the actors) or `invisible` is not lit
   from the grid at all. The BSP's `ENTLIGHTS` lump holds the map's static lights (56
@@ -997,20 +1290,56 @@ What is implemented, and on what basis:
   retail's cvars do (both 0); `r_entityLights 0` turns the lights off. Julie seen from
   the same camera matches the retail capture within a unit or two on every patch
   measured; `r_debugLight 3` prints each model's cube and the lights that went into it.
+  Retail's three aids for the cubes (archived, 0 by default) are drawn as it draws them,
+  at the nearest depth so over everything: `r_light_lines <n>` joins each light that
+  reaches a cube at least `n` strongly to the cube's centre and marks it with six arms as
+  long as the cube's radius, in its colour times its strength over 255, brought back to
+  unit length when brighter than white (`0x48d810`, from the point and spot lights);
+  `r_light_sun_line 1` draws the trace towards the sun, yellow at the model when it
+  reached the sky and black when not, white at its far end (`0x48cdc6`); `r_light_nolight
+  1` lights every cube full white (`0x48e1c3`). The retail renderer draws the lines as it
+  lights each model; the cubes are built in the front end here, so the lines are kept in
+  world space and drawn after the view's surfaces are sorted. `r_light_int_scale` ("0.05")
+  is registered and never read, as in retail. `probe-llines` frames Julie on `zoo`: her
+  lines and stars and her full white cube matched retail's shots.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). On the world they are much
   dimmer than retail's: a muzzle flash that lights the floor yellow around Julie in
-  retail barely shows here (`probe-fx-guns`). Debug lines are accepted and not drawn;
-  swipes are drawn (see "Weapon effects").
+  retail barely shows here (`probe-fx-guns`). Swipes are drawn (see "Weapon effects").
+- **Debug lines**: the game module's (`G_DebugLine`: `cam show`, the AI's node display,
+  `csys_draw`) and the client game module's are drawn as `fakk2.exe` draws them. The
+  renderer is handed the game's array and count (`ri.DebugLines`, as retail's refimport
+  at `0xcdbd50`); `R_DebugLine` (`0x461fb0`) adds a solid, one pixel line to it, up to
+  `g_numdebuglines` (which the renderer registers too, "4096", latched), and the game
+  clears it each server frame. `R_RenderView` (`0x4646d0`) draws them after sorting the
+  view's surfaces (`0x462060`), except in a view without the world or the sky portal's:
+  unblended in their colour, depth tested without writing depth, or with
+  `r_debuglines_depthmask 1` written at the nearest depth (`glDepthRange 0 0`), so in
+  front of everything; with `r_stipplelines 1` (the default) each line keeps its own
+  stipple pattern and width (`G_LineStipple`). Both cvars are archived and "0" and "1"
+  by default. `probe-dlines` on `zoo` draws the `csys_draw` axes from inside a box and
+  matched retail's shots, both depth tested and with `r_debuglines_depthmask`.
 - **The player's buttons and the inventory bar.** `default.cfg` binds `+attackleft`,
   `+attackright`, `+use` and `+cameralook`, which Quake III's client does not know, so
   the keys fired nothing (an unknown command goes to the server as chat). The client
   registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
-  `+attackleft` 1, `+sneak` 2, `+run` 3, `+holsterweapon` 4, `+use` 5) and `+cameralook`
-  as a client flag that does nothing yet (retail turns the camera about the player
-  with the mouse while it is held). The number keys and the wheel are `warpinv <slot>`,
+  `+attackleft` 1, `+sneak` 2, `+run` 3, `+holster` 4, `+use` 5) and `+cameralook`
+  as a client flag. `+togglemouse` (`0x41d960`; retail registers no `-togglemouse`),
+  `ui_showmouse` and `ui_hidemouse` (which push and pop the interface's mouse window, `0x40d900`,
+  `0x40d920`, raising and clearing the same flag, `0x41d9b0`, `0x41da00`) put up and take down a
+  cursor in the game, after letting go of any mouse button held: while it is up the
+  mouse moves it instead of the view (`0x41e100`) and the mouse buttons skip their
+  bindings (`0x41fad1`). Here it is the system cursor, as for the menus. As retail's
+  `CL_MouseMove` does (`0x41e3fc`), the mouse always adds
+  its pitch (`m_pitch`) and yaw (`-m_yaw`) to a camera offset, and while `+cameralook` is
+  held it turns nothing else; the client game module reads the offset, the flag and
+  `centerview`'s reset (`0x41de76`) through `get_camera_offset` (`0x41ff70`) and turns
+  its third person camera about the player by the offset while the key is held or the
+  game allows it (`CF_CAMERA_ANGLES_ALLOWOFFSET`), which the stub had left still. Not
+  compared with a capture: the probes cannot move the mouse. The number keys and the wheel are `warpinv <slot>`,
   `nextinv` and `previnv`, which the retail client handles itself (`0x408dc0`):
-  `global/inventory.scr` defines the slots and their items, the bar shows the slot's
+  `global/inventory.scr` (`ui_inventoryfile`; `inv_restart` reads it again, `0x40d670`) defines the
+  slots and their items, the bar shows the slot's
   items the player carries (named by the player state's `inventory_name_index`
   through the item config strings), and while it is up the attack keys equip the
   highlighted item by sending the game `use "<item>" lefthand|righthand|dualhand`
@@ -1095,7 +1424,12 @@ What is implemented, and on what basis:
   the back end after every draw-surface list, and tests the view against the front
   end's `tr.viewParms`; here every light is drawn once, in the main view). `r_sunflare "x y z"`
   (with `r_sunflare_inportalsky`) places the sun by hand as retail's developer cvar
-  does, which is how the sun flare was compared: with the sun put at `training`'s
+  does: anything but its default "0" is read as the sun's position (`0x48bc92`), so
+  "0 0 0" is the world's origin. `r_place_sunflare 1` writes where the view's centre
+  meets the world (a trace 16384 units out, 0.01 back) into `r_sunflare` every frame and
+  leaves out the sun's full-screen blend (`0x48bb57`, `0x48bf13`); `probe-skel` got the
+  same point on both games to the fifth decimal. The sun flare was compared with the sun
+  put at `training`'s
   player start, ours and retail show the same disc and ring at the same strength. The
   2D "fromClient" colour: a stretched picture's `rgbGen/alphaGen fromClient` stages read
   the entity colour, and read it when their batch is flushed, so `RB_SetColor` copies
@@ -1143,9 +1477,27 @@ What is implemented, and on what basis:
   defaults (none, black, culling on); a level script's later changes to it are not seen
   there.
 
-Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
-light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
-beams, level of detail, cross-blending between animations.
+- **Fog volumes** (`fogParms` brushes: `cemetery`, `cliff1`, `cliff2`, `oracleway`,
+  `over`, `under`) go through Quake III's fog code, which retail keeps almost whole:
+  the same fog lump (`R_LoadFogs` `0x485a00`: colour times the identity light, `tcScale`
+  1 / (depth for opaque * 8)), the same fog texture coordinates (`0x494d30`, with the
+  half texel on s), the same 256x32 `*fog` image of `pow(x, 0.5)` (`0x46fb50`) and the
+  fog drawn as an extra stage of each shader (`0x479322`). The image's density is not
+  Quake III's (`0x46fdbb`): the depth below the fog plane scales the distance by
+  (t - 1/256) * 32/254 up to t = 255/256, where Quake III scales it by (t - 1/32) / (30/32)
+  up to 31/32, so a fog volume is about eight times thinner over most of the image. A
+  transparent stage in fog keeps 1 - (t - 0.25) * s * 256 of its colour per vertex, no
+  less than 0 and with no ceiling, its low byte kept (`0x4944f0`, `0x494650`,
+  `0x4945c0`), where Quake III takes 1 - R_FogFactor. `probe-fogvol` on `cemetery` (from
+  above the blood and the water entrances' fogs) went from a mean of 20.8 in red and 16.7
+  in blue against retail to 1.7 and 1.8, and from inside the blood fog (a pool 48 units
+  deep, the camera at z 600) it matches within 1.7. (A first camera at z 560 was under the
+  pool, inside solid ground, where the two engines draw the unvisible world differently;
+  no player sees from there.) `fogParms`' fifth value is skipped as retail skips it; `foggen <wave>`
+  (`0x4772da`), which varies the depth for opaque and no retail shader uses, is not read.
+
+Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read, the
+`.skb` collapse maps are not, and neither is applied).
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

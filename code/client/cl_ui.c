@@ -825,7 +825,7 @@ intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_R_ADDPOLYTOSCENE:
-		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
+		re.AddPolyToScene( args[1], args[2], VMA(3), 1, 0 );
 		return 0;
 
 	case UI_R_ADDLIGHTTOSCENE:

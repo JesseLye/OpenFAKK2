@@ -88,6 +88,7 @@ cvar_t	*r_farplane_nofog;
 cvar_t	*r_useglfog;
 cvar_t	*r_drawworld;
 cvar_t	*r_speeds;
+cvar_t	*r_fps;		// FAKK2: the engine's "fps", which the renderer reads too
 cvar_t	*r_fullbright;
 cvar_t	*r_novis;
 cvar_t	*r_nocull;
@@ -124,6 +125,7 @@ cvar_t	*r_lensflare;
 cvar_t	*r_lightcoronasize;
 cvar_t	*r_sunflare;
 cvar_t	*r_sunflare_inportalsky;
+cvar_t	*r_place_sunflare;
 cvar_t	*r_mode;
 cvar_t	*r_nobind;
 cvar_t	*r_singleShader;
@@ -153,12 +155,19 @@ cvar_t  *r_noborder;
 
 cvar_t	*r_customwidth;
 cvar_t	*r_customheight;
-cvar_t	*r_customPixelAspect;
+cvar_t	*r_customaspect;		// FAKK2: r_mode -1's window aspect (Quake III's r_customPixelAspect)
+cvar_t	*r_drawsprites;
+cvar_t	*r_showskel;
+cvar_t	*r_skyportal;
+cvar_t	*r_skyportal_origin;
 
 cvar_t	*r_overBrightBits;
 cvar_t	*r_mapOverBrightBits;
 
 cvar_t	*r_debugSurface;
+cvar_t	*r_stipplelines;			// FAKK2: debug lines drawn with their stipple pattern and width
+cvar_t	*r_debuglines_depthmask;	// FAKK2: debug lines in front of everything
+cvar_t	*g_numdebuglines;			// FAKK2: how many debug lines the game's array holds
 cvar_t	*r_simpleMipMaps;
 
 cvar_t	*r_showImages;
@@ -304,17 +313,20 @@ qboolean R_GetModeInfo( int *width, int *height, float *windowAspect, int mode )
 		return qfalse;
 	}
 
+	// FAKK2: a custom mode's window aspect is r_customaspect itself (fakk2.exe
+	// 0x45fe58), a listed mode's its width over its height times its pixel aspect
 	if ( mode == -1 ) {
 		*width = r_customwidth->integer;
 		*height = r_customheight->integer;
-		pixelAspect = r_customPixelAspect->value;
-	} else {
-		vm = &r_vidModes[mode];
-
-		*width  = vm->width;
-		*height = vm->height;
-		pixelAspect = vm->pixelAspect;
+		*windowAspect = r_customaspect->value;
+		return qtrue;
 	}
+
+	vm = &r_vidModes[mode];
+
+	*width  = vm->width;
+	*height = vm->height;
+	pixelAspect = vm->pixelAspect;
 
 	*windowAspect = (float)*width / ( *height * pixelAspect );
 
@@ -1133,7 +1145,9 @@ void R_Register( void )
 			"0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_ext_max_anisotropy = ri.Cvar_Get( "r_ext_max_anisotropy", "2", CVAR_ARCHIVE | CVAR_LATCH );
 
-	r_picmip = ri.Cvar_Get ("r_picmip", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	// FAKK2: r_picmip, r_overBrightBits, r_ignoreFastPath, r_textureMode and
+	// r_ambientScale take the retail engine's defaults, not Quake III's
+	r_picmip = ri.Cvar_Get ("r_picmip", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_roundImagesDown = ri.Cvar_Get ("r_roundImagesDown", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_colorMipLevels = ri.Cvar_Get ("r_colorMipLevels", "0", CVAR_LATCH );
 	ri.Cvar_CheckRange( r_picmip, 0, 16, qtrue );
@@ -1144,20 +1158,20 @@ void R_Register( void )
 	r_depthbits = ri.Cvar_Get( "r_depthbits", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_ext_multisample = ri.Cvar_Get( "r_ext_multisample", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_CheckRange( r_ext_multisample, 0, 4, qtrue );
-	r_overBrightBits = ri.Cvar_Get ("r_overBrightBits", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	r_overBrightBits = ri.Cvar_Get ("r_overBrightBits", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_ignorehwgamma = ri.Cvar_Get( "r_ignorehwgamma", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_mode = ri.Cvar_Get( "r_mode", "-2", CVAR_ARCHIVE | CVAR_LATCH );
 	r_fullscreen = ri.Cvar_Get( "r_fullscreen", "1", CVAR_ARCHIVE );
 	r_noborder = ri.Cvar_Get("r_noborder", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_customwidth = ri.Cvar_Get( "r_customwidth", "1600", CVAR_ARCHIVE | CVAR_LATCH );
 	r_customheight = ri.Cvar_Get( "r_customheight", "1024", CVAR_ARCHIVE | CVAR_LATCH );
-	r_customPixelAspect = ri.Cvar_Get( "r_customPixelAspect", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	r_customaspect = ri.Cvar_Get( "r_customaspect", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_simpleMipMaps = ri.Cvar_Get( "r_simpleMipMaps", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0);
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
 	r_stereoEnabled = ri.Cvar_Get( "r_stereoEnabled", "0", CVAR_ARCHIVE | CVAR_LATCH);
-	r_ignoreFastPath = ri.Cvar_Get( "r_ignoreFastPath", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	r_ignoreFastPath = ri.Cvar_Get( "r_ignoreFastPath", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	ri.Cvar_CheckRange(r_greyscale, 0, 1, qfalse);
 
@@ -1179,9 +1193,16 @@ void R_Register( void )
 	r_flares = ri.Cvar_Get ("r_flares", "0", CVAR_ARCHIVE );
 	r_lensflare = ri.Cvar_Get ("r_lensflare", "1", CVAR_ARCHIVE );
 	r_lightcoronasize = ri.Cvar_Get ("r_lightcoronasize", ".1", CVAR_ARCHIVE );	// retail 0x4616f7
-	// retail's developer override of the worldspawn's sun: "x y z", "0 0 0" for none
-	r_sunflare = ri.Cvar_Get ("r_sunflare", "0 0 0", CVAR_TEMP );
-	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", CVAR_TEMP );
+	// retail's developer override of the worldspawn's sun: "x y z", "0" for none
+	r_sunflare = ri.Cvar_Get ("r_sunflare", "0", 0 );
+	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", 0 );
+	r_place_sunflare = ri.Cvar_Get( "r_place_sunflare", "0", 0 );	// retail 0x4616d2
+	// FAKK2: the sky portal's camera at a fixed point, turned the viewer's way
+	// (fakk2.exe 0x47bf76), and the scene's sprites (0x4643c0)
+	r_skyportal = ri.Cvar_Get( "r_skyportal", "0", 0 );
+	r_skyportal_origin = ri.Cvar_Get( "r_skyportal_origin", "0 0 0", 0 );
+	r_drawsprites = ri.Cvar_Get( "r_drawsprites", "1", CVAR_CHEAT );
+	r_showskel = ri.Cvar_Get( "r_showskel", "0", CVAR_CHEAT );	// fakk2.exe 0x461492
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );
 	ri.Cvar_CheckRange( r_znear, 0.001f, 200, qfalse );
 	r_zproj = ri.Cvar_Get( "r_zproj", "64", CVAR_ARCHIVE );
@@ -1193,7 +1214,7 @@ void R_Register( void )
 	r_dynamiclight = ri.Cvar_Get( "r_dynamiclight", "1", CVAR_ARCHIVE );
 	r_dlightBacks = ri.Cvar_Get( "r_dlightBacks", "1", CVAR_ARCHIVE );
 	r_finish = ri.Cvar_Get ("r_finish", "0", CVAR_ARCHIVE);
-	r_textureMode = ri.Cvar_Get( "r_textureMode", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
+	r_textureMode = ri.Cvar_Get( "r_textureMode", "GL_LINEAR_MIPMAP_NEAREST", CVAR_ARCHIVE );
 	r_swapInterval = ri.Cvar_Get( "r_swapInterval", "0",
 					CVAR_ARCHIVE | CVAR_LATCH );
 	r_gamma = ri.Cvar_Get( "r_gamma", "1", CVAR_ARCHIVE );
@@ -1205,7 +1226,7 @@ void R_Register( void )
 
 	r_primitives = ri.Cvar_Get( "r_primitives", "0", CVAR_ARCHIVE );
 
-	r_ambientScale = ri.Cvar_Get( "r_ambientScale", "0.6", CVAR_CHEAT );
+	r_ambientScale = ri.Cvar_Get( "r_ambientScale", "0.5", CVAR_CHEAT );
 	r_directedScale = ri.Cvar_Get( "r_directedScale", "1", CVAR_CHEAT );
 
 	r_anaglyphMode = ri.Cvar_Get("r_anaglyphMode", "0", CVAR_ARCHIVE);
@@ -1220,6 +1241,11 @@ void R_Register( void )
 	r_light_emphasize = ri.Cvar_Get( "r_light_emphasize", "0", 0 );
 	r_light_emphasizePercent = ri.Cvar_Get( "r_light_emphasizePercent", "0", 0 );
 	r_entityLights = ri.Cvar_Get( "r_entityLights", "1", CVAR_CHEAT );
+	// FAKK2: the light cubes' debugging aids (fakk2.exe 0x46156e on)
+	r_light_lines = ri.Cvar_Get( "r_light_lines", "0", CVAR_ARCHIVE );
+	r_light_sun_line = ri.Cvar_Get( "r_light_sun_line", "0", CVAR_ARCHIVE );
+	r_light_int_scale = ri.Cvar_Get( "r_light_int_scale", "0.05", CVAR_ARCHIVE );
+	r_light_nolight = ri.Cvar_Get( "r_light_nolight", "0", CVAR_ARCHIVE );
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0 );
 	r_saveFontData = ri.Cvar_Get( "r_saveFontData", "0", 0 );
@@ -1251,9 +1277,14 @@ void R_Register( void )
 	r_novis = ri.Cvar_Get ("r_novis", "0", CVAR_CHEAT);
 	r_showcluster = ri.Cvar_Get ("r_showcluster", "0", CVAR_CHEAT);
 	r_speeds = ri.Cvar_Get ("r_speeds", "0", CVAR_CHEAT);
+	r_fps = ri.Cvar_Get( "fps", "0", CVAR_ARCHIVE );	// FAKK2 (0x46172c)
 	r_verbose = ri.Cvar_Get( "r_verbose", "0", CVAR_CHEAT );
 	r_logFile = ri.Cvar_Get( "r_logFile", "0", CVAR_CHEAT );
 	r_debugSurface = ri.Cvar_Get ("r_debugSurface", "0", CVAR_CHEAT);
+	// FAKK2: fakk2.exe 0x460f0c, 0x46153d, 0x461715
+	g_numdebuglines = ri.Cvar_Get( "g_numdebuglines", "4096", CVAR_LATCH );
+	r_stipplelines = ri.Cvar_Get( "r_stipplelines", "1", CVAR_ARCHIVE );
+	r_debuglines_depthmask = ri.Cvar_Get( "r_debuglines_depthmask", "0", CVAR_ARCHIVE );
 	r_nobind = ri.Cvar_Get ("r_nobind", "0", CVAR_CHEAT);
 	r_showtris = ri.Cvar_Get ("r_showtris", "0", CVAR_CHEAT);
 	r_showsky = ri.Cvar_Get ("r_showsky", "0", CVAR_CHEAT);
@@ -1517,6 +1548,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.SwipeBegin = RE_SwipeBegin;
 	re.SwipePoint = RE_SwipePoint;
 	re.SwipeEnd = RE_SwipeEnd;
+	re.GetFrameStats = RE_GetFrameStats;
 	re.RenderScene = RE_RenderScene;
 
 	re.SetColor = RE_SetColor;

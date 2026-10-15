@@ -1,0 +1,24 @@
+// r_showskel and r_place_sunflare on zoo, from a script camera behind and above
+// Julie: shot 0 has r_showskel 1 (her skeleton in place of her mesh: each bone's
+// axes in red, green and blue, a cyan line to its parent); shot 1 has
+// r_place_sunflare 1, which writes where the view's centre meets the world into
+// r_sunflare (printed to the log) and puts the sun there.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname skelcam origin "-2400 1568 160" angles "20 0 0"
+wait .2
+cuecamera $skelcam
+stuffcmd "set r_showskel 1"
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set r_showskel 0; set r_place_sunflare 1"
+wait .5
+stuffcmd "screenshot"
+stuffcmd "r_sunflare"
+wait 1
+stuffcmd "set r_place_sunflare 0; set r_sunflare \"0 0 0\""
+wait .5
+stuffcmd "quit"
+end

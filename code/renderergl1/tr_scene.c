@@ -96,6 +96,14 @@ void R_AddPolygonSurfaces( void ) {
 	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
 
 	for ( i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys ; i++, poly++ ) {
+		// FAKK2 (fakk2.exe 0x47b3c0): the client game module's render flags,
+		// a third person poly kept out of the main view as an entity is
+		if ( ( poly->renderfx & RF_THIRD_PERSON ) && !tr.viewParms.isPortal ) {
+			continue;
+		}
+		if ( R_ViewLeavesOut( poly->renderfx ) ) {
+			continue;
+		}
 		sh = R_GetShaderByHandle( poly->hShader );
 		R_AddDrawSurf( ( void * )poly, sh, poly->fogIndex, qfalse );
 	}
@@ -107,7 +115,7 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int renderfx ) {
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -138,6 +146,7 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 		poly = &backEndData->polys[r_numpolys];
 		poly->surfaceType = SF_POLY;
 		poly->hShader = hShader;
+		poly->renderfx = renderfx;
 		poly->numVerts = numVerts;
 		poly->verts = &backEndData->polyVerts[r_numpolyverts];
 		
@@ -259,10 +268,30 @@ refEntity_t *RE_GetRenderEntity( int entityNumber ) {
 =====================
 RE_DebugLine
 
-Not drawn yet.
+FAKK2: the client game module's debug lines (fakk2.exe 0x461fb0) go into the
+game module's own array, solid and one pixel wide, up to g_numdebuglines;
+R_DrawDebugLines draws them with the game's.
 =====================
 */
 void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float b, float alpha ) {
+	debugline_t	*line;
+
+	if ( !ri.DebugLines || !ri.numDebugLines || !*ri.DebugLines ) {
+		return;
+	}
+	if ( *ri.numDebugLines >= g_numdebuglines->integer ) {
+		ri.Printf( PRINT_ALL, "R_DebugLine: Exceeded MAX_DEBUG_LINES\n" );
+		return;
+	}
+
+	line = &( *ri.DebugLines )[ ( *ri.numDebugLines )++ ];
+	VectorCopy( start, line->start );
+	VectorCopy( end, line->end );
+	VectorSet( line->color, r, g, b );
+	line->alpha = alpha;
+	line->width = 1;
+	line->factor = 1;
+	line->pattern = 0xffff;
 }
 
 /*

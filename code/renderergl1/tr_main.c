@@ -1287,8 +1287,9 @@ scene names a sky camera, the scene is first drawn from that camera, turned
 the way the viewer is looking. The view is then drawn over it, and its sky
 surfaces leave the picture alone.
 
-(The retail renderer's version of this has not been examined; this follows
-the description in the SDK headers and OpenMoHAA's renderer.)
+The retail renderer (fakk2.exe 0x47bee0) turns the camera the same way, the
+viewer's axes times the sky axes; with r_skyportal it puts the camera at
+r_skyportal_origin and keeps the viewer's axes as they are.
 =================
 */
 static void R_RenderSkyPortal( void ) {
@@ -1306,9 +1307,19 @@ static void R_RenderSkyPortal( void ) {
 	oldParms = tr.viewParms;
 	newParms = tr.viewParms;
 
-	VectorCopy( tr.refdef.sky_origin, newParms.or.origin );
-	MatrixMultiply( oldParms.or.axis, tr.refdef.sky_axis, axis );
-	AxisCopy( axis, newParms.or.axis );
+	if ( r_skyportal->integer ) {
+		// fakk2.exe 0x47bf76: the camera at r_skyportal_origin, looking the
+		// way the viewer does
+		if ( sscanf( r_skyportal_origin->string, "%f %f %f", &newParms.or.origin[0],
+			&newParms.or.origin[1], &newParms.or.origin[2] ) != 3 ) {
+			ri.Printf( PRINT_WARNING, "WARNING: Invalid sky portal origin: %s\n", r_skyportal_origin->string );
+			return;
+		}
+	} else {
+		VectorCopy( tr.refdef.sky_origin, newParms.or.origin );
+		MatrixMultiply( oldParms.or.axis, tr.refdef.sky_axis, axis );
+		AxisCopy( axis, newParms.or.axis );
+	}
 	VectorCopy( newParms.or.origin, newParms.pvsOrigin );
 	newParms.isPortalSky = qtrue;
 
@@ -1374,6 +1385,27 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 /*
 =============
+R_ViewLeavesOut
+
+FAKK2: what the view leaves out of an entity's or a poly's render flags
+(fakk2.exe 0x463fa2 for entities, 0x47b3f8 for polys): a sky entity belongs
+to the sky portal's view and nothing else does, and a mirror or portal's
+view shows only what is flagged for portals or for both, while the main
+view leaves out what is flagged for portals only.
+=============
+*/
+qboolean R_ViewLeavesOut( int renderfx ) {
+	if ( !( renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
+		return qtrue;
+	}
+	if ( tr.viewParms.isPortal ) {
+		return !( renderfx & ( RF_PORTALENTITY | RF_DUALENTITY ) );
+	}
+	return ( renderfx & RF_PORTALENTITY ) != 0;
+}
+
+/*
+=============
 R_AddEntitySurfaces
 =============
 */
@@ -1404,10 +1436,7 @@ void R_AddEntitySurfaces (void) {
 			continue;
 		}
 
-		// FAKK2: sky entities belong to the sky portal's view and nothing
-		// else does. (Taken from the flag's description; the retail
-		// renderer's handling has not been examined.)
-		if ( !( ent->e.renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
+		if ( R_ViewLeavesOut( ent->e.renderfx ) ) {
 			continue;
 		}
 
@@ -1419,6 +1448,9 @@ void R_AddEntitySurfaces (void) {
 
 			if ( sprModel && sprModel->type == MOD_SPRITE ) {
 				if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+					continue;
+				}
+				if ( !r_drawsprites->integer ) {
 					continue;
 				}
 				ent->e.radius = R_SpriteRadius( sprModel->spriteShader, ent->e.scale );
@@ -1464,6 +1496,9 @@ void R_AddEntitySurfaces (void) {
 				case MOD_SPRITE:
 					// a .spr model is a sprite with that shader, sized by the entity's scale
 					if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+						break;
+					}
+					if ( !r_drawsprites->integer ) {
 						break;
 					}
 					ent->e.reType = RT_SPRITE;
@@ -1562,6 +1597,76 @@ void R_DebugPolygon( int color, int numPoints, float *points ) {
 
 /*
 ====================
+R_DrawDebugLines
+
+FAKK2: the game module's debug lines (G_DebugLine, and the client game
+module's through RE_DebugLine), drawn over the view as fakk2.exe 0x462060
+draws them: unblended in their colour, depth tested without writing depth,
+or with r_debuglines_depthmask written at the nearest depth so that they
+show through everything. With r_stipplelines each line keeps its own
+stipple pattern and width. Not in the sky portal's view.
+====================
+*/
+static void R_DrawDebugLines( void ) {
+	const debugline_t	*line;
+	float				width = -1;
+	unsigned short		factor = 4, pattern = 0xffff;
+	int					i;
+
+	if ( !ri.DebugLines || !*ri.DebugLines || !ri.numDebugLines || !*ri.numDebugLines ) {
+		return;
+	}
+	if ( ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) || tr.viewParms.isPortalSky ) {
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	GL_Bind( tr.whiteImage );
+	if ( r_debuglines_depthmask->integer ) {
+		GL_State( GLS_DEPTHMASK_TRUE );
+		qglDepthRange( 0, 0 );
+	} else {
+		GL_State( 0 );
+	}
+	qglDisableClientState( GL_COLOR_ARRAY );
+	qglDisableClientState( GL_TEXTURE_COORD_ARRAY );
+
+	if ( r_stipplelines->integer ) {
+		qglEnable( GL_LINE_STIPPLE );
+		qglLineStipple( 4, 0xffff );
+		qglLineWidth( 1 );
+	}
+
+	qglBegin( GL_LINES );
+	line = *ri.DebugLines;
+	for ( i = 0; i < *ri.numDebugLines; i++, line++ ) {
+		if ( r_stipplelines->integer
+			&& ( line->width != width || line->factor != factor || line->pattern != pattern ) ) {
+			qglEnd();
+			qglLineStipple( line->factor, line->pattern );
+			qglLineWidth( line->width );
+			qglBegin( GL_LINES );
+			width = line->width;
+			factor = line->factor;
+			pattern = line->pattern;
+		}
+		qglColor4f( line->color[0], line->color[1], line->color[2], line->alpha );
+		qglVertex3fv( line->start );
+		qglVertex3fv( line->end );
+	}
+	qglEnd();
+
+	if ( r_stipplelines->integer ) {
+		qglDisable( GL_LINE_STIPPLE );
+		qglLineStipple( 1, 0xffff );
+		qglLineWidth( 1 );
+	}
+	qglDepthRange( 0, 1 );
+}
+
+/*
+====================
 R_DebugGraphics
 
 Visualization aid for movement clipping debugging
@@ -1629,6 +1734,9 @@ void R_RenderView (viewParms_t *parms) {
 	}
 
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
+
+	R_DrawDebugLines();
+	R_DrawLightLines();
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();

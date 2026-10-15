@@ -429,8 +429,20 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		R_LoadLensFlares();
 	}
 
-	if ( tr.world && r_sunflare->string[0] && Q_stricmp( r_sunflare->string, "0 0 0" ) ) {
-		// retail's developer placing of the sun (0x48bb20 reads r_sunflare)
+	// retail's r_place_sunflare (0x48bb57): the sun goes where the view's
+	// centre meets the world, written to r_sunflare for the map's author to copy
+	if ( r_place_sunflare->integer && tr.world && !view->isPortalSky ) {
+		trace_t	trace;
+		vec3_t	end, pos;
+
+		VectorMA( view->or.origin, 16384, view->or.axis[0], end );
+		ri.CM_BoxTrace( &trace, view->or.origin, end, NULL, NULL, 0, CONTENTS_SOLID, qfalse );
+		VectorMA( trace.endpos, -0.01f, view->or.axis[0], pos );
+		ri.Cvar_Set( "r_sunflare", va( "%f %f %f", pos[0], pos[1], pos[2] ) );
+	}
+
+	if ( tr.world && Q_stricmp( r_sunflare->string, "0" ) ) {
+		// retail's developer placing of the sun: anything but "0" (0x48bc92)
 		vec3_t	pos;
 
 		if ( sscanf( r_sunflare->string, "%f %f %f", &pos[0], &pos[1], &pos[2] ) == 3 ) {
@@ -481,7 +493,10 @@ void R_DrawLensFlares( const viewParms_t *view ) {
 		LF_DrawLight( &lf_dlight, view );
 	}
 
-	// retail fades only the sun's full-screen blend (0x48b5a0 on 0x96d448)
-	LF_DrawFullscreen( &lf_sun, view );
+	// retail fades only the sun's full-screen blend (0x48b5a0 on 0x96d448),
+	// and leaves it out while the sun is being placed (0x48bf13)
+	if ( !r_place_sunflare->integer ) {
+		LF_DrawFullscreen( &lf_sun, view );
+	}
 	RE_SetColor( NULL );
 }

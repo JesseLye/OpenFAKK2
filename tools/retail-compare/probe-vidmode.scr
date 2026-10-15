@@ -1,0 +1,14 @@
+// The client's "vidmode 4" on zoo: 800x600, then a screenshot at that size and r_mode
+// printed to the log. Retail switches in place; ours sets r_mode and restarts the video.
+// Remove r_mode from both sandboxes' config.cfg afterwards.
+probe:
+waitforplayer
+wait 2
+stuffcmd "vidmode 4"
+wait 3
+stuffcmd "r_mode"
+wait 0.5
+stuffcmd "screenshot"
+wait 2
+stuffcmd "quit"
+end

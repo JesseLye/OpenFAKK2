@@ -1642,6 +1642,16 @@ void NET_Event(fd_set *fdr)
 					continue;          // drop this packet
 			}
 
+			// FAKK2's com_dropsim (Com_EventLoop, fakk2.exe 0x42de63): the share
+			// of incoming packets dropped, 0 to 1
+			if(com_dropsim->value > 0.0f)
+			{
+				static int seed;
+
+				if(Q_random(&seed) < com_dropsim->value)
+					continue;
+			}
+
 			if(com_sv_running->integer)
 				Com_RunAndTimeServerPacket(&from, &netmsg);
 			else

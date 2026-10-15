@@ -27,6 +27,19 @@ R_PerformanceCounters
 =====================
 */
 void R_PerformanceCounters( void ) {
+	// FAKK2's fps counter (fakk2.exe 0x47a710, before the counters are cleared
+	// and the frame's commands run): the last frame's back end, its 3D view,
+	// and this frame's light cubes
+	if ( r_fps->integer ) {
+		tr.frameStats[0] = backEnd.pc.c_totalIndexes / 3;
+		tr.frameStats[1] = backEnd.pc.c_vertexes;
+		tr.frameStats[2] = backEnd.texelsUsed;
+		tr.frameStats[3] = backEnd.worldPc.c_totalIndexes / 3;
+		tr.frameStats[4] = backEnd.worldPc.c_vertexes;
+		tr.frameStats[5] = tr.pc.c_charLights;
+	}
+	backEnd.worldPcTaken = qfalse;
+
 	if ( !r_speeds->integer ) {
 		// clear the counters even if we aren't printing
 		Com_Memset( &tr.pc, 0, sizeof( tr.pc ) );
@@ -69,6 +82,17 @@ void R_PerformanceCounters( void ) {
 	Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 }
 
+
+/*
+====================
+RE_GetFrameStats
+
+FAKK2: what R_PerformanceCounters kept for the client's fps counter
+====================
+*/
+void RE_GetFrameStats( int stats[6] ) {
+	Com_Memcpy( stats, tr.frameStats, sizeof( tr.frameStats ) );
+}
 
 /*
 ====================

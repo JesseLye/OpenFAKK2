@@ -627,14 +627,13 @@ static void CL_CG_MUSIC_UpdateVolume( float volume, float fade_time ) {
 	MUSIC_UpdateVolume( volume, fade_time );
 }
 
-// The camera look offsets (mouse look while the view is fixed) have not been
-// read from the retail engine; there is no offset yet.
+// FAKK2 (fakk2.exe 0x41ff70): the offset the mouse has turned, whether
+// +cameralook is held, and centerview's reset, which is reported once
 static float *CL_CG_GetCameraOffset( qboolean *lookactive, qboolean *resetview ) {
-	static vec3_t	offset;
-
-	*lookactive = qfalse;
-	*resetview = qfalse;
-	return offset;
+	*lookactive = in_cameraLook;
+	*resetview = cl_cameraResetView;
+	cl_cameraResetView = qfalse;
+	return cl_cameraOffset;
 }
 
 // renderer
@@ -703,7 +702,7 @@ static void CL_CG_R_AddLightToScene( vec3_t origin, float intensity, float r, fl
 }
 
 static void CL_CG_R_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int renderfx ) {
-	re.AddPolyToScene( hShader, numVerts, verts, 1 );
+	re.AddPolyToScene( hShader, numVerts, verts, 1, renderfx );
 }
 
 static void CL_CG_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) {

@@ -68,6 +68,8 @@ typedef struct {
 	vec3_t		bounds[2];		// of the model as placed, after scaling
 	vec3_t		localOrigin;
 	float		radius;
+	vec3_t		lightCentre;	// the model is lit from here: the centre of the file's bounds, placed
+	float		lightRadius;	// the file's radius, scaled (fakk2.exe 0x48cff0)
 	vec3_t		scale;			// tan: decoded vertex = packed * scale + offset
 	vec3_t		offset;
 } tikiFrame_t;
@@ -139,6 +141,7 @@ struct tikiModel_s {
 	char		path[MAX_QPATH];
 	float		scale;
 	vec3_t		origin;
+	vec3_t		lightOffset;	// "lightoffset", in the model's space before its scale
 	qboolean	skeletal;
 	vec3_t		mins, maxs;
 	float		radius;
@@ -503,6 +506,7 @@ qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc ) {
 	}
 	tiki->scale = desc->scale ? desc->scale : 1;
 	VectorCopy( desc->origin, tiki->origin );
+	VectorCopy( desc->lightOffset, tiki->lightOffset );
 	tiki->skeletal = desc->skeletal;
 	VectorCopy( desc->mins, tiki->mins );
 	VectorCopy( desc->maxs, tiki->maxs );
@@ -604,7 +608,10 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		for ( k = 0 ; k < 3 ; k++ ) {
 			frame->scale[k] = TAN_Float( f + 24 + k * 4 ) * tiki->scale;
 			frame->offset[k] = ( TAN_Float( f + 36 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
+			frame->lightCentre[k] = ( ( TAN_Float( f + k * 4 ) + TAN_Float( f + 12 + k * 4 ) ) * 0.5f
+				+ tiki->origin[k] ) * tiki->scale;
 		}
+		frame->lightRadius = TAN_Float( f + 60 ) * tiki->scale;
 		ClearBounds( frame->bounds[0], frame->bounds[1] );
 	}
 
@@ -754,6 +761,8 @@ static skelAnim_t *R_SkaLoad( const tikiModel_t *tiki, const char *skaFile ) {
 			frame->bounds[1][k] = ( TAN_Float( f + 12 + k * 4 ) + tiki->origin[k] ) * tiki->scale;
 		}
 		R_TikiFinishFrame( frame, &anim->radius );
+		VectorCopy( frame->localOrigin, frame->lightCentre );
+		frame->lightRadius = TAN_Float( f + 24 ) * tiki->scale;
 		for ( j = 0 ; j < numBones * 8 ; j++ ) {
 			anim->bones[i * numBones * 8 + j] = TAN_Short( f + SKA_FRAME_HEADER_SIZE + j * 2 );
 		}
@@ -1004,14 +1013,18 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 	// FAKK2 lights a TIKI model from the centre of its frame's bounds, not
 	// from its origin (fakk2.exe 0x48cff0), which keeps a model whose origin
 	// sits in a wall (the training room's door button, in the door frame)
-	// sampling the grid where the model is. A scene without a world (the
-	// inventory's windows) gets the flat ambient R_SetupEntityLighting gives it.
+	// sampling the grid where the model is. The bounds and the radius are
+	// the ones the animation file stores, not those of the vertexes. A scene
+	// without a world (the inventory's windows) gets the flat ambient
+	// R_SetupEntityLighting gives it.
 	{
 		const tikiFrame_t	*frame = &frames[ent->e.frame];
 		float				escale = R_TikiEntityScale( &ent->e );
 		vec3_t				local, lightOrigin;
 
-		VectorScale( frame->localOrigin, escale, local );
+		// plus the definition's "lightoffset", scaled as the model is (0x48d0b2)
+		VectorMA( frame->lightCentre, tiki->scale, tiki->lightOffset, local );
+		VectorScale( local, escale, local );
 		if ( ent->e.renderfx & RF_LIGHTING_ORIGIN ) {
 			VectorCopy( ent->e.lightingOrigin, lightOrigin );
 		} else {
@@ -1023,7 +1036,7 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		if ( ent->e.renderfx & ( RF_EXTRALIGHT | RF_INVISIBLE ) ) {
 			// betterlighting: a light cube from the map's lights instead
 			// of the grid (fakk2.exe 0x48e170)
-			R_SetupEntityLightCube( ent, lightOrigin, local, frame->radius * escale * 0.5f );
+			R_SetupEntityLightCube( ent, lightOrigin, local, frame->lightRadius * escale * 0.5f );
 		} else {
 			R_SetupEntityLighting( &tr.refdef, ent, lightOrigin );
 		}
@@ -1047,6 +1060,21 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		if ( !sh ) {
 			continue;
 		}
+
+		// FAKK2: the shadows of an opaque surface of a model the game flags
+		// for precise shadows (fakk2.exe 0x4896a8, 0x4896ea; 0x486fec for a
+		// skeletal one): cg_shadows 2 a stencil shadow when it casts one, 3 a
+		// projection onto the plane the client game module found under it
+		if ( sh->sort == SS_OPAQUE && ( ent->e.renderfx & RF_SHADOW_PRECISE ) ) {
+			if ( r_shadows->integer == 2 && ( ent->e.renderfx & RF_SHADOW )
+				&& !( ent->e.renderfx & RF_DEPTHHACK ) ) {
+				R_AddDrawSurf( surf, tr.shadowShader, 0, qfalse );
+			}
+			if ( r_shadows->integer == 3 && ( ent->e.renderfx & RF_SHADOW_PLANE ) ) {
+				R_AddDrawSurf( surf, tr.projectionShadowShader, 0, qfalse );
+			}
+		}
+
 		R_AddDrawSurf( surf, sh, 0, qfalse );
 	}
 }
@@ -1380,6 +1408,51 @@ static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 
 /*
 ===============
+RB_ShowSkel
+
+r_showskel (fakk2.exe 0x495db3, 0x496042): the entity's skeleton in place
+of its surfaces, once per frame: each bone's axes four units long in red,
+green and blue, and a cyan line to it from its parent.
+===============
+*/
+static void RB_ShowSkel( const tikiModel_t *tiki, const trRefEntity_t *ent, float scale ) {
+	static const trRefEntity_t	*shownEnt;
+	static int					shownFrame = -1;
+	static const float			axisColors[3][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
+	int							b, i;
+
+	if ( ent == shownEnt && tr.frameCount == shownFrame ) {
+		return;
+	}
+	shownEnt = ent;
+	shownFrame = tr.frameCount;
+
+	GL_Bind( tr.whiteImage );
+	qglBegin( GL_LINES );
+	for ( b = 0 ; b < tiki->skel->numBones ; b++ ) {
+		const skelBonePose_t	*pose = &skel_pose[b];
+		int						parent = tiki->skel->parents[b];
+		vec3_t					origin, end;
+
+		VectorScale( pose->origin, scale, origin );
+		for ( i = 0 ; i < 3 ; i++ ) {
+			qglColor3f( axisColors[i][0], axisColors[i][1], axisColors[i][2] );
+			qglVertex3fv( origin );
+			VectorMA( origin, 4, pose->axis[i], end );
+			qglVertex3fv( end );
+		}
+		if ( parent >= 0 ) {
+			qglColor3f( 0, 1, 1 );
+			VectorScale( skel_pose[parent].origin, scale, end );
+			qglVertex3fv( end );
+			qglVertex3fv( origin );
+		}
+	}
+	qglEnd();
+}
+
+/*
+===============
 RB_SurfaceSkel
 
 Skins the surface's vertexes with the entity's bones.
@@ -1398,6 +1471,11 @@ void RB_SurfaceSkel( void *surface ) {
 		return;
 	}
 	R_SkelComputeBones( tiki, ent );
+
+	if ( r_showskel->integer ) {
+		RB_ShowSkel( tiki, ent, tiki->scale * escale );
+		return;
+	}
 
 	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
 

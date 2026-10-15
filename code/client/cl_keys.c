@@ -1047,10 +1047,126 @@ void Key_Bind_f (void)
 }
 
 /*
+=============================================================================
+
+FAKK2's ALT and CTRL bindings (fakk2.exe 0x41f4f0, 0x41f640)
+
+A key has two more bindings, used when it is pressed with ALT held and
+cl_altbindings is on, or with CTRL held and cl_ctrlbindings is on
+(CL_KeyEvent 0x41f9c0). default.cfg gives ALT+n "weapgroup<n>" and CTRL+n
+"saveweaps <n>": the player's weapon groups. unbindall leaves them alone.
+
+=============================================================================
+*/
+
+static char		*keyAltBindings[MAX_KEYS];
+static char		*keyCtrlBindings[MAX_KEYS];
+static qboolean	keyAltPressed[MAX_KEYS];		// pressed while ALT was held
+static qboolean	keyCtrlPressed[MAX_KEYS];
+static qboolean	keyAltHeld, keyCtrlHeld;
+static cvar_t	*cl_altbindings;
+static cvar_t	*cl_ctrlbindings;
+
+static void Key_SetModBinding( char **table, int keynum, const char *binding ) {
+	if ( keynum < 0 || keynum >= MAX_KEYS ) {
+		return;
+	}
+	if ( table[keynum] ) {
+		Z_Free( table[keynum] );
+	}
+	table[keynum] = CopyString( binding );
+	cvar_modifiedFlags |= CVAR_ARCHIVE;
+}
+
+// altbind/ctrlbind <key> [command]: as bind, but the key is named as given
+static void Key_ModBind( char **table, const char *usage ) {
+	char	cmd[1024];
+	int		i, c, b;
+
+	c = Cmd_Argc();
+	if ( c < 2 ) {
+		Com_Printf( "%s", usage );
+		return;
+	}
+	b = Key_StringToKeynum( Cmd_Argv( 1 ) );
+	if ( b == -1 ) {
+		Com_Printf( "\"%s\" isn't a valid key\n", Cmd_Argv( 1 ) );
+		return;
+	}
+	if ( c == 2 ) {
+		if ( table[b] ) {
+			Com_Printf( "\"%s\" = \"%s\"\n", Cmd_Argv( 1 ), table[b] );
+		} else {
+			Com_Printf( "\"%s\" is not bound\n", Cmd_Argv( 1 ) );
+		}
+		return;
+	}
+
+	cmd[0] = 0;
+	for ( i = 2 ; i < c ; i++ ) {
+		Q_strcat( cmd, sizeof( cmd ), Cmd_Argv( i ) );
+		if ( i != c - 1 ) {
+			Q_strcat( cmd, sizeof( cmd ), " " );
+		}
+	}
+	Key_SetModBinding( table, b, cmd );
+}
+
+static void Key_ModUnbind( char **table, const char *usage ) {
+	int		b;
+
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "%s", usage );
+		return;
+	}
+	b = Key_StringToKeynum( Cmd_Argv( 1 ) );
+	if ( b == -1 ) {
+		Com_Printf( "\"%s\" isn't a valid key\n", Cmd_Argv( 1 ) );
+		return;
+	}
+	Key_SetModBinding( table, b, "" );
+}
+
+static void Key_ModBindlist( char **table ) {
+	int		i;
+
+	for ( i = 0 ; i < MAX_KEYS ; i++ ) {
+		if ( table[i] && table[i][0] ) {
+			Com_Printf( "%s \"%s\"\n", Key_KeynumToString( i ), table[i] );
+		}
+	}
+}
+
+static void Key_AltBind_f( void ) {
+	Key_ModBind( keyAltBindings, "altbind <key> [command] : attach a command to a key\n" );
+}
+
+static void Key_CtrlBind_f( void ) {
+	Key_ModBind( keyCtrlBindings, "ctrlbind <key> [command] : attach a command to a key\n" );
+}
+
+static void Key_AltUnbind_f( void ) {
+	Key_ModUnbind( keyAltBindings, "unaltbind <key> : remove commands from a key\n" );
+}
+
+static void Key_CtrlUnbind_f( void ) {
+	Key_ModUnbind( keyCtrlBindings, "unctrlbind <key> : remove commands from a key\n" );
+}
+
+static void Key_AltBindlist_f( void ) {
+	Key_ModBindlist( keyAltBindings );
+}
+
+static void Key_CtrlBindlist_f( void ) {
+	Key_ModBindlist( keyCtrlBindings );
+}
+
+/*
 ============
 Key_WriteBindings
 
-Writes lines containing "bind key value"
+Writes lines containing "bind key value", and FAKK2's "altbind" and "ctrlbind"
+after each key's (0x41f790)
 ============
 */
 void Key_WriteBindings( fileHandle_t f ) {
@@ -1061,9 +1177,13 @@ void Key_WriteBindings( fileHandle_t f ) {
 	for (i=0 ; i<MAX_KEYS ; i++) {
 		if (keys[i].binding && keys[i].binding[0] ) {
 			FS_Printf (f, "bind %s \"%s\"\n", Key_KeynumToString(i), keys[i].binding);
-
 		}
-
+		if ( keyAltBindings[i] && keyAltBindings[i][0] ) {
+			FS_Printf( f, "altbind %s \"%s\"\n", Key_KeynumToString( i ), keyAltBindings[i] );
+		}
+		if ( keyCtrlBindings[i] && keyCtrlBindings[i][0] ) {
+			FS_Printf( f, "ctrlbind %s \"%s\"\n", Key_KeynumToString( i ), keyCtrlBindings[i] );
+		}
 	}
 }
 
@@ -1153,6 +1273,20 @@ void CL_InitKeyCommands( void ) {
 	Cmd_SetCommandCompletionFunc( "unbind", Key_CompleteUnbind );
 	Cmd_AddCommand ("unbindall",Key_Unbindall_f);
 	Cmd_AddCommand ("bindlist",Key_Bindlist_f);
+
+	// FAKK2: the ALT and CTRL bindings (0x41f900, the switches 0x42269c)
+	Cmd_AddCommand( "altbind", Key_AltBind_f );
+	Cmd_SetCommandCompletionFunc( "altbind", Key_CompleteBind );
+	Cmd_AddCommand( "unaltbind", Key_AltUnbind_f );
+	Cmd_SetCommandCompletionFunc( "unaltbind", Key_CompleteUnbind );
+	Cmd_AddCommand( "ctrlbind", Key_CtrlBind_f );
+	Cmd_SetCommandCompletionFunc( "ctrlbind", Key_CompleteBind );
+	Cmd_AddCommand( "unctrlbind", Key_CtrlUnbind_f );
+	Cmd_SetCommandCompletionFunc( "unctrlbind", Key_CompleteUnbind );
+	Cmd_AddCommand( "altbindlist", Key_AltBindlist_f );
+	Cmd_AddCommand( "ctrlbindlist", Key_CtrlBindlist_f );
+	cl_altbindings = Cvar_Get( "cl_altbindings", "0", CVAR_ARCHIVE );
+	cl_ctrlbindings = Cvar_Get( "cl_ctrlbindings", "0", CVAR_ARCHIVE );
 }
 
 /*
@@ -1181,16 +1315,49 @@ CL_ParseBinding
 Execute the commands in the bind string
 ===================
 */
+static void CL_ParseBindingText( const char *binding, int key, qboolean down, unsigned time );
+
 void CL_ParseBinding( int key, qboolean down, unsigned time )
+{
+	// FAKK2 (CL_KeyEvent 0x41f9c0): a key pressed with ALT or CTRL held runs
+	// that binding instead, when it has one; on release, both its button
+	// commands and the plain binding's are let go
+	if ( down ) {
+		if ( keyAltPressed[key] && keyAltBindings[key] ) {
+			CL_ParseBindingText( keyAltBindings[key], key, down, time );
+			return;
+		}
+		if ( keyCtrlPressed[key] && keyCtrlBindings[key] ) {
+			CL_ParseBindingText( keyCtrlBindings[key], key, down, time );
+			return;
+		}
+	} else {
+		if ( keyAltPressed[key] ) {
+			keyAltPressed[key] = qfalse;
+			if ( keyAltBindings[key] ) {
+				CL_ParseBindingText( keyAltBindings[key], key, down, time );
+			}
+		}
+		if ( keyCtrlPressed[key] ) {
+			keyCtrlPressed[key] = qfalse;
+			if ( keyCtrlBindings[key] ) {
+				CL_ParseBindingText( keyCtrlBindings[key], key, down, time );
+			}
+		}
+	}
+	CL_ParseBindingText( keys[key].binding, key, down, time );
+}
+
+static void CL_ParseBindingText( const char *binding, int key, qboolean down, unsigned time )
 {
 	char buf[ MAX_STRING_CHARS ], *p = buf, *end;
 	qboolean allCommands, allowUpCmds;
 
 	if( clc.state == CA_DISCONNECTED && Key_GetCatcher( ) == 0 && !CL_Viewer_Active() )
 		return;
-	if( !keys[key].binding || !keys[key].binding[0] )
+	if( !binding || !binding[0] )
 		return;
-	Q_strncpyz( buf, keys[key].binding, sizeof( buf ) );
+	Q_strncpyz( buf, binding, sizeof( buf ) );
 
 	// run all bind commands if console, ui, etc aren't reading keys
 	allCommands = ( Key_GetCatcher( ) == 0 );
@@ -1262,6 +1429,15 @@ void CL_KeyDownEvent( int key, unsigned time )
 	{
 		Con_ToggleConsole_f ();
 		Key_ClearStates ();
+		return;
+	}
+
+	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
+	// skip their bindings; a menu or a floating window up still takes them
+	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
+		if ( ( Key_GetCatcher( ) & KEYCATCH_UI || URC_HasWindows() ) && !uivm ) {
+			URC_KeyEvent( key, qtrue );
+		}
 		return;
 	}
 
@@ -1365,6 +1541,15 @@ void CL_KeyUpEvent( int key, unsigned time )
 	if ( key == K_CONSOLE || ( key == K_ESCAPE && keys[K_SHIFT].down ) )
 		return;
 
+	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
+	// skip their bindings
+	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
+		if ( ( Key_GetCatcher( ) & KEYCATCH_UI || URC_HasWindows() ) && !uivm ) {
+			URC_KeyEvent( key, qfalse );
+		}
+		return;
+	}
+
 	//
 	// key up events only perform actions if the game key binding is
 	// a button command (leading + sign).  These will be processed even in
@@ -1389,6 +1574,26 @@ Called by the system for both key up and key down events
 ===================
 */
 void CL_KeyEvent (int key, qboolean down, unsigned time) {
+	// FAKK2 (0x41fa1f): ALT and CTRL are followed while their switches are on,
+	// and a key pressed meanwhile is marked for that binding
+	if ( key == K_ALT ) {
+		if ( cl_altbindings && cl_altbindings->integer ) {
+			keyAltHeld = down;
+		}
+	} else if ( key == K_CTRL ) {
+		if ( cl_ctrlbindings && cl_ctrlbindings->integer ) {
+			keyCtrlHeld = down;
+		}
+	}
+	if ( down ) {
+		if ( keyAltHeld && key != K_ALT ) {
+			keyAltPressed[key] = qtrue;
+		}
+		if ( keyCtrlHeld && key != K_CTRL ) {
+			keyCtrlPressed[key] = qtrue;
+		}
+	}
+
 	if( down )
 		CL_KeyDownEvent( key, time );
 	else

@@ -1,0 +1,28 @@
+// Fog volumes (fogParms brushes) on cemetery, from script cameras: the blood
+// entrance's fog (bloodentrancefog1, its top at z 624) seen at a slant from above
+// and from inside, and the water entrance's (waterentrancefog1, top at z 1008)
+// from above. Each camera is cued twice: the level's own camera can take the
+// first cue.
+probe:
+waitforplayer
+wait 40
+spawn Camera targetname fogcam1 origin "1523 -1968 784" angles "30 0 0"
+spawn Camera targetname fogcam2 origin "1823 -2120 600" angles "10 90 0"
+spawn Camera targetname fogcam3 origin "-2391 -1216 1200" angles "35 0 0"
+wait .2
+cuecamera $fogcam1
+wait .5
+cuecamera $fogcam1
+wait 1
+stuffcmd "screenshot"
+wait 1
+cuecamera $fogcam2
+wait 1
+stuffcmd "screenshot"
+wait 1
+cuecamera $fogcam3
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

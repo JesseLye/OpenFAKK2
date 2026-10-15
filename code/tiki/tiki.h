@@ -29,6 +29,11 @@ typedef struct tiki_s tiki_t;
 
 void		TIKI_Shutdown( void );
 
+// the client's console commands: tiki <name>, tikilist, cachealltikis
+void		TIKI_Info_f( void );
+void		TIKI_List_f( void );
+void		TIKI_CacheAll_f( void );
+
 // Returns the cached definition, loading it on first use, or NULL when the
 // file is missing or malformed. A failure is remembered and reported once.
 tiki_t		*TIKI_Register( const char *name );
@@ -44,6 +49,7 @@ const char	*TIKI_SkelFile( const tiki_t *tiki );	// the .skb file, "" when not s
 const char	*TIKI_Path( const tiki_t *tiki );
 float		TIKI_Scale( const tiki_t *tiki );
 void		TIKI_Origin( const tiki_t *tiki, vec3_t origin );
+void		TIKI_LightOffset( const tiki_t *tiki, vec3_t offset );	// the setup's "lightoffset"
 const char	*TIKI_Anim_File( const tiki_t *tiki, int animnum );
 const char	*TIKI_Surface_Shader( const tiki_t *tiki, int num, int skin );
 

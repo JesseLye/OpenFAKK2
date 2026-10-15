@@ -172,7 +172,9 @@ typedef enum {
 	AGEN_CONST,
 	AGEN_SKY_ALPHA,				// the scene's sky alpha
 	AGEN_ONE_MINUS_SKY_ALPHA,
-	AGEN_FARPLANE_FOG			// FAKK2: distance over the far plane distance
+	AGEN_FARPLANE_FOG,			// FAKK2: distance over the far plane distance
+	AGEN_DOT,					// FAKK2: facing the viewer, from alphaMin to alphaMax
+	AGEN_ONE_MINUS_DOT
 } alphaGen_t;
 
 typedef enum {
@@ -188,7 +190,8 @@ typedef enum {
 	CGEN_LIGHTING_DIFFUSE,
 	CGEN_FOG,				// standard fog
 	CGEN_CONST,				// fixed color
-	CGEN_FARPLANE_FOG		// FAKK2: the far plane's colour, alpha as AGEN_FARPLANE_FOG
+	CGEN_FARPLANE_FOG,		// FAKK2: the far plane's colour, alpha as AGEN_FARPLANE_FOG
+	CGEN_COLORWAVE			// FAKK2: constantColor scaled by rgbWave
 } colorGen_t;
 
 typedef enum {
@@ -244,7 +247,9 @@ typedef enum {
 	TMOD_SCALE,
 	TMOD_STRETCH,
 	TMOD_ROTATE,
-	TMOD_ENTITY_TRANSLATE
+	TMOD_ENTITY_TRANSLATE,
+	TMOD_PARALLAX,			// FAKK2: offset by the view's position, rates in scroll[]
+	TMOD_MACRO				// FAKK2: world-aligned coordinates, 1/size in scale[]
 } texMod_t;
 
 #define	MAX_SHADER_DEFORMS	3
@@ -303,6 +308,9 @@ typedef struct {
 	int				videoMapHandle;
 	qboolean		isLightmap;
 	qboolean		isVideoMap;
+
+	qboolean		frameFromEntity;	// FAKK2: the animMap frame is the entity's (the game's "shader frame")
+	qboolean		animMapOnce;		// FAKK2: the animation stops on its last frame
 } textureBundle_t;
 
 #define NUM_TEXTURE_BUNDLES 2
@@ -317,6 +325,7 @@ typedef struct {
 
 	waveForm_t		alphaWave;
 	alphaGen_t		alphaGen;
+	float			alphaMin, alphaMax;			// FAKK2: for AGEN_DOT and AGEN_ONE_MINUS_DOT
 
 	byte			constantColor[4];			// for CGEN_CONST and AGEN_CONST
 
@@ -587,6 +596,7 @@ typedef struct srfPoly_s {
 	int				fogIndex;
 	int				numVerts;
 	polyVert_t		*verts;
+	int				renderfx;		// FAKK2: the client game module's RF_ flags
 } srfPoly_t;
 
 
@@ -954,6 +964,8 @@ typedef struct {
 	int		c_leafs;
 	int		c_dlightSurfaces;
 	int		c_dlightSurfacesCulled;
+
+	int		c_charLights;		// FAKK2: map lights offered to light cubes
 } frontEndCounters_t;
 
 #define	FOG_TABLE_SIZE		256
@@ -1002,6 +1014,11 @@ typedef struct {
 	byte		color2D[4];
 	qboolean	vertexes2D;		// shader needs to be finished
 	trRefEntity_t	entity2D;	// currentEntity will point at this when doing 2D rendering
+
+	// FAKK2's fps counter: the counters as the frame first turned to 2D
+	backEndCounters_t	worldPc;
+	qboolean	worldPcTaken;
+	int			texelsUsed;		// by the last frame, from RB_SwapBuffers
 } backEndState_t;
 
 /*
@@ -1111,6 +1128,8 @@ typedef struct {
 	vec3_t					sunDir;				// towards the sun
 	vec3_t					entAmbient;			// "ambientlight"
 	int						entLightVisit;
+
+	int						frameStats[6];		// FAKK2: RE_GetFrameStats
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -1164,6 +1183,7 @@ extern	cvar_t	*r_farplane_nofog;		// FAKK2: don't fog towards the far plane
 extern	cvar_t	*r_useglfog;			// FAKK2: shaders of one lightingDiffuse stage (models) take OpenGL's fog rather than the far plane pass
 extern	cvar_t	*r_drawworld;			// disable/enable world rendering
 extern	cvar_t	*r_speeds;				// various levels of information display
+extern	cvar_t	*r_fps;
 extern  cvar_t	*r_detailTextures;		// enables/disables detail texturing stages
 extern	cvar_t	*r_novis;				// disable/enable usage of PVS
 extern	cvar_t	*r_nocull;
@@ -1201,6 +1221,11 @@ extern	cvar_t	*r_lensflare;					// FAKK2: the sun's and lensflare lights' flares
 extern	cvar_t	*r_lightcoronasize;				// FAKK2: half-size of a lensflare light's corona, as a share of the half screen
 extern	cvar_t	*r_sunflare;					// FAKK2: "x y z" puts the sun there instead of worldspawn's
 extern	cvar_t	*r_sunflare_inportalsky;		// FAKK2: ... in the portal sky
+extern	cvar_t	*r_place_sunflare;				// FAKK2: r_sunflare set to where the view looks
+extern	cvar_t	*r_skyportal;					// FAKK2: the sky portal's camera at r_skyportal_origin
+extern	cvar_t	*r_skyportal_origin;
+extern	cvar_t	*r_drawsprites;					// FAKK2: 0 leaves out the scene's .spr sprites
+extern	cvar_t	*r_showskel;					// FAKK2: skeletal models drawn as their bones
 
 extern	cvar_t	*r_intensity;
 
@@ -1222,6 +1247,9 @@ extern	cvar_t	*r_overBrightBits;
 extern	cvar_t	*r_mapOverBrightBits;
 
 extern	cvar_t	*r_debugSurface;
+extern	cvar_t	*r_stipplelines;
+extern	cvar_t	*r_debuglines_depthmask;
+extern	cvar_t	*g_numdebuglines;
 extern	cvar_t	*r_simpleMipMaps;
 
 extern	cvar_t	*r_showImages;
@@ -1474,10 +1502,15 @@ void R_LoadEntLights( world_t *w, const byte *fileBase, lump_t *l );
 void R_LoadEntLightsVis( world_t *w, const byte *fileBase, lump_t *l );
 void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3_t localOrigin, float radius );
 void RB_CalcLightCubeColors( unsigned char *colors );
+void R_DrawLightLines( void );
 mnode_t *R_PointInLeaf( const vec3_t p );
 extern cvar_t	*r_light_emphasize;
 extern cvar_t	*r_light_emphasizePercent;
 extern cvar_t	*r_entityLights;
+extern cvar_t	*r_light_lines;
+extern cvar_t	*r_light_sun_line;
+extern cvar_t	*r_light_nolight;
+extern cvar_t	*r_light_int_scale;
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 
@@ -1548,7 +1581,8 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
-void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int renderfx );
+qboolean R_ViewLeavesOut( int renderfx );
 void RE_AddRefSpriteToScene( const refEntity_t *ent );
 refEntity_t *RE_GetRenderEntity( int entityNumber );
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int type );
@@ -1556,6 +1590,7 @@ void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float
 void RE_SwipeBegin( float thistime, float life, qhandle_t shader );
 void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time );
 void RE_SwipeEnd( void );
+void RE_GetFrameStats( int stats[6] );
 void R_AddSwipeSurfaces( void );
 void RE_DrawBox( float x, float y, float w, float h );
 int RE_GetShaderWidth( qhandle_t hShader );
@@ -1617,6 +1652,9 @@ void	RB_CalcFogTexCoords( float *dstTexCoords );
 void	RB_CalcScrollTexCoords( const float scroll[2], float *dstTexCoords );
 void	RB_CalcRotateTexCoords( float rotSpeed, float *dstTexCoords );
 void	RB_CalcScaleTexCoords( const float scale[2], float *dstTexCoords );
+void	RB_CalcParallaxTexCoords( const float rate[2], float *dstTexCoords );
+void	RB_CalcMacroTexCoords( const float scale[2], float *dstTexCoords );
+void	RB_CalcDotAlpha( qboolean oneMinus, float min, float max, unsigned char *colors );
 void	RB_CalcTurbulentTexCoords( const waveForm_t *wf, float *dstTexCoords );
 void	RB_CalcTransformTexCoords( const texModInfo_t *tmi, float *dstTexCoords );
 void	RB_CalcModulateColorsByFog( unsigned char *dstColors );
@@ -1627,7 +1665,7 @@ void	RB_CalcModulateRGBAsByFarplaneFog( unsigned char *colors );
 void	RB_CalcModulateAlphasByFog( unsigned char *dstColors );
 void	RB_CalcModulateRGBAsByFog( unsigned char *dstColors );
 void	RB_CalcWaveAlpha( const waveForm_t *wf, unsigned char *dstColors );
-void	RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors );
+void	RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors, const byte *scaleColor );
 void	RB_CalcAlphaFromEntity( unsigned char *dstColors );
 void	RB_CalcAlphaFromOneMinusEntity( unsigned char *dstColors );
 void	RB_CalcStretchTexCoords( const waveForm_t *wf, float *texCoords );
