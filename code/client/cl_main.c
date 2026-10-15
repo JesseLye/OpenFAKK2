@@ -2936,20 +2936,19 @@ void CL_PacketEvent( netadr_t from, msg_t *msg ) {
 ==================
 CL_CheckTimeout
 
+FAKK2: the retail check (fakk2.exe 0x421e80) counts the frames past
+cl_timeout but never disconnects; nothing else reads the count. The
+connection here dropped on the sixth: a game left paused under the menu
+for longer than cl_timeout (125 s) has had no packets, and once the menu
+closes the next snapshot waits for a whole server frame (50 ms at sv_fps
+20), six frames or more above 120 fps, so the level was thrown away.
 ==================
 */
 void CL_CheckTimeout( void ) {
-	//
-	// check timeout
-	//
-	if ( ( !CL_CheckPaused() || !sv_paused->integer ) 
+	if ( !cl_paused->integer
 		&& clc.state >= CA_CONNECTED && clc.state != CA_CINEMATIC
 	    && cls.realtime - clc.lastPacketTime > cl_timeout->value*1000) {
-		if (++cl.timeoutcount > 5) {	// timeoutcount saves debugger
-			Com_Printf ("\nServer connection timed out.\n");
-			CL_Disconnect( qtrue );
-			return;
-		}
+		cl.timeoutcount++;
 	} else {
 		cl.timeoutcount = 0;
 	}
