@@ -559,7 +559,17 @@ snapshot has been built, and by 500 ms one has (seen through `SVF_SENT` with
 `probe-entry.scr`). No movement command arrives in that time either. A level that opens
 with a cinematic freezes the player in that gap, so the player stays at the spawn point;
 a player that moves at once drops to the floor first. The test player therefore sends
-nothing and gets no snapshots for `sv_testplayerstall` (300 ms) after entering.
+nothing and gets no snapshots for `sv_enterstall` (300 ms) after entering.
+
+OpenFAKK2's own client enters only once it has finished loading, so without the gap it
+drew the player's view at once and could steer Julie until the cinematic took over:
+`training` waits 0.2 s after `waitforplayer` before its fake player and first camera,
+and that view, with the HUD, showed in between (2026-10-15, `probe-cine.scr` through
+`retail-capture`; retail's first picture is the camera). The server now imposes the same
+gap on every client that enters (`SV_ClientEnterStalled`): for `sv_enterstall` ms it
+sends the client no snapshot, so the loading screen stays up, and drops its movement
+commands, marking them as seen so that their copies in later packets are not run
+afterwards. Not read from retail: what keeps the retail client busy in that time.
 
 The length of the gap under retail is real time spent loading and is not the same on
 every map. It decides where the player's idle animation is in its cycle, which is why

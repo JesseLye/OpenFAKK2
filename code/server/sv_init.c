@@ -701,6 +701,9 @@ void SV_Init (void)
 	sv_killserver = Cvar_Get ("sv_killserver", "0", 0);
 	sv_mapChecksum = Cvar_Get ("sv_mapChecksum", "", CVAR_ROM);
 	sv_lanForceRate = Cvar_Get ("sv_lanForceRate", "1", CVAR_ARCHIVE );
+	// the retail client is still busy for a few frames after it enters: under
+	// retail no snapshot has been built 200 ms after entry and one has by 500 ms
+	sv_enterstall = Cvar_Get ("sv_enterstall", "300", 0 );
 #ifndef STANDALONE
 	sv_strictAuth = Cvar_Get ("sv_strictAuth", "1", CVAR_ARCHIVE );
 #endif

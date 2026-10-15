@@ -1,0 +1,43 @@
+// training's entry cinematic starts 0.2 s after the player enters. The retail client is
+// still loading then, so its first picture is the cinematic's camera. Holds +forward from
+// entry and takes a shot every 0.05 s: no shot may show the player's own view or the HUD
+// (a capture.ps1 picture probe; run on training).
+probe:
+waitforplayer
+stuffcmd "+forward"
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "-forward"
+wait 0.5
+stuffcmd "quit"
+end

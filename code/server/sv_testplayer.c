@@ -18,11 +18,12 @@ sv_testplayerdelay milliseconds of game time. It matters because scripts
 that wait for the player are released when the player enters, and commands
 given on the command line after the map run before that.
 
-For sv_testplayerstall milliseconds after entering, the player sends no
-commands and no snapshots are built for it, as with the retail client, which
-is still finishing its own loading then. It matters because a level script
-that freezes the player for a cinematic does so in that gap; a command sent
-at once would let the player drop to the floor first.
+For sv_enterstall milliseconds after entering, the player sends no commands
+and no snapshots are built for it, as with the retail client, which is still
+finishing its own loading then (the server imposes the same gap on a real
+client: SV_ClientEnterStalled). It matters because a level script that
+freezes the player for a cinematic does so in that gap; a command sent at
+once would let the player drop to the floor first.
 
 The player can be given input with the key commands a real client binds
 (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +left, +right,
@@ -46,9 +47,7 @@ NA_BOT), which is what keeps packets from being sent anywhere.
 
 static cvar_t	*sv_testplayer;
 static cvar_t	*sv_testplayerdelay;
-static cvar_t	*sv_testplayerstall;
 static int		testPlayerEnterTime;
-static int		testPlayerFirstCmdTime;
 
 // usercmd_t->buttons bits, as the game module defines them
 #define	TP_BUTTON_ATTACKRIGHT	( 1 << 0 )
@@ -152,9 +151,6 @@ static qboolean SV_TestPlayer_Enabled( void ) {
 		// 450 ms puts the player's entry at the same level time as the retail
 		// client's on the retail maps (dumps taken ten seconds later line up)
 		sv_testplayerdelay = Cvar_Get( "sv_testplayerdelay", "450", 0 );
-		// the retail client is still busy for a few frames after it enters: under
-		// retail no snapshot has been built 200 ms after entry and one has by 500 ms
-		sv_testplayerstall = Cvar_Get( "sv_testplayerstall", "300", 0 );
 	}
 	return sv_testplayer->integer != 0;
 }
@@ -168,7 +164,7 @@ built for it before then.
 ===============
 */
 qboolean SV_TestPlayer_Stalled( const client_t *cl ) {
-	return cl->state != CS_ACTIVE || sv.time < testPlayerFirstCmdTime;
+	return cl->state != CS_ACTIVE || SV_ClientEnterStalled( cl );
 }
 
 qboolean SV_IsTestPlayer( const client_t *cl ) {
@@ -271,7 +267,6 @@ void SV_TestPlayer_Frame( int frameMsec ) {
 
 	if ( cl->state == CS_CONNECTED && sv.time >= testPlayerEnterTime ) {
 		SV_ClientEnterWorld( cl, NULL );
-		testPlayerFirstCmdTime = sv.time + sv_testplayerstall->integer;
 	}
 	if ( cl->state != CS_ACTIVE ) {
 		return;
@@ -281,7 +276,7 @@ void SV_TestPlayer_Frame( int frameMsec ) {
 	cl->lastPacketTime = svs.time;
 	cl->reliableAcknowledge = cl->reliableSequence;
 
-	if ( sv.time < testPlayerFirstCmdTime ) {
+	if ( SV_ClientEnterStalled( cl ) ) {
 		return;
 	}
 

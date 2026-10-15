@@ -804,6 +804,10 @@ void SV_ClientEnterWorld( client_t *client, usercmd_t *cmd ) {
 	client->deltaMessage = -1;
 	client->lastSnapshotTime = 0;	// generate a snapshot immediately
 
+	// FAKK2: the retail client enters the world before it has finished loading
+	// and sends no commands for a few frames after (see SV_ClientEnterStalled)
+	client->enterStallTime = sv.time + ( sv_enterstall->integer > 0 ? sv_enterstall->integer : 0 );
+
 	if(cmd)
 		memcpy(&client->lastUsercmd, cmd, sizeof(client->lastUsercmd));
 	else
@@ -1671,6 +1675,25 @@ void SV_ClientThink (client_t *cl, usercmd_t *cmd) {
 
 /*
 ==================
+SV_ClientEnterStalled
+
+True for sv_enterstall milliseconds of game time after a client enters the
+world. The retail client enters before it has finished loading: under retail
+no snapshot has been built for it 200 ms after entry and one has by 500 ms,
+and it sends no movement command in that time. A level that opens with a
+cinematic (training: "wait .2", then the fake player and the first camera)
+counts on that gap, so the player never sees or steers the view the
+cinematic is about to replace. OpenFAKK2's client enters only once it has
+loaded, so the server stands in for the gap: no snapshots are sent to the
+client and its commands are dropped until it is over.
+==================
+*/
+qboolean SV_ClientEnterStalled( const client_t *cl ) {
+	return cl->state == CS_ACTIVE && sv.time < cl->enterStallTime;
+}
+
+/*
+==================
 SV_UserMove
 
 The message usually contains all the movement commands 
@@ -1753,6 +1776,16 @@ static void SV_UserMove( client_t *cl, msg_t *msg, qboolean delta ) {
 
 	if ( cl->state != CS_ACTIVE ) {
 		cl->deltaMessage = -1;
+		return;
+	}
+
+	// a client that has just entered is still loading under retail and sends
+	// nothing; drop its commands, marking them as seen so that the duplicates
+	// in later packets are not run once the stall is over
+	if ( SV_ClientEnterStalled( cl ) ) {
+		if ( cmds[cmdCount-1].serverTime > cl->lastUsercmd.serverTime ) {
+			cl->lastUsercmd = cmds[cmdCount-1];
+		}
 		return;
 	}
 
