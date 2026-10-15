@@ -1,0 +1,44 @@
+{
+  "skill_name": "retail-capture",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "With the shotgun out in training, does OpenFAKK2's crosshair look like retail's when Julie aims at the floor? Show me both.",
+      "expected_output": "A probe (probe-crosshair.scr or an equivalent) that waits for the player, outlasts the training intro, gives and wields the shotgun with a hand argument, holds +lookdown briefly and takes screenshots, ending with quit; a capture.ps1 run on both games; a report that names the pair image, describes how the crosshair is drawn in each (flat on the floor in retail) and gives the difference figures.",
+      "files": [],
+      "expectations": [
+        "The probe starts with waitforplayer and waits long enough to outlast the training intro (about 25 s) before giving the weapon",
+        "The probe selects the weapon with a hand argument (use Shotgun dual) and pitches the view down with +lookdown / -lookdown before a screenshot",
+        "The probe ends with stuffcmd \"quit\"",
+        "The probe was run on both games through capture.ps1 (or the same probe through both runners), with no +wait on either command line, so build\\compare\\captures\\<probe>-training holds retail and ours shots of the same moment",
+        "The report says where the crosshair lies in each picture (retail draws it flat on the floor) and gives the difference figures or the pair image as evidence",
+        "The report does not treat the small view shift from key timing as a rendering difference"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Did my renderer change alter how the swamp branches look in swamp1? Compare this build with the main checkout's build at C:\\Users\\Chse\\Desktop\\OpenFAKK2, and with retail.",
+      "expected_output": "Three captures of probe-swbranch on swamp1 from its script cameras: retail, this build, and the main checkout's build (via -Bin and -Name before); a report that compares each build with retail using the difference figures and says whether the change moved the picture towards or away from retail.",
+      "files": [],
+      "expectations": [
+        "The capture uses script cameras (probe-swbranch.scr or an equivalent spawn Camera / cuecamera probe) so the views match exactly",
+        "One OpenFAKK2 capture uses the main checkout's build (-Bin pointing under C:\\Users\\Chse\\Desktop\\OpenFAKK2\\build) with a distinct -Name, and one uses this worktree's build",
+        "Retail was captured with the same probe",
+        "The report gives difference figures for each build against retail, taken from the runner's output or shots.py, and its verdict follows from them",
+        "Neither run put +wait on the command line or used an edited copy of the probe without waitforplayer"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Do the health and water gauges match retail at 50 health and 50 water?",
+      "expected_output": "A capture of probe-hud (or a probe setting $player health 50 and $player waterpower 50 before a screenshot) on training on both games, and a zoomed pair of the gauge region with shots.py pair --crop --zoom, with a verdict.",
+      "files": [],
+      "expectations": [
+        "The probe sets the state with script lines ($player health 50, $player waterpower 50) rather than cheat cvars",
+        "Both games were captured with the same probe",
+        "The comparison crops to the gauges in the top-left corner (shots.py pair --crop ... --zoom) rather than judging the whole frame",
+        "The verdict names what differs in the gauges, if anything, with the zoomed pair as evidence, and discounts the notify line or masks it"
+      ]
+    }
+  ]
+}

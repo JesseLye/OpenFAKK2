@@ -22,8 +22,9 @@ end
 `+forward +back +moveleft +moveright +moveup +movedown +left +right +attackleft
 +attackright +use +speed`, each with its `-` form. The player walks unless `+speed` is
 held; `+left`/`+right` turn at about 140 degrees per second. Anything else (pitch, mouse,
-camera, menu, HUD) needs the real client through `probe-client.ps1`, where every client
-console command is available: `+lookup`, `+lookdown`, `centerview`, `screenshot`. Not
+camera, menu, HUD) needs the real client through `probe-client.ps1` (add `-Retail` for
+the retail client), where every client console command is available: `+lookup`,
+`+lookdown`, `centerview`, `screenshot`. Not
 `viewpos`: in this build that is the map viewer's command and prints nothing in a game.
 
 ## Weapons

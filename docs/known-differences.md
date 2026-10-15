@@ -608,7 +608,7 @@ What is implemented, and on what basis:
   `depthMask`, `noDepthTest`, `portalsky`, `skyParms full|half`, `tcMod macro|offset`,
   animated textures of up to 64 frames. From the scripts' own usage. Approximations:
   `tcMod macro` is a plain scale, `alphaGen dot|oneMinusDot` is opaque, `colorwave`
-  ignores its colour, `spriteGen`, `surfaceColor` and similar are ignored.
+  ignores its colour, `surfaceColor` and similar are ignored.
 - **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
@@ -658,9 +658,20 @@ What is implemented, and on what basis:
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
   bones. Level of detail is not applied in the renderer.
-- **Sprites**: a `.spr` model is the shader of that name, drawn as a sprite whose half
-  size is the image's width times the shader's `spriteScale` times the entity's scale.
-  That is OpenMoHAA's rule; the retail renderer's has not been read.
+- **Sprites**: a `.spr` model is the shader of that name, drawn as the retail renderer
+  draws it (`0x491790`; the model keeps the shader's image size, `0x491e40`). The quad is
+  the image's width and height times the shader's `spriteScale` times the entity's scale,
+  centred on the entity. The shader's `spriteGen` (`0x47738a`; `spriteScale` defaults to
+  1, and any `spriteGen` line sets it back to 1) lays it out: `parallel` faces the viewer,
+  `parallel_oriented` faces the viewer turned by the roll in the entity's axes (and is
+  mirrored left to right against `parallel`, as in retail), `oriented` lies in the plane of
+  the entity's left and up axes, and `parallel_upright` turns about the world's vertical
+  and is not drawn within a degree of looking straight up or down. Until `spriteGen` was
+  read every sprite faced the viewer, so the crosshair (`oriented`, turned by the game to
+  the surface its trace hits) stood upright and half sank into the floor; it now lies on
+  the floor as in the retail capture (`tools/retail-compare/probe-crosshair.scr`). Not
+  done: the retail sprite path also skips a quad whose corners are all outside one
+  frustum plane, which only saves drawing.
 - **The entity's scale** (`refEntity_t.scale`, the entity state's `scale`, which maps and
   scripts set: `intro`'s dropship is placed at 0.02, Obadiah in `swamp1` at 2.0) multiplies
   a `.tik` model's vertexes, bounds and radius on top of the definition's own scale, as the

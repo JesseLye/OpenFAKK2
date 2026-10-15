@@ -1651,14 +1651,37 @@ static qboolean ParseShader( char **text )
 		// FAKK2: a sprite's size relative to its image
 		else if ( !Q_stricmp( token, "spriteScale" ) ) {
 			token = COM_ParseExt( text, qfalse );
-			if ( token[0] ) {
-				shader.spriteScale = atof( token );
+			if ( !token[0] ) {
+				ri.Printf( PRINT_WARNING, "WARNING: missing spritescale parm in shader '%s'\n", shader.name );
+				continue;
 			}
+			shader.spriteScale = atof( token );
 			continue;
 		}
-		// FAKK2 parameters for its map compiler and sprite models
+		// FAKK2: the plane a sprite is drawn in. As in the retail parser
+		// (fakk2.exe 0x47738a), any word, known or not, also sets the
+		// spriteScale back to 1; an unknown one leaves the mode as it was
+		else if ( !Q_stricmp( token, "spriteGen" ) ) {
+			token = COM_ParseExt( text, qfalse );
+			if ( !token[0] ) {
+				ri.Printf( PRINT_WARNING, "WARNING: missing spritegen parm in shader '%s'\n", shader.name );
+				continue;
+			}
+			if ( !Q_stricmp( token, "parallel" ) ) {
+				shader.spriteGen = SPRITE_PARALLEL;
+			} else if ( !Q_stricmp( token, "parallel_oriented" ) ) {
+				shader.spriteGen = SPRITE_PARALLEL_ORIENTED;
+			} else if ( !Q_stricmp( token, "parallel_upright" ) ) {
+				shader.spriteGen = SPRITE_PARALLEL_UPRIGHT;
+			} else if ( !Q_stricmp( token, "oriented" ) ) {
+				shader.spriteGen = SPRITE_ORIENTED;
+			}
+			shader.spriteScale = 1.0f;
+			continue;
+		}
+		// FAKK2 parameters for its map compiler
 		else if ( !Q_stricmp( token, "surfaceColor" ) || !Q_stricmp( token, "surfaceDensity" )
-			|| !Q_stricmp( token, "subdivisions" ) || !Q_stricmp( token, "spriteGen" )
+			|| !Q_stricmp( token, "subdivisions" )
 			|| !Q_stricmp( token, "deform" )
 			|| !Q_stricmp( token, "fogOnly" ) || !Q_stricmp( token, "force32bit" ) ) {
 			SkipRestOfLine( text );
@@ -2414,6 +2437,7 @@ static void InitShader( const char *name, int lightmapIndex ) {
 
 	Q_strncpyz( shader.name, name, sizeof( shader.name ) );
 	shader.lightmapIndex = lightmapIndex;
+	shader.spriteScale = 1.0f;	// FAKK2: the retail default (fakk2.exe 0x475b1f)
 
 	for ( i = 0 ; i < MAX_SHADER_STAGES ; i++ ) {
 		stages[i].bundle[0].texMods = texMods[i];
@@ -3149,7 +3173,7 @@ FAKK2: the size of a shader's first image, which its client game module uses
 to lay out 2D pictures.
 ====================
 */
-static image_t *R_ShaderFirstImage( shader_t *sh ) {
+image_t *R_ShaderFirstImage( shader_t *sh ) {
 	int		i;
 
 	for ( i = 0 ; i < MAX_SHADER_STAGES && sh->stages[i] ; i++ ) {

@@ -1,8 +1,6 @@
 // Looks at Julie where she stands after the training intro, from a camera
 // in front of her, for a like-for-like capture of a lit TIKI model.
-// Retail: run-retail-client.ps1 -Map training -Secs 45 -After "+script thread probe-julie.scr::probe"
-// Ours (after a +wait that lets the map load) drop the waitforplayer, which
-// only returns when the player spawns after the thread starts.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-julie -Map training
 probe:
 waitforplayer
 wait 25

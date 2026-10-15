@@ -26,7 +26,7 @@
         "Two runs were made with the same probe: one against the main checkout's build under C:\\Users\\Chse\\Desktop\\OpenFAKK2\\build and one against this worktree's build",
         "The report gives the pod's position relative to Julie's position for each run, as numbers taken from the logs",
         "The report's fixed/not-fixed verdict follows from those numbers (a pod within Julie's 30x30x96 box or bouncing at her counts as hitting her; one well past her counts as flying)",
-        "The report does not claim a retail comparison was made for the pitched shot, since the headless comparison cannot reproduce the pitch"
+        "Any retail comparison for the pitched shot comes from the real retail client (probe-client.ps1 -Retail), not from compare-player.ps1, whose headless test player cannot pitch"
       ]
     },
     {

@@ -1,0 +1,20 @@
+// Wields the shotgun, which shows the crosshair, and screenshots it on the wall
+// ahead and then on the floor, for comparing the crosshair with OpenFAKK2's.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-crosshair -Map training -MaskNotify
+probe:
+waitforplayer
+wait 25
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "+lookdown"
+wait 0.25
+stuffcmd "-lookdown"
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
