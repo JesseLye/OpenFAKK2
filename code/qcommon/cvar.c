@@ -181,6 +181,21 @@ int Cvar_Flags(const char *var_name)
 
 /*
 ============
+Cvar_LatchedString
+
+FAKK2: the value a latched cvar takes at its next restart, or NULL when
+none is waiting (the interface's ui_checkrestart)
+============
+*/
+const char *Cvar_LatchedString( const char *var_name )
+{
+	cvar_t *var = Cvar_FindVar( var_name );
+
+	return var ? var->latchedString : NULL;
+}
+
+/*
+============
 Cvar_CommandCompletion
 ============
 */

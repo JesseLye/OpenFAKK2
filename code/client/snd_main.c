@@ -525,7 +525,7 @@ void S_Init( void )
 	// fourteen bearings with 0.5 and 0 matched (probe-sound-pan.scr). It is kept
 	// for configs that set it, and changes nothing here either
 	Cvar_Get( "s_separation", "0.5", CVAR_ARCHIVE );
-	Cvar_Get( "s_loadas8bit", "0", CVAR_ARCHIVE | CVAR_LATCH );	// snd_codec.c
+	Cvar_Get( "s_loadas8bit", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );	// snd_codec.c
 	s_reverb = Cvar_Get( "s_reverb", "1", CVAR_ARCHIVE );	// FAKK2: retail defaulted to 0, needing an EAX card
 	s_muted = Cvar_Get("s_muted", "0", CVAR_ROM);
 	s_doppler = Cvar_Get( "s_doppler", "1", CVAR_ARCHIVE );
@@ -552,7 +552,7 @@ void S_Init( void )
 		Cmd_AddCommand( "s_setreverb", S_SetReverb_f );	// FAKK2
 		MUSIC_Init( );
 
-		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH );
+		cv = Cvar_Get( "s_useOpenAL", "1", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );
 		if( cv->integer ) {
 			//OpenAL
 			started = S_AL_Init( &si );

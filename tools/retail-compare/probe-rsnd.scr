@@ -1,0 +1,10 @@
+// probe-restart's "ui_checkrestart" with a sound latch: s_loadas8bit under advancedoptions.
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ==== check; pushmenu advancedoptions; set s_loadas8bit 1; ui_checkrestart; popmenu 0"
+wait 5
+stuffcmd "echo ==== after; s_loadas8bit"
+wait 1
+stuffcmd "quit"
+end

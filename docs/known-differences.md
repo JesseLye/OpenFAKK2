@@ -135,10 +135,8 @@ Missing from OpenFAKK2, to be done:
   scales the looping sounds, `0x43ed10` and `0x45c528`, but the client game module never
   calls it.)
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
-  window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
-  `ui_loadconsolepos`),
-  `ui_checkrestart`,
-  and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
+  window that can be moved (`ui_console`, `ui_consoleposition`, `ui_saveconsolepos`,
+  `ui_loadconsolepos`), and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
   `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
@@ -623,6 +621,18 @@ Not read, done another way:
   menu on top links to back to its default (`probe-resetcv`: the same values on both).
   Retail takes one of two menus its window manager keeps (`+0x14`, else `+0x18`, which a
   push sets, `0x4a2fd9`); OpenFAKK2 takes the top of its stack, and does nothing without one.
+  `ui_checkrestart` (`0x40d6a0`, `0x4a44f0`, `0x4a3cb0`), which the options and advanced
+  options menus' Ok buttons run, compares each linked cvar's latched value with its value
+  as the menu came up (`0x4a3a30`, on push, show and force) and queues `vid_restart` for a
+  `CVAR_LATCH` cvar, else `snd_restart` for a sound latch (retail's `0x1000`). The engine
+  now has `CVAR_SOUND_LATCH` (`0x4000`, with `CVAR_LATCH`) on the sound system's latched
+  cvars and the game's sound latches; since `snd_restart` here restarts the video too, a
+  sound latch asks for it and wins over the video. `probe-restart` (`r_picmip` under
+  options) restarts the video on both games; `probe-rsnd` (`s_loadas8bit` under advanced
+  options) restarts the video on retail, whose `s_loadas8bit` is a plain latch, and the
+  sound and video here, where only the sound system's restart applies it. Retail first
+  brings its console window and mini console up or down by `ui_console` and
+  `ui_minicon` (both registered now, archived, `0`); those windows are still missing.
 
   `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
   `ui/bind.scr` header pictures in the title colours) over a label per `binditem`

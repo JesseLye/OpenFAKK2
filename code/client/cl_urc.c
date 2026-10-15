@@ -151,6 +151,7 @@ typedef struct {
 	int			lastStat;
 	int			statChangeTime;
 	qboolean	disabled;			// UIWidget's "disable" (0x49e670): hidden, out of the cursor's reach
+	char		linkSnapshot[MAX_CVAR_VALUE_STRING];	// the linked cvar's value when the menu came up (0x4a3a30)
 } urcWidget_t;
 
 typedef struct {
@@ -2585,10 +2586,32 @@ MENU STACK AND HUD
 =======================================================================
 */
 
+/*
+=================
+URC_SnapshotCvars
+
+What ui_checkrestart compares against: each linked cvar's value as the
+menu comes up (0x4a3a30, from the window manager's push, show and force,
+0x4a2e90, 0x4a3020, 0x4a3260).
+=================
+*/
+static void URC_SnapshotCvars( urcMenu_t *menu ) {
+	int		i;
+
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+
+		if ( w->linkcvar[0] ) {
+			Q_strncpyz( w->linkSnapshot, Cvar_VariableString( w->linkcvar ), sizeof( w->linkSnapshot ) );
+		}
+	}
+}
+
 static void URC_ShowMenu( urcMenu_t *menu ) {
 	if ( menu && !menu->visible ) {
 		menu->visible = qtrue;
 		menu->showTime = cls.realtime;
+		URC_SnapshotCvars( menu );
 	}
 }
 
@@ -2648,6 +2671,7 @@ void URC_PushMenu( const char *name ) {
 	}
 	urc_stack[urc_stackDepth++] = menu - urc_menus;
 	URC_ShowMenu( menu );
+	URC_SnapshotCvars( menu );		// also when it was shown already
 	URC_UpdateCatcher();
 	INV_Close();		// not retail's: its weapon bar stays over the menu (cl_inv.c)
 
@@ -4294,11 +4318,63 @@ static void URC_ResetCvars_f( void ) {
 	}
 }
 
+/*
+=================
+URC_CheckRestart_f
+
+ui_checkrestart (fakk2.exe 0x40d6a0, 0x4a44f0, 0x4a3cb0): when a cvar a
+widget of the menu on top links to has a latched value other than the
+one it had as the menu came up, restart what applies it: retail runs
+vid_restart for a CVAR_LATCH cvar, else snd_restart for a sound latch,
+the video taking precedence. Here snd_restart restarts the video as
+well, so a sound latch asks for it and the video alone for vid_restart.
+Retail first brings its console window ("FAKK2 Console") and mini
+console up or down by ui_console and ui_minicon; those windows are not
+made here.
+=================
+*/
+static void URC_CheckRestart_f( void ) {
+	urcMenu_t	*menu;
+	qboolean	vid = qfalse, snd = qfalse;
+	int			i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+		const char	*latched;
+		int			flags;
+
+		if ( !w->linkcvar[0] ) {
+			continue;
+		}
+		latched = Cvar_LatchedString( w->linkcvar );
+		if ( !latched || !Q_stricmp( latched, w->linkSnapshot ) ) {
+			continue;
+		}
+		flags = Cvar_Flags( w->linkcvar );
+		if ( flags & CVAR_SOUND_LATCH ) {
+			snd = qtrue;
+		} else if ( flags & CVAR_LATCH ) {
+			vid = qtrue;
+		}
+	}
+	if ( snd ) {
+		Cbuf_AddText( "snd_restart\n" );
+	} else if ( vid ) {
+		Cbuf_AddText( "vid_restart\n" );
+	}
+}
+
 void URC_Init( void ) {
 	ui_drawcoords = Cvar_Get( "ui_drawcoords", "0", 0 );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
 	Cvar_Get( "shortversion", "1.02", CVAR_ROM );	// the main menu's version label; the game data's version
 	Cvar_Get( "ui_newvidmode", "-1", 0 );			// UI_Init (0x40ea46); see URC_UpdateCatcher
+	Cvar_Get( "ui_console", "0", CVAR_ARCHIVE );		// UI_Init (0x40ea31, 0x40e9f0): the console and mini console
+	Cvar_Get( "ui_minicon", "0", CVAR_ARCHIVE );		// windows, which are not made here (ui_checkrestart)
 
 	urc_numFonts = 0;
 	urc_stackDepth = 0;
@@ -4324,6 +4400,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "dialog", URC_Dialog_f );
 	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
 	Cmd_AddCommand( "ui_resetcvars", URC_ResetCvars_f );
+	Cmd_AddCommand( "ui_checkrestart", URC_CheckRestart_f );
 	urc_initialised = qtrue;
 	urc_lastState = -1;
 }
@@ -4349,6 +4426,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "dialog" );
 	Cmd_RemoveCommand( "ui_testlist" );
 	Cmd_RemoveCommand( "ui_resetcvars" );
+	Cmd_RemoveCommand( "ui_checkrestart" );
 	URC_CloseAllWindows();		// their materials die with the renderer
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer
