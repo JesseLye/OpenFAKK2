@@ -286,7 +286,7 @@ static void URC_DrawPopup( void );
 
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
-static cvar_t		*ui_hud;
+static qboolean		urc_hudOn = qtrue;		// "ui_hud", a command in retail (0x40e010) setting 0x4df7b8
 static cvar_t		*ui_urcdebug;
 static qhandle_t	urc_addFadeShader;
 
@@ -2763,7 +2763,7 @@ bosshud while the boss-health stat is at least 1.
 static void URC_UpdateHud( void ) {
 	qboolean	on;
 
-	on = ui_hud->integer && clc.state == CA_ACTIVE && cl.snap.valid && !urc_stackDepth &&
+	on = urc_hudOn && clc.state == CA_ACTIVE && cl.snap.valid && !urc_stackDepth &&
 		!cl.snap.ps.stats[URC_STAT_CINEMATIC];
 	if ( !on ) {
 		URC_HideMenu( urc_healthhud );
@@ -3671,8 +3671,22 @@ void URC_PlayAliasSound( const char *name ) {
 	URC_PlaySound( name );
 }
 
+/*
+=================
+URC_Hud_f
+
+ui_hud [1|0] (fakk2.exe 0x40e010): the HUD menus on or off.
+=================
+*/
+static void URC_Hud_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: ui_hud [1|0]\n" );
+		return;
+	}
+	urc_hudOn = atoi( Cmd_Argv( 1 ) ) != 0;
+}
+
 void URC_Init( void ) {
-	ui_hud = Cvar_Get( "ui_hud", "1", CVAR_ARCHIVE );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
 	Cvar_Get( "shortversion", "1.02", CVAR_ROM );	// the main menu's version label; the game data's version
 	Cvar_Get( "ui_newvidmode", "-1", 0 );			// UI_Init (0x40ea46); see URC_UpdateCatcher
@@ -3697,6 +3711,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "centerprint", URC_CenterPrint_f );
 	Cmd_AddCommand( "locationprint", URC_LocationPrint_f );
 	Cmd_AddCommand( "widgetcommand", URC_WidgetCommand_f );
+	Cmd_AddCommand( "ui_hud", URC_Hud_f );
 	urc_initialised = qtrue;
 	urc_lastState = -1;
 }
@@ -3716,6 +3731,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "listmenus" );
 	Cmd_RemoveCommand( "loadmenu" );
 	Cmd_RemoveCommand( "centerprint" );
+	Cmd_RemoveCommand( "ui_hud" );
 	Cmd_RemoveCommand( "locationprint" );
 	Cmd_RemoveCommand( "widgetcommand" );
 	urc_initialised = qfalse;

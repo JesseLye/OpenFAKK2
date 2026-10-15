@@ -136,7 +136,7 @@ Missing from OpenFAKK2, to be done:
   calls it.)
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
-  `ui_loadconsolepos`), `ui_drawcoords`, `ui_hud`,
+  `ui_loadconsolepos`), `ui_drawcoords`,
   `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `vidmode`, `dialog`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
@@ -564,7 +564,7 @@ Not read, done another way:
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
   tests a field of its print object), the print's fade (in over the first half second,
   out over the last), the `@shader` size (256x128), the stat-bar flash (half a second
-  after a change), and `ui_hud`, a command in retail, is a cvar here. The prints'
+  after a change). `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. The prints'
   places come from retail captures of the intro: a location print's x is its left edge
   and its y is measured up from the bottom of the screen to the bottom of its first
   line (`locprint 230 220` puts the quote's first line at y 241, left-aligned at
