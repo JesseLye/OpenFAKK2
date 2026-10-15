@@ -545,8 +545,6 @@ static int CL_CG_CM_MarkFragments( int numPoints, const vec3_t *points, const ve
 // sound's own from global/sound*.txt when the module passes -1 (see
 // snd_info.c). Reverb and the music system are not applied yet.
 
-static int	cl_loopingSoundNum;		// FAKK2 names no entity for a looping sound; Quake III wants one
-
 static void CL_CG_S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx, float volume, float min_dist ) {
 	S_StartSound( origin, entnum, entchannel, sfx, volume, min_dist );
 }
@@ -569,14 +567,17 @@ static void CL_CG_S_StopSound( int entnum, int channel ) {
 
 static void CL_CG_S_ClearLoopingSounds( void ) {
 	S_ClearLoopingSounds( qfalse );
-	cl_loopingSoundNum = 0;
 }
 
+// FAKK2 names no entity for a looping sound: the sound system merges the
+// frame's loops by sound, as the retail engine does (see snd_main.c). The
+// retail import (0x43ee10) ignores handle 0. The module always passes a
+// velocity of 0 0 0.
 static void CL_CG_S_AddLoopingSound( const vec3_t origin, const vec3_t velocity, sfxHandle_t sfx, float volume, float min_dist ) {
-	if ( cl_loopingSoundNum >= MAX_GENTITIES ) {
+	if ( sfx <= 0 ) {
 		return;
 	}
-	S_AddLoopingSound( cl_loopingSoundNum++, origin, velocity, sfx, volume, min_dist );
+	S_AddLoopingSound( origin, sfx, volume, min_dist );
 }
 
 /*

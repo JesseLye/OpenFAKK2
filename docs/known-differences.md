@@ -396,16 +396,15 @@ Not read, done another way:
   `0x45bc70`, the software mixer's `S_PickChannel` `0x43f010`); the `.mp3` files, Miles
   streams in retail, neither replace nor are replaced. Loop blocks and sounds that
   follow their entity: see "Loop blocks and the weapons' sounds" below. Not followed:
-  `maxnumber` and `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity
-  stays), the `s_show` print is retail's format only; `S_StopSound` stops every match
+  `maxnumber`, and `maxfactor` but for looping sounds (Quake III's limit of 4 or 8 like
+  sounds per entity stays; see "Looping sounds" below), the `s_show` print is retail's format only; `S_StopSound` stops every match
   where retail's Miles stop (`0x45d710`) ends the first sample or `.mp3` stream with
   that entity and channel, and `CHAN_AUTO` here stops all of the entity's channels;
   `.mp3` streams never replace each other in retail except on `CHAN_MENU` (`0x45bd10`),
   and here not even there; the `.mp3` dialog files (1015 of them) are decoded
   whole with dr_mp3 when registered, where the retail engine streams every `.mp3` name
   through Miles (`0x45bf00` sends them down a separate path); ambient-volume
-  calls are ignored; looping sounds are keyed by their
-  order in the frame. `s_soundinfo [name]` prints the table's size or a name's entry.
+  calls are ignored. `s_soundinfo [name]` prints the table's size or a name's entry.
 - **Loop blocks and the weapons' sounds.** A sound whose entry in the sound information
   has a loop block (`loopstart`, `loopend`: 25 sounds in `global/sound0.txt`, among them
   the uzi's `start.wav`, the chaingun's, the flamethrower's and the chainsword's) plays
@@ -435,6 +434,32 @@ Not read, done another way:
   the origin the module sent, so a weapon's sound with no origin was placed at 0 0 0.
   Checked by recording `tools/retail-compare/probe-uzi.scr` (one uzi, the other, both;
   `-Volume 0.06`) on both engines.
+- **Looping sounds.** The client game module names no entity for a looping sound, and the
+  retail engine files each under its sound: its import (`0x43ee10`, which ignores handle
+  0) hands it to the Miles backend (`0x45c2d0`), which takes a slot of that sound not yet
+  taken this frame, or else a free one. Its sound update (`0x45c470`) then plays every
+  stationary loop of one sound (the module passes no velocity, so all of them) as a single
+  Miles sample: its volume is the sum of what each loop gives at its distance (the first
+  loop's volume and minimum distance for all, full within the minimum distance, the
+  inverse of the distance beyond and nothing past 64 times it), no more than the sound
+  information's `maxfactor` times the loudest when that is 1 or more, and no more than 1;
+  it sits half the minimum distance from the listener in the direction of the loops
+  weighted by their volumes, and a loop that joins a sound already playing takes up its
+  play position. `global/sound0.txt` gives the fire a burning creature carries
+  (`fx_catchfire.tik`, `flame2.wav`, one to three per creature, each put out and lit again
+  at random as the fire sword keeps hitting it) `maxfactor 1`, so any number of them
+  sounds like the nearest. Here every loop used to be a sound of its own under the
+  number of its place in the frame: on the OpenAL backend each new fire started the
+  sound again from its beginning over the others, and three fires 80 units ahead were
+  6 dB louder than one, 4 dB after one was put out and another lit; the software mixer
+  summed them in step, 2 dB louder (its own limit held it there). The sound system
+  (`snd_main.c`) now gathers the frame's loops and hands the backend one per sound, under
+  a key the sound keeps from frame to frame, when the module respatializes; all three
+  stretches of `tools/retail-compare/probe-fire-loops.scr` read alike on both backends
+  (within 0.5 dB, recorded through OpenAL Soft's wave writer and SDL's disk driver), and a
+  lone loop is as loud as before. The retail game, recorded from the speakers with
+  `sound-record.ps1`, reads alike too (within 1 dB, a brief rise as the two fires join). Not followed: a moving loop, which retail plays on its
+  own, would be merged too.
 - **Stopping an actor's dialog.** Retail keeps the entity and channel of every sample and
   `.mp3` stream it starts, a `localsound` included (`0x45bf00`, `0x45bd10`), so its stop
   (`0x45d710`) finds them. The dialog `.mp3`s are `localsound`s in the sound information,
