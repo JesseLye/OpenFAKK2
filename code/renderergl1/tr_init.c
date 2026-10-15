@@ -158,6 +158,7 @@ cvar_t	*r_customheight;
 cvar_t	*r_customaspect;		// FAKK2: r_mode -1's window aspect (Quake III's r_customPixelAspect)
 cvar_t	*r_drawsprites;
 cvar_t	*r_showskel;
+cvar_t	*r_showlod;
 cvar_t	*r_skyportal;
 cvar_t	*r_skyportal_origin;
 
@@ -1293,6 +1294,7 @@ void R_Register( void )
 	r_skyportal_origin = ri.Cvar_Get( "r_skyportal_origin", "0 0 0", 0 );
 	r_drawsprites = ri.Cvar_Get( "r_drawsprites", "1", CVAR_CHEAT );
 	r_showskel = ri.Cvar_Get( "r_showskel", "0", CVAR_CHEAT );	// fakk2.exe 0x461492
+	r_showlod = ri.Cvar_Get( "r_showlod", "0", CVAR_TEMP );		// fakk2.exe 0x46117b
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );
 	ri.Cvar_CheckRange( r_znear, 0.001f, 200, qfalse );
 	r_zproj = ri.Cvar_Get( "r_zproj", "64", CVAR_ARCHIVE );
@@ -1352,7 +1354,8 @@ void R_Register( void )
 	r_skipBackEnd = ri.Cvar_Get ("r_skipBackEnd", "0", CVAR_CHEAT);
 
 	r_measureOverdraw = ri.Cvar_Get( "r_measureOverdraw", "0", CVAR_CHEAT );
-	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", CVAR_CHEAT );
+	// FAKK2: not a cheat (fakk2.exe 0x4612ca)
+	r_lodscale = ri.Cvar_Get( "r_lodscale", "5", 0 );
 	r_norefresh = ri.Cvar_Get ("r_norefresh", "0", CVAR_CHEAT);
 	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", CVAR_CHEAT );
 	r_lerpmodels = ri.Cvar_Get ("r_lerpmodels", "1", 0 );

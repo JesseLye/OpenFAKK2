@@ -127,8 +127,6 @@ generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
 
 Missing from OpenFAKK2, to be done:
 
-- Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
-  it waits on level of detail itself, below).
 - `S_SetGlobalAmbientVolumeLevel` stores a level that scales the looping sounds
   (`0x43ed10` and `0x45c528`), but the client game module never calls it.
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
@@ -171,8 +169,9 @@ Left out on purpose:
   given 0.73 m/s and shifts by 0.2% (4 cents) against a speed of sound of 343 m/s,
   too little to hear; whether the "Fast 2D Positional Audio" provider applies it at all
   was not checked. Neither of OpenFAKK2's backends moves a sound by it. Their own Doppler
-  (`s_doppler`, `s_alDopplerFactor`, `s_alDopplerSpeed`) only acts on looping sounds,
-  which the module always gives a velocity of 0.
+  (`s_doppler`, `s_alDopplerFactor`, `s_alDopplerSpeed`) only ever acted on looping
+  sounds, which the module always gives a velocity of 0; since looping sounds are merged
+  by sound (`S_AddLoopingSound`), they carry no velocity at all.
 
 Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`,
 `sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
@@ -1362,9 +1361,10 @@ What is implemented, and on what basis:
   per-frame data, then the surfaces with their triangles, collapse map, texture
   coordinates and packed vertexes. All 569 version 2 files in the retail archives have
   exactly this layout, and in all of them a frame's `offset` is its lower bound and its `scale` is
-  its size over 65535. Of what is read, the file's own frame bounds and radius and the
-  collapse map and `minLod` (level of detail) are not used; the bounds are taken from
-  the vertexes. The vertex normal is two angles in a short, as in Quake III: `max2tan`'s
+  its size over 65535. The file's own frame bounds and radius only place the model's
+  light and (the radius) size its level of detail; the bounds it is culled with are
+  taken from the vertexes. The collapse map and `minLod` give the level of detail
+  (below). The vertex normal is two angles in a short, as in Quake III: `max2tan`'s
   `MyNormalToLatLong` puts the angle around z in the high byte and the angle from +z in
   the low one, both at 255/360 of a step per degree, while the decoder takes 256 steps a
   turn as Quake III's does (under a degree off). How retail decodes the normal has not
@@ -1374,8 +1374,8 @@ What is implemented, and on what basis:
   surface; ours refuses past 1200 and 4096 (`qfiles.h`'s `TIKI_MAX_VERTS`,
   `TIKI_MAX_TRIANGLES`). The largest retail surface has 601 and 787. One `.tan` in the
   archives is empty and no `.tik` names it. The origin is added before scaling, as
-  `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso animations and
-  level of detail are not applied.
+  `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending and torso animations
+  are not applied.
 - **Skeletal models** (`.skb` with `.ska` animations): the skeleton's bones and
   weighted vertexes are read at registration and each animation's frames on first use.
   Bones are composed root first the way `TIKI_Tag_Orientation` (`0x44fe40`) does it: a
@@ -1399,7 +1399,8 @@ What is implemented, and on what basis:
   Retail's `TIKI_LoadSkel` (`0x449fd0`) refuses a version other than 3 or more than
   100 bones and only warns past 1000 vertexes or 2000 triangles a surface. Not read: a
   `.ska`'s `type`. `max2skl` never sets it, and 29 retail files hold the uninitialised
-  `0xcccccccc`. The collapse map (level of detail) is not read either. The archives also
+  `0xcccccccc`. A surface's collapse map and `minLod` give its level of detail (below).
+  The archives also
   hold version 1 and 2 skeletons and animations (6 `.skb`, 132 `.ska`), an empty `.ska`, and
   `models/monster/grawlix/marktest.ska`, whose layout does not fit; no `.tik` names
   any of them. From the retail renderer's
@@ -1414,7 +1415,7 @@ What is implemented, and on what basis:
   the animation itself), when that lerp is not negative (the same branches of
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
-  bones. Level of detail is not applied in the renderer. `r_showskel 1` (cheat) draws a
+  bones. `r_showskel 1` (cheat) draws a
   skeletal model's bones in place of its surfaces, once a frame: each bone's axes four
   units long in red, green and blue and a cyan line from its parent (`0x495db3`,
   `0x496042`); `probe-skel` gave Julie's skeleton pixel for pixel as retail's.
@@ -1734,8 +1735,55 @@ What is implemented, and on what basis:
   no player sees from there.) `fogParms`' fifth value is skipped as retail skips it; `foggen <wave>`
   (`0x4772da`), which varies the depth for opaque and no retail shader uses, is not read.
 
-Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read, the
-`.skb` collapse maps are not, and neither is applied).
+- **Level of detail** (`tr_lod.c`): a `.tan` or `.skb` surface, and a triangle soup
+  the map compiler baked from a model, is a progressive mesh. Its vertexes are in order
+  of importance and its collapse map names, for each, an earlier vertex it collapses
+  into (vertex 0 into itself, in every retail file). A model's level of detail, 0 to 1,
+  is the share of the view's height its radius covers (`0x486aa0`, Quake III's
+  `ProjectRadius`; 1 when it is behind the view) times `r_lodscale` (at most 20) and the
+  definition's `lod_scale` (over 5, `0x44c20e`), less `r_lodbias` (its value, not its
+  integer) and the definition's `lod_bias`, kept between 0 and 1 (`0x4872d0` for a
+  skeletal model, `0x489b40` for a `.tan` one, `0x487090` for a soup). A TIKI model's
+  radius is its frame's radius as the file has it, around the definition's origin
+  scaled but not turned with the entity; a skeletal model's frame is the legs
+  animation's, or the torso's when only that plays. The value is kept per entity for
+  the main view (`+0x1a0`) and for a view through a portal (`+0x1a4`), and the back end
+  reads the one for the view it draws. A surface keeps its first numVerts * lod
+  vertexes (cut down to a whole number), no fewer than `minLod` and no more than it has;
+  each later vertex moves along the collapse map to a kept one and a triangle that loses
+  an edge is left out (`0x495b1c` for `.tan`, `0x495d3e` for skeletal surfaces,
+  `0x48fb44` for soups); none kept leaves the surface out, before `r_showskel` even. A
+  soup's minimum, scale and bias are in its first three vertexes' second lightmap
+  coordinate and each vertex's collapse in its first (`qfiles.h` `drawSoupVert_t`,
+  read at `0x48540c`); its centre is the middle of its bounds and its radius 1.5 times
+  their full diagonal (`0x4854da`, `0x48fb14`). All 2054 soups in the retail maps have a
+  collapse map; 1119 of them have a `minLod` of all their vertexes and never reduce
+  (the swamp's branches, for one), and of the 1268 `.tan` and 182 `.skb` surfaces 47
+  `.tan` ones have a `minLod` of 0. `r_lodscale` is "5" and not a cheat (`0x4612ca`; it
+  was `CVAR_CHEAT` here), `r_lodbias` "0" archived (`0x460f6b`).
+  `r_showlod 1` (`CVAR_TEMP`, `0x46117b`) writes over each TIKI model, 100 units above
+  its origin, the triangles its surfaces keep and how many they have as "kept.all", the
+  count of all as decimals as many as it has figures, at most 4 (`0x4897f6`, the end of
+  `0x489b40`, counted by `0x48a500`): yellow seven-segment figures of debug lines
+  (`0x4808c0`, tables at `0x4fa51c` and `0x4fa69c`), ten units a figure, centred and
+  facing the view, scaled by 1 / lod. They go into the game module's debug lines (as
+  `RE_DebugLine`, `0x461fb0`), so they show only with a local game. Checked with
+  `probe-lod` on `zoo` (Julie and a spawned `obj_statue.tik`): Julie's "1091.1091" at the
+  default scale and the kept count at `r_lodscale 0.5` drawn as retail draws them, the
+  statue's "160.160", and both models' silhouettes at `r_lodscale 0.1` the same as
+  retail's; against retail the shot at 0.5 went from 1.08% of pixels off by more than 24
+  to 0.29%, and at 0.1 from 0.53% to 0.29%. `probe-lodsoup` on `swamp1` (a swamp tree,
+  197 vertexes down to 143) drops the same pieces of trunk and branch at `r_lodscale
+  0.05` as retail; that shot went from 1.30% to 0.72%, the same as at full detail.
+  Different on purpose: retail works out a soup's level of detail in the back end
+  from the front end's view, whichever was set up last (a later scene's, such as the
+  inventory's model windows, would do); here it is the view being drawn. A level of
+  detail of 0 makes retail scale the `r_showlod` figures infinitely; they are not drawn
+  here. Not followed: a skeletal surface too large to draw in one go is cut into pieces,
+  which lose its collapse map and are drawn whole (no retail surface is that large: the
+  largest has 604 vertexes); and OpenFAKK2 leaves out a `RF_THIRD_PERSON` model outside a
+  portal before culling, so no `r_showlod` figures show over it, where retail still works
+  it out and draws them.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
