@@ -1287,8 +1287,9 @@ scene names a sky camera, the scene is first drawn from that camera, turned
 the way the viewer is looking. The view is then drawn over it, and its sky
 surfaces leave the picture alone.
 
-(The retail renderer's version of this has not been examined; this follows
-the description in the SDK headers and OpenMoHAA's renderer.)
+The retail renderer (fakk2.exe 0x47bee0) turns the camera the same way, the
+viewer's axes times the sky axes; with r_skyportal it puts the camera at
+r_skyportal_origin and keeps the viewer's axes as they are.
 =================
 */
 static void R_RenderSkyPortal( void ) {
@@ -1306,9 +1307,19 @@ static void R_RenderSkyPortal( void ) {
 	oldParms = tr.viewParms;
 	newParms = tr.viewParms;
 
-	VectorCopy( tr.refdef.sky_origin, newParms.or.origin );
-	MatrixMultiply( oldParms.or.axis, tr.refdef.sky_axis, axis );
-	AxisCopy( axis, newParms.or.axis );
+	if ( r_skyportal->integer ) {
+		// fakk2.exe 0x47bf76: the camera at r_skyportal_origin, looking the
+		// way the viewer does
+		if ( sscanf( r_skyportal_origin->string, "%f %f %f", &newParms.or.origin[0],
+			&newParms.or.origin[1], &newParms.or.origin[2] ) != 3 ) {
+			ri.Printf( PRINT_WARNING, "WARNING: Invalid sky portal origin: %s\n", r_skyportal_origin->string );
+			return;
+		}
+	} else {
+		VectorCopy( tr.refdef.sky_origin, newParms.or.origin );
+		MatrixMultiply( oldParms.or.axis, tr.refdef.sky_axis, axis );
+		AxisCopy( axis, newParms.or.axis );
+	}
 	VectorCopy( newParms.or.origin, newParms.pvsOrigin );
 	newParms.isPortalSky = qtrue;
 
@@ -1421,6 +1432,9 @@ void R_AddEntitySurfaces (void) {
 				if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
 					continue;
 				}
+				if ( !r_drawsprites->integer ) {
+					continue;
+				}
 				ent->e.radius = R_SpriteRadius( sprModel->spriteShader, ent->e.scale );
 				R_AddSpriteDrawSurf( ent, sprModel->spriteShader );
 				continue;
@@ -1464,6 +1478,9 @@ void R_AddEntitySurfaces (void) {
 				case MOD_SPRITE:
 					// a .spr model is a sprite with that shader, sized by the entity's scale
 					if ( (ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal) {
+						break;
+					}
+					if ( !r_drawsprites->integer ) {
 						break;
 					}
 					ent->e.reType = RT_SPRITE;

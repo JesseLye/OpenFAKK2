@@ -154,7 +154,10 @@ cvar_t  *r_noborder;
 
 cvar_t	*r_customwidth;
 cvar_t	*r_customheight;
-cvar_t	*r_customPixelAspect;
+cvar_t	*r_customaspect;		// FAKK2: r_mode -1's window aspect (Quake III's r_customPixelAspect)
+cvar_t	*r_drawsprites;
+cvar_t	*r_skyportal;
+cvar_t	*r_skyportal_origin;
 
 cvar_t	*r_overBrightBits;
 cvar_t	*r_mapOverBrightBits;
@@ -308,17 +311,20 @@ qboolean R_GetModeInfo( int *width, int *height, float *windowAspect, int mode )
 		return qfalse;
 	}
 
+	// FAKK2: a custom mode's window aspect is r_customaspect itself (fakk2.exe
+	// 0x45fe58), a listed mode's its width over its height times its pixel aspect
 	if ( mode == -1 ) {
 		*width = r_customwidth->integer;
 		*height = r_customheight->integer;
-		pixelAspect = r_customPixelAspect->value;
-	} else {
-		vm = &r_vidModes[mode];
-
-		*width  = vm->width;
-		*height = vm->height;
-		pixelAspect = vm->pixelAspect;
+		*windowAspect = r_customaspect->value;
+		return qtrue;
 	}
+
+	vm = &r_vidModes[mode];
+
+	*width  = vm->width;
+	*height = vm->height;
+	pixelAspect = vm->pixelAspect;
 
 	*windowAspect = (float)*width / ( *height * pixelAspect );
 
@@ -1157,7 +1163,7 @@ void R_Register( void )
 	r_noborder = ri.Cvar_Get("r_noborder", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_customwidth = ri.Cvar_Get( "r_customwidth", "1600", CVAR_ARCHIVE | CVAR_LATCH );
 	r_customheight = ri.Cvar_Get( "r_customheight", "1024", CVAR_ARCHIVE | CVAR_LATCH );
-	r_customPixelAspect = ri.Cvar_Get( "r_customPixelAspect", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	r_customaspect = ri.Cvar_Get( "r_customaspect", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_simpleMipMaps = ri.Cvar_Get( "r_simpleMipMaps", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_vertexLight = ri.Cvar_Get( "r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_uiFullScreen = ri.Cvar_Get( "r_uifullscreen", "0", 0);
@@ -1188,6 +1194,11 @@ void R_Register( void )
 	// retail's developer override of the worldspawn's sun: "x y z", "0 0 0" for none
 	r_sunflare = ri.Cvar_Get ("r_sunflare", "0 0 0", CVAR_TEMP );
 	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", CVAR_TEMP );
+	// FAKK2: the sky portal's camera at a fixed point, turned the viewer's way
+	// (fakk2.exe 0x47bf76), and the scene's sprites (0x4643c0)
+	r_skyportal = ri.Cvar_Get( "r_skyportal", "0", 0 );
+	r_skyportal_origin = ri.Cvar_Get( "r_skyportal_origin", "0 0 0", 0 );
+	r_drawsprites = ri.Cvar_Get( "r_drawsprites", "1", CVAR_CHEAT );
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );
 	ri.Cvar_CheckRange( r_znear, 0.001f, 200, qfalse );
 	r_zproj = ri.Cvar_Get( "r_zproj", "64", CVAR_ARCHIVE );

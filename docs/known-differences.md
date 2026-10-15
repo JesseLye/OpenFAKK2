@@ -130,8 +130,7 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- Renderer: `r_showskel`, `r_showlod`, `r_place_sunflare`, `r_skyportal`,
-  `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
+- Renderer: `r_showskel`, `r_showlod`, `r_place_sunflare`. Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
 - TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
@@ -1020,7 +1019,17 @@ What is implemented, and on what basis:
 - **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
-  it. From the SDK's scene definition and flag descriptions, and OpenMoHAA.
+  it. From the SDK's scene definition and flag descriptions, and OpenMoHAA; the retail
+  renderer (`0x47bee0`) turns the camera the same way, the viewer's axes times the sky
+  axes. Its developer cvars: `r_skyportal 1` puts the camera at `r_skyportal_origin`
+  ("x y z", warning "Invalid sky portal origin" otherwise) and keeps the viewer's axes
+  as they are (`0x47bf76`).
+- **`r_drawsprites`** (cheat, 1): 0 leaves the scene's sprites out (`0x4643c0`, the
+  sprites the client game module adds as `.spr` models). `probe-sprites` with
+  `+set r_drawsprites 0` drew none of its sprites on either game.
+- **`r_customaspect`** (archived, latched, 1) is `r_mode -1`'s window aspect as it is
+  (`R_GetModeInfo`, `0x45fe58`), where Quake III divides the width over the height by
+  `r_customPixelAspect`, which retail does not have.
 - **Models from `.tik` definitions**: the `.tan` file of the animation the entity asks
   for is loaded on first use, and the entity's frame and old frame are decoded and
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by
