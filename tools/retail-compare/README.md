@@ -135,6 +135,8 @@ and prints `r_sunflare`, the point it wrote, to the log.
 markers; compare the two logs' sections.
 `probe-shadows` frames Julie's feet on `zoo` with `cg_shadows 2` (stencil, which retail
 cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
+`probe-fogvol` frames `cemetery`'s blood and water entrance fogs from three script cameras,
+40 seconds in (after the level's own cameras), each cued twice.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

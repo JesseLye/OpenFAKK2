@@ -1125,7 +1125,12 @@ R_FogFactor
 
 Returns a 0.0 to 1.0 fog density value
 This is called for each texel of the fog texture on startup
-and for each vertex of transparent shaders in fog dynamically
+
+FAKK2 (fakk2.exe 0x46fdbb, inlined in its fog image): the depth below the
+fog plane scales the distance by (t - 1/256) * 32/254 up to t = 255/256,
+where Quake III scales it by (t - 1/32) / (30/32) up to 31/32, which makes
+a fog volume about eight times thinner over most of the image. Transparent
+stages in fog take their own factor (RB_CalcModulateColorsByFog).
 ================
 */
 float	R_FogFactor( float s, float t ) {
@@ -1138,8 +1143,8 @@ float	R_FogFactor( float s, float t ) {
 	if ( t < 1.0/32 ) {
 		return 0;
 	}
-	if ( t < 31.0/32 ) {
-		s *= (t - 1.0f/32.0f) / (30.0f/32.0f);
+	if ( t < 255.0/256 ) {
+		s *= ( t - 1.0f/256.0f ) * ( 32.0f/254.0f );
 	}
 
 	// we need to leave a lot of clamp range

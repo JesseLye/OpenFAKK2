@@ -770,6 +770,25 @@ void RB_CalcWaveAlpha( const waveForm_t *wf, unsigned char *dstColors )
 }
 
 /*
+** RB_FogModulateFactor
+**
+** FAKK2: what a transparent stage in a fog volume keeps of its colour
+** (fakk2.exe 0x4944f0, 0x494650, 0x4945c0), not Quake III's 1 - R_FogFactor:
+** 1 - (t - 0.25) * s * 256 from the fog texture coordinates, no less than 0
+** and with no ceiling. Above 1 (a vertex above the fog plane) the colour
+** grows, and retail keeps the low byte of what it comes to.
+*/
+static float RB_FogModulateFactor( const float *st ) {
+	float	f = 1.0f - ( st[1] - 0.25f ) * st[0] * 256.0f;
+
+	return f < 0 ? 0 : f;
+}
+
+static byte RB_FogModulate( byte c, float f ) {
+	return (byte)(int)( c * f );
+}
+
+/*
 ** RB_CalcModulateColorsByFog
 */
 void RB_CalcModulateColorsByFog( unsigned char *colors ) {
@@ -782,10 +801,10 @@ void RB_CalcModulateColorsByFog( unsigned char *colors ) {
 	RB_CalcFogTexCoords( texCoords[0] );
 
 	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
-		float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-		colors[0] *= f;
-		colors[1] *= f;
-		colors[2] *= f;
+		float f = RB_FogModulateFactor( texCoords[i] );
+		colors[0] = RB_FogModulate( colors[0], f );
+		colors[1] = RB_FogModulate( colors[1], f );
+		colors[2] = RB_FogModulate( colors[2], f );
 	}
 }
 
@@ -802,8 +821,7 @@ void RB_CalcModulateAlphasByFog( unsigned char *colors ) {
 	RB_CalcFogTexCoords( texCoords[0] );
 
 	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
-		float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-		colors[3] *= f;
+		colors[3] = RB_FogModulate( colors[3], RB_FogModulateFactor( texCoords[i] ) );
 	}
 }
 
@@ -820,11 +838,11 @@ void RB_CalcModulateRGBAsByFog( unsigned char *colors ) {
 	RB_CalcFogTexCoords( texCoords[0] );
 
 	for ( i = 0; i < tess.numVertexes; i++, colors += 4 ) {
-		float f = 1.0 - R_FogFactor( texCoords[i][0], texCoords[i][1] );
-		colors[0] *= f;
-		colors[1] *= f;
-		colors[2] *= f;
-		colors[3] *= f;
+		float f = RB_FogModulateFactor( texCoords[i] );
+		colors[0] = RB_FogModulate( colors[0], f );
+		colors[1] = RB_FogModulate( colors[1], f );
+		colors[2] = RB_FogModulate( colors[2], f );
+		colors[3] = RB_FogModulate( colors[3], f );
 	}
 }
 

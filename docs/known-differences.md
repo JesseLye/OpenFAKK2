@@ -1420,10 +1420,27 @@ What is implemented, and on what basis:
   defaults (none, black, culling on); a level script's later changes to it are not seen
   there.
 
+- **Fog volumes** (`fogParms` brushes: `cemetery`, `cliff1`, `cliff2`, `oracleway`,
+  `over`, `under`) go through Quake III's fog code, which retail keeps almost whole:
+  the same fog lump (`R_LoadFogs` `0x485a00`: colour times the identity light, `tcScale`
+  1 / (depth for opaque * 8)), the same fog texture coordinates (`0x494d30`, with the
+  half texel on s), the same 256x32 `*fog` image of `pow(x, 0.5)` (`0x46fb50`) and the
+  fog drawn as an extra stage of each shader (`0x479322`). The image's density is not
+  Quake III's (`0x46fdbb`): the depth below the fog plane scales the distance by
+  (t - 1/256) * 32/254 up to t = 255/256, where Quake III scales it by (t - 1/32) / (30/32)
+  up to 31/32, so a fog volume is about eight times thinner over most of the image. A
+  transparent stage in fog keeps 1 - (t - 0.25) * s * 256 of its colour per vertex, no
+  less than 0 and with no ceiling, its low byte kept (`0x4944f0`, `0x494650`,
+  `0x4945c0`), where Quake III takes 1 - R_FogFactor. `probe-fogvol` on `cemetery` (from
+  above the blood and the water entrances' fogs) went from a mean of 20.8 in red and 16.7
+  in blue against retail to 1.7 and 1.8. From inside the blood fog the walls now match,
+  but under them ours draws the floor black and a pillar red where retail draws the
+  floor red and the pillar black (10.3 in red; the same before this change), not yet
+  understood. `fogParms`' fifth value is skipped as retail skips it; `foggen <wave>`
+  (`0x4772da`), which varies the depth for opaque and no retail shader uses, is not read.
+
 Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read, the
-`.skb` collapse maps are not, and neither is applied). Not compared with retail: fog
-volumes (`fogParms` brushes on `cemetery`, `water` and the swamps), which go through
-Quake III's fog code.
+`.skb` collapse maps are not, and neither is applied).
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
