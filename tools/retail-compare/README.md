@@ -81,10 +81,20 @@ skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zo
 - `probe-fx-guns` (chaingun, uzi, hand gun), `probe-fx-range` (crossbow, flamethrower,
   soul sucker) and `probe-fx-melee` (electric sword, axe, chain sword, flashbang, gas
   sling) sweep the other weapons.
+- `probe-muzzle` fires the uzi through two script cameras beside and ahead of Julie's
+  hand and shoots its muzzle burst, smoke and shells in bursts, after a shot of
+  `fx\test_muzzle.tik` (the flash sprite and model held still); `probe-muzz2` does the
+  chaingun, hand gun, shotgun and rocket launcher through the side camera, and
+  `probe-muzz3` the hand gun alone with a shot every server frame. A flash lives 0.05 s,
+  so which shots catch one varies from run to run. `probe-muzz4` frames the uzi's muzzle
+  close up, then the floor where its casings land; `probe-muzz5` takes twenty shots of
+  the muzzle 0.1 s apart, to count how often the burst is up, and with
+  `-Extra "+set cg_showemitters 1"` both games log every particle each emitter spawns
+  (19 of each of the uzi's four in that burst, on both).
 - `probe-fx-expl` spawns the flashbang's, gas pod's and soul sucker's explosion models.
-  `probe-sprites` and `probe-fx-order` spawn the test models in `fx\` (still sprites,
-  the fade rules, overlapping sprites); copy `fx\*.tik` into each engine's
-  `fakk\models` first. A model spawned by a script does not start its animation, so the
+  `probe-sprites`, `probe-fx-order` and `probe-muzzle` spawn the test models in `fx\`
+  (still sprites, the fade rules, overlapping sprites, muzzle flashes); copy `fx\*.tik`
+  into each engine's `fakk\models` first. A model spawned by a script does not start its animation, so the
   probes name it and send `anim idle`.
 - `probe-dlight` (on `training`, not `zoo`) holds `fx\test_dlight.tik`, a light the
   hand gun's muzzle flash colour and radius, at four places over a glowing pad

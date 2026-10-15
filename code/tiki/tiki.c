@@ -166,11 +166,22 @@ typedef struct {
 	char	value[MAX_QPATH * 2];
 } tikiMacro_t;
 
+typedef enum { SECTION_NONE, SECTION_SETUP, SECTION_INIT, SECTION_ANIMATIONS, SECTION_OTHER } tikiSection_t;
+typedef enum { SUB_NONE, SUB_SERVER, SUB_CLIENT } tikiSubSection_t;
+
 typedef struct {
 	tiki_t				*tiki;
 	int					numMacros;
 	tikiMacro_t			macros[TIKI_MAX_MACROS];
 	tikiCommandList_t	surfaceCmds;	// applied once the surface names are known
+
+	// where the reader is, carried through $include
+	tikiSection_t		section;
+	tikiSubSection_t	sub;
+	int					level;			// brace depth
+	int					animIndex;		// the animation whose commands are being read
+	qboolean			inEffectBlock;	// between the "(" and ")" lines of a client effect
+	int					lastFrame;		// the frame of the command line above
 } tikiParse_t;
 
 static tiki_t	*tiki_list;
@@ -741,19 +752,18 @@ static qboolean TIKI_ParseFile( tikiParse_t *parse, const char *filename, int de
 TIKI_ParseText
 
 Sections, braces and commands are all line oriented: a brace stands alone on
-its line, and a command is the tokens of one line. Each file tracks its own
-section state, so an included file is a complete definition in its own right
-that contributes to the same model.
+its line, and a command is the tokens of one line. An included file's text
+continues where the $include line stands, as in retail (fakk2.exe 0x4529f0
+opens it as a child script, given the parent's $defines, that the reader then
+takes its tokens from): the reader's state is the parse's, not the file's.
+weapon_uzi.tik and weapon_dualuzi.tik include uzi_emitters.txt, a bare list of
+tagemitter blocks, inside their init client block; read as a definition of
+its own, every line of it was dropped, and with it the uzi's muzzle burst,
+smoke and shells.
 ===============
 */
 static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
-	enum { SECTION_NONE, SECTION_SETUP, SECTION_INIT, SECTION_ANIMATIONS, SECTION_OTHER } section = SECTION_NONE;
-	enum { SUB_NONE, SUB_SERVER, SUB_CLIENT } sub = SUB_NONE;
 	tiki_t		*tiki = parse->tiki;
-	int			level = 0;
-	int			animIndex = -1;
-	qboolean	inEffectBlock = qfalse;	// between the "(" and ")" lines of a client effect
-	int			lastFrame = 0;			// the frame of the command line above
 	char		*line = text;
 
 	while ( line && *line ) {
@@ -791,51 +801,51 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 			continue;
 		}
 		if ( !strcmp( head, "{" ) ) {
-			level++;
+			parse->level++;
 			continue;
 		}
 		if ( !strcmp( head, "}" ) ) {
-			if ( level > 0 ) {
-				level--;
+			if ( parse->level > 0 ) {
+				parse->level--;
 			}
-			if ( level == 0 ) {
-				section = SECTION_NONE;
+			if ( parse->level == 0 ) {
+				parse->section = SECTION_NONE;
 			}
-			if ( level == 1 ) {
-				sub = SUB_NONE;
+			if ( parse->level == 1 ) {
+				parse->sub = SUB_NONE;
 			}
 			continue;
 		}
 
-		if ( level == 0 ) {
+		if ( parse->level == 0 ) {
 			if ( !Q_stricmp( head, "setup" ) ) {
-				section = SECTION_SETUP;
+				parse->section = SECTION_SETUP;
 			} else if ( !Q_stricmp( head, "init" ) ) {
-				section = SECTION_INIT;
+				parse->section = SECTION_INIT;
 			} else if ( !Q_stricmp( head, "animations" ) ) {
-				section = SECTION_ANIMATIONS;
+				parse->section = SECTION_ANIMATIONS;
 			} else {
-				section = SECTION_OTHER;	// includes the leading TIKI identifier
+				parse->section = SECTION_OTHER;	// includes the leading TIKI identifier
 			}
-			sub = SUB_NONE;
+			parse->sub = SUB_NONE;
 			continue;
 		}
 
-		switch ( section ) {
+		switch ( parse->section ) {
 		case SECTION_SETUP:
 			TIKI_ParseSetup( parse, tokens, numTokens );
 			break;
 
 		case SECTION_INIT:
-			if ( level == 1 ) {
-				sub = !Q_stricmp( head, "server" ) ? SUB_SERVER : SUB_CLIENT;
-			} else if ( level == 2 ) {
-				TIKI_AddCommand( sub == SUB_SERVER ? &tiki->serverInit : &tiki->clientInit, 0, tokens, numTokens );
+			if ( parse->level == 1 ) {
+				parse->sub = !Q_stricmp( head, "server" ) ? SUB_SERVER : SUB_CLIENT;
+			} else if ( parse->level == 2 ) {
+				TIKI_AddCommand( parse->sub == SUB_SERVER ? &tiki->serverInit : &tiki->clientInit, 0, tokens, numTokens );
 			}
 			break;
 
 		case SECTION_ANIMATIONS:
-			if ( level == 1 ) {
+			if ( parse->level == 1 ) {
 				tikiAnim_t	*anim;
 				int			i;
 
@@ -843,7 +853,7 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 					break;
 				}
 				anim = TIKI_NewAnim( tiki );
-				animIndex = tiki->numAnims - 1;
+				parse->animIndex = tiki->numAnims - 1;
 				anim->weight = 1.0f;
 				anim->crossblend = TIKI_DEFAULT_CROSSBLEND_MS;
 				Q_strncpyz( anim->alias, tokens[0], sizeof( anim->alias ) );
@@ -862,13 +872,13 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 						anim->crossblend = (int)( atof( tokens[++i] ) * 1000 );
 					}
 				}
-			} else if ( level == 2 ) {
-				sub = !Q_stricmp( head, "server" ) ? SUB_SERVER : SUB_CLIENT;
-				inEffectBlock = qfalse;
-				lastFrame = 0;
-			} else if ( level == 3 && animIndex >= 0 ) {
-				tikiAnim_t			*anim = &tiki->anims[animIndex];
-				tikiCommandList_t	*list = sub == SUB_SERVER ? &anim->serverCmds : &anim->clientCmds;
+			} else if ( parse->level == 2 ) {
+				parse->sub = !Q_stricmp( head, "server" ) ? SUB_SERVER : SUB_CLIENT;
+				parse->inEffectBlock = qfalse;
+				parse->lastFrame = 0;
+			} else if ( parse->level == 3 && parse->animIndex >= 0 ) {
+				tikiAnim_t			*anim = &tiki->anims[parse->animIndex];
+				tikiCommandList_t	*list = parse->sub == SUB_SERVER ? &anim->serverCmds : &anim->clientCmds;
 
 				// As the retail engine reads them (fakk2.exe 0x44b760): a client
 				// effect spreads its parameters over the lines between a "(" line
@@ -878,16 +888,16 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 				// are commands (StartBlock, EndBlock in cg_commands.cpp), and ")"
 				// is what makes the effect. Any other line starts with its frame.
 				if ( !strcmp( head, "(" ) ) {
-					inEffectBlock = qtrue;
-					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
+					parse->inEffectBlock = qtrue;
+					TIKI_AddCommand( list, parse->lastFrame, tokens, numTokens );
 				} else if ( !strcmp( head, ")" ) ) {
-					inEffectBlock = qfalse;
-					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
-				} else if ( inEffectBlock ) {
-					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
+					parse->inEffectBlock = qfalse;
+					TIKI_AddCommand( list, parse->lastFrame, tokens, numTokens );
+				} else if ( parse->inEffectBlock ) {
+					TIKI_AddCommand( list, parse->lastFrame, tokens, numTokens );
 				} else {
-					lastFrame = TIKI_ParseFrameSelector( head );
-					TIKI_AddCommand( list, lastFrame, tokens + 1, numTokens - 1 );
+					parse->lastFrame = TIKI_ParseFrameSelector( head );
+					TIKI_AddCommand( list, parse->lastFrame, tokens + 1, numTokens - 1 );
 				}
 			}
 			break;
@@ -1159,6 +1169,7 @@ tiki_t *TIKI_Register( const char *name ) {
 
 	parse = TIKI_Alloc( sizeof( *parse ) );
 	parse->tiki = tiki;
+	parse->animIndex = -1;
 
 	if ( !TIKI_ParseFile( parse, name, 0 ) ) {
 		Com_Printf( "Can't find %s\n", name );

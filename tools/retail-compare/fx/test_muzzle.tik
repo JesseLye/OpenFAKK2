@@ -1,0 +1,82 @@
+TIKI
+// Effect test (probe-muzzle.scr): the two pieces of the uzi's, the chaingun's and the
+// hand gun's muzzle flash, standing still for 30 seconds with no fade, so a screenshot
+// compares them between engines. Left to right as seen from a player looking down +x:
+// muzsprite.spr upright and rolled 45 degrees, then fx_muzflash.tik side on and end
+// on; the second row repeats the model at the uzi's scale and the rocket launcher's
+// rflash.spr.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      cache muzsprite.spr
+      cache rflash.spr
+      cache models/fx_muzflash.tik
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+      {
+      client
+         {
+         entry originspawn
+            (
+            count 1
+            model muzsprite.spr
+            offset 0 120 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model muzsprite.spr
+            offset 0 40 0
+            angles 0 0 45
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model models/fx_muzflash.tik
+            offset 0 -40 0
+            angles 0 90 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model models/fx_muzflash.tik
+            offset 0 -120 0
+            angles 0 180 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model models/fx_muzflash.tik
+            offset 0 40 -80
+            angles 0 135 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model rflash.spr
+            offset 0 -80 -80
+            life 30
+            )
+         }
+      }
+   }

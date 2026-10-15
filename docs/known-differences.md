@@ -945,6 +945,18 @@ explosion, soot, beams and swipes now appear as in retail. What it took:
   `entry` or `enter`, and any other word outside a block is read as a number, so it is
   frame 0. Two shipped definitions rely on the extra words: `claw.tik`'s `start melee`
   and `bspurt.tik`'s `end remove`.
+- **`$include` continues the including file where it stands** (fakk2.exe `0x4529f0`,
+  the TIKI script's `$` directive handler: it opens the named file as a child script,
+  `0x453390`, gives it the parent's `$define`s, and the reader then takes its tokens
+  from the child). This port had read an included file as a definition of its own, from
+  outside any section. The only shipped file that relies on the difference is
+  `uzi_emitters.txt`, a bare list of `tagemitter` blocks that `weapon_uzi.tik` and
+  `weapon_dualuzi.tik` include inside their `init` `client` block: every line of it was
+  dropped, so the uzi's `emitteron` commands found no emitters, and firing it drew only
+  a small glow at the muzzle, with no flame burst (`muzsprite.spr` and
+  `models/fx_muzflash.tik`), smoke or shells (`probe-muzzle`). The other guns spawn the
+  same flash pieces with `tagspawn` from their own files and matched retail already
+  (`probe-muzz2`, `probe-muzz3`).
 - **Decals are fitted to the collision model** (`CM_MarkFragments`, `0x426a90`; the
   client game module's `CM_MarkFragments` import is slot 0x1d of `CL_InitCGameImport`
   `0x41ce90`), not to the drawn surfaces as in Quake III's `R_MarkFragments`. For each

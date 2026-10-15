@@ -1,0 +1,32 @@
+// The hand gun's muzzle flash up close, for the real client on zoo (see
+// probe-muzz2): one shot, and a screenshot every server frame after it, since the
+// flash lives 0.05 s.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "camside" origin "-2310 1480 50" angles "5 90 0"
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+wait 3
+cuecamera $camside
+wait 1
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

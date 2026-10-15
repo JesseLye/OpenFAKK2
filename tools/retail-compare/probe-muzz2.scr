@@ -1,0 +1,63 @@
+// The other guns' muzzle flashes up close, for the real client on zoo, where the
+// player starts at (-2352 1568 0) looking down +x: the chaingun, the hand gun, the
+// shotgun's plasma blast and the rocket launcher, each fired straight ahead and shot
+// in a burst through a camera beside the barrel (probe-muzzle does the uzi). A flash
+// lives 0.05 s, so which shots catch one varies from run to run.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "camside" origin "-2310 1480 50" angles "5 90 0"
+stuffcmd "give weapon_chaingun.tik"
+wait 0.5
+stuffcmd "use Chaingun dual"
+wait 3
+cuecamera $camside
+wait 1
+stuffcmd "+attackleft"
+wait 0.6
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 1.5
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+wait 3
+stuffcmd "+attackright"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 1.5
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 3
+stuffcmd "+attackleft"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 1.5
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+wait 3
+stuffcmd "+attackleft"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 1.5
+stuffcmd "quit"
+end

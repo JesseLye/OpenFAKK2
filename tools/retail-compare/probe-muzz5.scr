@@ -1,0 +1,58 @@
+// How often the uzi's muzzle burst is up, for the real client on zoo: a camera
+// close beside the muzzle (as in probe-muzz4) and twenty screenshots 0.1 s apart
+// while she fires. Run with +set cg_showemitters 1 to log what each emitter spawns.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "cammuz" origin "-2296 1512 62" angles "0 102 0"
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+wait 3
+cuecamera $cammuz
+wait 1
+stuffcmd "+attackright"
+wait 0.3
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 1
+stuffcmd "quit"
+end
