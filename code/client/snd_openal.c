@@ -48,6 +48,7 @@ cvar_t *s_alDopplerFactor;
 cvar_t *s_alDopplerSpeed;
 cvar_t *s_alDriver;
 cvar_t *s_alDevice;
+cvar_t *s_alHRTF;	// FAKK2
 cvar_t *s_alInputDevice;
 cvar_t *s_alAvailableDevices;
 cvar_t *s_alAvailableInputDevices;
@@ -150,6 +151,8 @@ typedef struct alSfx_s
 	int				loopCnt;		// number of loops using this sfx
 	int				loopActiveCnt;		// number of playing loops using this sfx
 	int				masterLoopSrc;		// All other sources looping this buffer are synced to this master src
+
+	ALuint		loopBuffer;				// FAKK2: the sound up to its loop block's end, 0 if none (S_AL_BufferLoadLoop)
 } alSfx_t;
 
 static qboolean alBuffersInitialised = qfalse;
@@ -290,13 +293,16 @@ static void S_AL_BufferUnload(sfxHandle_t sfx)
 	if(!knownSfx[sfx].inMemory)
 		return;
 
-	// Delete it 
+	// Delete it
 	S_AL_ClearError( qfalse );
 	qalDeleteBuffers(1, &knownSfx[sfx].buffer);
+	if(knownSfx[sfx].loopBuffer)
+		qalDeleteBuffers(1, &knownSfx[sfx].loopBuffer);
 	if(qalGetError() != AL_NO_ERROR)
 		Com_Printf( S_COLOR_RED "ERROR: Can't delete sound buffer for %s\n",
 				knownSfx[sfx].filename);
 
+	knownSfx[sfx].loopBuffer = 0;
 	knownSfx[sfx].inMemory = qfalse;
 }
 
@@ -370,6 +376,57 @@ static qboolean S_AL_GenBuffers(ALsizei numBuffers, ALuint *buffers, const char 
 	}
 
 	return qtrue;
+}
+
+/*
+=================
+S_AL_BufferLoadLoop
+
+FAKK2: a sound with a loop block in the sound information (loopstart and
+loopend, byte offsets into its data as Miles took them) plays to the end of
+the block and then repeats the block until it is stopped, when it is
+started as a one-shot (retail 0x45c1df: AIL_set_3D_sample_loop_block, then a
+loop count of 0). The uzi's start.wav repeats its first 2019 samples, one
+burst, for as long as the trigger is held. The looping copy is a second
+buffer, holding the sound up to the block's end and looping from its start
+(AL_SOFT_loop_points; without it the whole copy loops), so the sound's own
+buffer still loops whole for a looping sound on an entity.
+=================
+*/
+#ifndef AL_LOOP_POINTS_SOFT
+#define AL_LOOP_POINTS_SOFT	0x2015
+#endif
+static qboolean alLoopPoints;	// AL_SOFT_loop_points
+
+static void S_AL_BufferLoadLoop(alSfx_t *curSfx, const void *data, const snd_info_t *info, ALuint format)
+{
+	const soundInfo_t *sinfo = S_SoundInfoForName(curSfx->filename);
+	int frame = info->width * info->channels;
+	ALint points[2];
+
+	if(sinfo->loopStart < 0 || !frame || info->samples <= 0 || !Q_stricmp(COM_GetExtension(curSfx->filename), "mp3"))
+		return;
+
+	points[0] = sinfo->loopStart / frame;
+	points[1] = (sinfo->loopEnd < 0) ? info->samples : MIN(sinfo->loopEnd / frame, info->samples);
+	if(points[0] >= points[1])
+		return;
+
+	if(!S_AL_GenBuffers(1, &curSfx->loopBuffer, curSfx->filename))
+	{
+		curSfx->loopBuffer = 0;
+		return;
+	}
+
+	S_AL_ClearError(qfalse);
+	qalBufferData(curSfx->loopBuffer, format, data, points[1] * frame, info->rate);
+	if(points[0] > 0 && alLoopPoints && qalBufferiv)
+		qalBufferiv(curSfx->loopBuffer, AL_LOOP_POINTS_SOFT, points);
+	if(qalGetError() != AL_NO_ERROR)
+	{
+		qalDeleteBuffers(1, &curSfx->loopBuffer);
+		curSfx->loopBuffer = 0;
+	}
 }
 
 /*
@@ -463,7 +520,9 @@ static void S_AL_BufferLoad(sfxHandle_t sfx, qboolean cache)
 	}
 
 	curSfx->info = info;
-	
+	if(info.size)
+		S_AL_BufferLoadLoop(curSfx, data, &info, format);	// FAKK2
+
 	// Free the memory
 	Hunk_FreeTempMemory(data);
 
@@ -608,6 +667,8 @@ typedef struct src_s
 	qboolean	isPaused;		// FAKK2: held while the game is paused
 	vec3_t		origin;			// FAKK2: where a world source is (S_AL_SrcPlace)
 	float		panGain;		// FAKK2: times curGain, for the Miles panning
+	qboolean	loopBlock;		// FAKK2: repeats its sound's loop block until stopped (S_AL_BufferLoadLoop)
+	int		entityFrame;		// FAKK2: the entity's last update the source has followed (S_AL_SrcFollow)
 } src_t;
 
 #ifdef __APPLE__
@@ -628,6 +689,9 @@ static qboolean alMilesPan;		// FAKK2: OpenAL Soft's plain stereo panning, steer
 #define ALC_OUTPUT_MODE_SOFT	0x19AC
 #define ALC_STEREO_BASIC_SOFT	0x19AE
 #endif
+#ifndef ALC_HRTF_SOFT
+#define ALC_HRTF_SOFT			0x1992
+#endif
 
 typedef struct sentity_s
 {
@@ -642,9 +706,12 @@ typedef struct sentity_s
 	qboolean				startLoopingSound;
 	float						loopVolume;			// FAKK2
 	float						loopMinDist;
+	int							updateFrame;		// FAKK2: alFrame of the last S_AL_UpdateEntityPosition
+	qboolean				useListener;		// FAKK2: its sounds are at the listener (S_AL_SrcFollow)
 } sentity_t;
 
 static sentity_t entityList[MAX_GENTITIES];
+static int alFrame = 1;	// FAKK2: counts S_AL_Update calls
 
 /*
 =================
@@ -1037,6 +1104,8 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 	curSource->scaleGain = curSource->curGain * curSource->panGain;
 	curSource->local = local;
 	VectorClear(curSource->origin);
+	curSource->loopBlock = qfalse;
+	curSource->entityFrame = 0;
 
 	// Set up OpenAL source
 	if(sfx >= 0)
@@ -1398,10 +1467,15 @@ void S_AL_SrcUnlock(srcHandle_t src)
 /*
 =================
 S_AL_UpdateEntityPosition
+
+FAKK2: the client game module also says whether the entity's sounds are at
+the listener: it sends the weapons and other things attached to the player
+with that flag and an origin of 0 0 0 (cg_ents.c). The update's frame is
+kept for S_AL_SrcFollow, as the retail engine keeps its time (0x43ec90).
 =================
 */
 static
-void S_AL_UpdateEntityPosition( int entityNum, const vec3_t origin )
+void S_AL_UpdateEntityPosition( int entityNum, const vec3_t origin, qboolean useListener )
 {
 	vec3_t sanOrigin;
 
@@ -1410,6 +1484,107 @@ void S_AL_UpdateEntityPosition( int entityNum, const vec3_t origin )
 	if ( entityNum < 0 || entityNum >= MAX_GENTITIES )
 		Com_Error( ERR_DROP, "S_UpdateEntityPosition: bad entitynum %i", entityNum );
 	VectorCopy( sanOrigin, entityList[entityNum].origin );
+	entityList[entityNum].useListener = useListener;
+	entityList[entityNum].updateFrame = alFrame;
+}
+
+/*
+=================
+S_AL_SrcFollow
+
+FAKK2: a sound started on an entity follows it while the client game module
+keeps updating the entity, as in the retail engine's sound update (0x45cdd1),
+to where S_FollowOrigin puts it: the weapons Julie holds sound at her ears,
+as loud in both. An entity that was not updated since the last frame leaves
+its sound where it was, but a sound repeating its loop block is stopped, as
+the retail engine ends it (0x45ced8), or a uzi put away while firing would go
+on for ever.
+=================
+*/
+static void S_AL_SrcFollow(srcHandle_t src)
+{
+	src_t *curSource = &srcList[src];
+	sentity_t *sent = &entityList[curSource->entity];
+	vec3_t origin;
+
+	if(sent->updateFrame <= curSource->entityFrame)
+	{
+		if(curSource->loopBlock)
+			S_AL_SrcKill(src);
+		else if(alMilesPan && !curSource->local)
+			S_AL_SrcPlace(curSource, curSource->origin);
+		return;
+	}
+	curSource->entityFrame = sent->updateFrame;
+	if(curSource->local)
+		return;
+
+	S_FollowOrigin(curSource->entity, sent->origin, sent->useListener, lastListenerNumber, lastListenerOrigin, origin);
+	S_AL_SrcPlace(curSource, origin);
+}
+
+/*
+=================
+S_AL_SrcReplace
+
+FAKK2: a new sound on an entity's channel other than CHAN_AUTO takes the
+place of the one playing there, as the retail engine's sample picker
+(0x45bc70) hands it that sample. The .mp3 files were Miles streams in the
+retail engine, kept apart from the samples, so they neither replace nor are
+replaced here.
+=================
+*/
+static qboolean S_AL_IsMp3(sfxHandle_t sfx)
+{
+	return !Q_stricmp(COM_GetExtension(knownSfx[sfx].filename), "mp3");
+}
+
+static void S_AL_SrcReplace(sfxHandle_t sfx, int entnum, int entchannel)
+{
+	int i;
+
+	if(entchannel == CHAN_AUTO || S_AL_IsMp3(sfx))
+		return;
+
+	for(i = 0; i < srcCount; i++)
+	{
+		src_t *curSource = &srcList[i];
+
+		if(!curSource->isActive || curSource->isLocked || curSource->isLooping || curSource->isStream)
+			continue;
+		if(curSource->entity != entnum || curSource->channel != entchannel || S_AL_IsMp3(curSource->sfx))
+			continue;
+		S_AL_SrcKill(i);
+	}
+}
+
+/*
+=================
+S_AL_SrcStart
+
+FAKK2: starts a one-shot that S_AL_SrcSetup has set up, looping its
+sound's loop block if it has one (S_AL_BufferLoadLoop), and following its
+entity (S_AL_SrcFollow): from this frame's update on for a sound started at
+an origin, and from the entity's last update for one started on the entity
+alone, as the retail engine starts the two (0x45c143, 0x45c184).
+=================
+*/
+static void S_AL_SrcStart(srcHandle_t src, int entnum, qboolean placed)
+{
+	src_t *curSource = &srcList[src];
+	ALuint loopBuffer = knownSfx[curSource->sfx].loopBuffer;
+
+	if(loopBuffer)
+	{
+		qalSourcei(curSource->alSource, AL_BUFFER, loopBuffer);
+		qalSourcei(curSource->alSource, AL_LOOPING, AL_TRUE);
+		curSource->loopBlock = qtrue;
+	}
+	curSource->isTracking = (entnum >= 0 && entnum < ENTITYNUM_NONE);
+	curSource->entityFrame = placed ? alFrame - 1 : 0;
+
+	curSource->isPlaying = qtrue;
+	qalSourcePlay(curSource->alSource);
 }
 
 /*
@@ -1458,6 +1633,8 @@ static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int entnum, int channel, flo
 	if(volume < 0)
 		volume = info->volume;
 
+	S_AL_SrcReplace(sfx, entnum, channel);
+
 	// Try to grab a source
 	src = S_AL_SrcAlloc(SRCPRI_LOCAL, entnum, channel);
 
@@ -1468,8 +1645,7 @@ static void S_AL_StartLocalSoundEx(sfxHandle_t sfx, int entnum, int channel, flo
 	S_AL_SrcSetup(src, sfx, SRCPRI_LOCAL, entnum, channel, qtrue, volume, info->minDist);
 
 	// Start it playing
-	srcList[src].isPlaying = qtrue;
-	qalSourcePlay(srcList[src].alSource);
+	S_AL_SrcStart(src, entnum, qfalse);
 }
 
 static
@@ -1529,6 +1705,8 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 
 	S_AL_SanitiseVector(sorigin);
 
+	S_AL_SrcReplace(sfx, entnum, entchannel);
+
 	if((srcActiveCnt > 5 * srcCount / 3) &&
 		(DistanceSquared(sorigin, lastListenerOrigin) >=
 		(minDist * SOUND_MAX_DIST_FACTOR) * (minDist * SOUND_MAX_DIST_FACTOR)))
@@ -1546,14 +1724,10 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 
 	curSource = &srcList[src];
 
-	if(!origin)
-		curSource->isTracking = qtrue;
-
 	S_AL_SrcPlace(curSource, sorigin);
 
 	// Start it playing
-	curSource->isPlaying = qtrue;
-	qalSourcePlay(curSource->alSource);
+	S_AL_SrcStart(src, entnum, origin != NULL);
 }
 
 /*
@@ -2022,6 +2196,13 @@ void S_AL_SrcUpdate( void )
 		        	continue;
         		}
                 }
+
+		// FAKK2: a one-shot follows its entity (S_AL_SrcFollow)
+		if(curSource->isTracking && !curSource->isStream)
+		{
+			S_AL_SrcFollow(i);
+			continue;
+		}
 
 		// Query relativity of source, don't move if it's true
 		qalGetSourcei(curSource->alSource, AL_SOURCE_RELATIVE, &state);
@@ -2752,6 +2933,7 @@ void S_AL_Update( void )
 
 	// Update SFX channels
 	S_AL_SrcUpdate();
+	alFrame++;	// FAKK2: S_AL_SrcFollow
 
 	// Update streams
 	for (i = 0; i < MAX_RAW_STREAMS; i++)
@@ -2999,6 +3181,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 
 	s_alInputDevice = Cvar_Get( "s_alInputDevice", "", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );
 	s_alDevice = Cvar_Get("s_alDevice", "", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH);
+	s_alHRTF = Cvar_Get( "s_alHRTF", "0", CVAR_ARCHIVE | CVAR_LATCH | CVAR_SOUND_LATCH );	// FAKK2: see below
 
 	// Load QAL
 	if( !QAL_Init( s_alDriver->string ) )
@@ -3088,11 +3271,28 @@ qboolean S_AL_Init( soundInterface_t *si )
 		return qfalse;
 	}
 
-	// Create OpenAL context; FAKK2: with a send for the reverb when EFX is there
+	// Create OpenAL context; FAKK2: with a send for the reverb when EFX is
+	// there, and without HRTF unless s_alHRTF asks for it. OpenAL Soft turns
+	// HRTF on by itself for headphones, and with it a sound at the listener,
+	// such as the weapon Julie fires, is some 8 dB quieter than the retail
+	// engine's Miles provider played it (it had no HRTF); without it the
+	// output is plain stereo, which S_AL_SrcPlace pans as Miles did.
 	{
-		ALCint attrs[] = { ALC_MAX_AUXILIARY_SENDS, 1, 0 };
+		ALCint attrs[5], n = 0;
 
-		alContext = qalcCreateContext( alDevice, qalcIsExtensionPresent( alDevice, ALC_EXT_EFX_NAME ) ? attrs : NULL );
+		if( qalcIsExtensionPresent( alDevice, ALC_EXT_EFX_NAME ) )
+		{
+			attrs[n++] = ALC_MAX_AUXILIARY_SENDS;
+			attrs[n++] = 1;
+		}
+		if( !s_alHRTF->integer && qalcIsExtensionPresent( alDevice, "ALC_SOFT_HRTF" ) )
+		{
+			attrs[n++] = ALC_HRTF_SOFT;
+			attrs[n++] = ALC_FALSE;
+		}
+		attrs[n] = 0;
+
+		alContext = qalcCreateContext( alDevice, n ? attrs : NULL );
 	}
 	if( !alContext )
 	{
@@ -3113,6 +3313,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 		alMilesPan = ( mode == ALC_STEREO_BASIC_SOFT );
 		Com_Printf( "OpenAL output mode 0x%x%s\n", mode, alMilesPan ? ", panned as Miles did" : "" );
 	}
+	alLoopPoints = qalIsExtensionPresent( "AL_SOFT_loop_points" );	// FAKK2: S_AL_BufferLoadLoop
 
 	// Initialize sources, buffers, music
 	S_AL_BufferInit( );

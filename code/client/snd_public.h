@@ -56,7 +56,7 @@ void S_StopLoopingSound(int entityNum );
 void S_Respatialize( int entityNum, const vec3_t origin, vec3_t axis[3], int inwater );
 
 // let the sound system know where an entity currently is
-void S_UpdateEntityPosition( int entityNum, const vec3_t origin );
+void S_UpdateEntityPosition( int entityNum, const vec3_t origin, qboolean useListener );
 
 void S_Update( void );
 

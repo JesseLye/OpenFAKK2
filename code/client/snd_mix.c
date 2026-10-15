@@ -518,6 +518,8 @@ void S_PaintChannels( int endtime ) {
 	int		ltime, count;
 	int		sampleOffset;
 	int		pass;
+	int		limit;
+	qboolean	loopBlock;
 	qboolean	reverb = s_reverb->integer && S_ReverbActive();
 
 	if(s_muted->integer)
@@ -583,13 +585,26 @@ void S_PaintChannels( int endtime ) {
 				continue;
 			}
 
-			sampleOffset = ltime - ch->startSample;
-			count = end - ltime;
-			if ( sampleOffset + count > sc->soundLength ) {
-				count = sc->soundLength - sampleOffset;
-			}
+			// FAKK2: a channel repeating its sound's loop block goes back to the
+			// block's start at its end (S_LoadSound)
+			loopBlock = ch->loopBlock && sc->loopEnd > sc->loopStart;
+			do {
+				sampleOffset = ltime - ch->startSample;
+				limit = sc->soundLength;
+				if ( loopBlock ) {
+					if ( sampleOffset >= sc->loopEnd ) {
+						sampleOffset = sc->loopStart + ( sampleOffset - sc->loopEnd ) % ( sc->loopEnd - sc->loopStart );
+					}
+					limit = sc->loopEnd;
+				}
+				count = end - ltime;
+				if ( sampleOffset + count > limit ) {
+					count = limit - sampleOffset;
+				}
+				if ( count <= 0 ) {
+					break;
+				}
 
-			if ( count > 0 ) {
 				if( sc->soundCompressionMethod == 1) {
 					S_PaintChannelFromADPCM		(ch, sc, count, sampleOffset, ltime - s_paintedtime);
 				} else if( sc->soundCompressionMethod == 2) {
@@ -599,7 +614,8 @@ void S_PaintChannels( int endtime ) {
 				} else {
 					S_PaintChannelFrom16		(ch, sc, count, sampleOffset, ltime - s_paintedtime);
 				}
-			}
+				ltime += count;
+			} while ( loopBlock && ltime < end );
 		}
 		if ( pass == 1 ) {
 			break;

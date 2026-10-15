@@ -46,7 +46,8 @@ Output goes to `build\x86-Release\Release`. A 32-bit build is required for binar
 compatibility with the retail game modules. The build copies `SDL2.dll` and OpenAL
 Soft's `OpenAL32.dll` (1.24.3, LGPL 2.1, from `code/thirdparty/libs/`) beside the
 executable; the sound system uses OpenAL by default (`s_useOpenAL 0` selects the
-software mixer).
+software mixer), in plain stereo as the retail game was (`s_alHRTF 1` lets OpenAL Soft
+use HRTF on headphones).
 
 Point the engine at an existing install rather than copying data:
 

@@ -1,0 +1,29 @@
+// The uzis' fire sound, for sound-record.ps1 on zoo: Julie dual wields the two uzis
+// (inventory.scr's "dualwield Uzi DualUzi"), then fires the left one for 3 s, the right
+// one for 3 s, and both together for 3 s, with 3 s of quiet between, so a loopback
+// recording shows one uzi's level against two.
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_uzi.tik"
+stuffcmd "give weapon_dualuzi.tik"
+stuffcmd "give ammo_uziclip.tik"
+wait 0.5
+stuffcmd "dualwield Uzi DualUzi"
+wait 4
+stuffcmd "+attackleft"
+wait 3
+stuffcmd "-attackleft"
+wait 3
+stuffcmd "+attackright"
+wait 3
+stuffcmd "-attackright"
+wait 3
+stuffcmd "+attackleft"
+stuffcmd "+attackright"
+wait 3
+stuffcmd "-attackleft"
+stuffcmd "-attackright"
+wait 2
+stuffcmd "pendingevents"
+end
