@@ -32,7 +32,11 @@ function Get-SuiteChecks($Config) {
         $items = @($null); $field = $null
         $maps = Get-Prop $c 'maps'
         $menus = Get-Prop $c 'menus'
-        if ($maps) { $field = 'map'; $items = if ($maps -eq 'all') { @($Config.maps) } else { @($maps) } }
+        if ($maps) {
+            $field = 'map'; $items = if ($maps -eq 'all') { @($Config.maps) } else { @($maps) }
+            $skip = @(Get-Prop $c 'skipMaps' @())
+            $items = @($items | Where-Object { $skip -notcontains $_ })
+        }
         elseif ($menus) { $field = 'menu'; $items = @($menus) }
         foreach ($item in $items) {
             $o = [ordered]@{}

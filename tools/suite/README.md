@@ -66,7 +66,7 @@ never committed (they are made from Ritual's data).
 
 Each check: `name`, `areas`, `level` (quick, standard, full), `kind`, and what the kind
 needs. `maps` (a list, or `"all"`) or `menus` expands one entry into a check per item
-(`spawn/zoo`); `quickMaps` makes some of those quick. `always: true` runs it at every
+(`spawn/zoo`); `quickMaps` makes some of those quick and `skipMaps` leaves some out. `always: true` runs it at every
 level. `sound: true` runs it only with `-Sound`. `tolerance` per measure (or `"*"`), a
 number or `"N%"` of the last good value; by default 0, and 1 percentage point for
 screenshots. `knownIssue` reports a failure among the known differences, for a bug

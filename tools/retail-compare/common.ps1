@@ -62,6 +62,15 @@ function Reset-TestHome {
         if ($env:FAKK2_TEST_MODULES -eq 'retail') { Copy-Item (Join-Path $GameInstall "fakk\$dll") $target -Force }
         elseif (Test-Path $target) { Remove-Item $target -Force }
     }
+    Remove-GeneratedPaths $TestFakk
+}
+
+# A level whose paks have no path file (homes1_fullvis) makes one at spawn ("No paths
+# found. Creating paths...") and saves it in the home's maps folder, where the next run
+# loads it instead ("Loading nodes..."), so a run's output depended on the runs before.
+# Only the top level: Ritual's example maps keep their .pth files in maps\example.
+function Remove-GeneratedPaths([string]$Fakk) {
+    Get-ChildItem (Join-Path $Fakk 'maps') -File -Filter '*.pth' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 # The retail sandboxes (build\sandbox\retail and retail-snd) keep their config.cfg between
@@ -72,6 +81,7 @@ function Reset-RetailConfig([string]$GameDir) {
     if (-not (Test-Path $fakk)) { return }
     Copy-Item (Join-Path $GameInstall 'fakk\default.cfg') (Join-Path $fakk 'default.cfg') -Force
     Set-Content -Path (Join-Path $fakk 'config.cfg') -Value '// empty on purpose: harness runs start from default.cfg (Reset-RetailConfig)' -Encoding ascii
+    Remove-GeneratedPaths $fakk
 }
 
 # --- one game at a time -------------------------------------------------------------
