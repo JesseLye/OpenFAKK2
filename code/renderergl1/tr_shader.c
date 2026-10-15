@@ -2632,9 +2632,13 @@ static shader_t *FinishShader( void ) {
 	// r_useglfog.
 	//
 	shader.numFarplanePasses = stage;
+	// (ParseStage turns the identity alphaGen of a lightingDiffuse stage into
+	// AGEN_SKIP, so a scripted model shader carries that, the default shader
+	// AGEN_IDENTITY.) A fog volume's shader (no stages, CONTENTS_FOG) is not
+	// a surface to fog and gets no pass.
 	shader.canUseGLFog = ( stage == 1 && stages[0].rgbGen == CGEN_LIGHTING_DIFFUSE
-		&& stages[0].alphaGen == AGEN_IDENTITY );
-	if ( stage < MAX_SHADER_STAGES
+		&& ( stages[0].alphaGen == AGEN_IDENTITY || stages[0].alphaGen == AGEN_SKIP ) );
+	if ( stage < MAX_SHADER_STAGES && !( shader.contentFlags & CONTENTS_FOG )
 		&& !( ( stages[0].stateBits & ( GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS ) )
 			&& stages[0].adjustColorsForFog != ACFF_NONE ) ) {
 		Com_Memset( &farplaneFogStage, 0, sizeof( farplaneFogStage ) );
