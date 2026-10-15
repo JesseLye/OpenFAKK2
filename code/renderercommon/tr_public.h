@@ -201,6 +201,10 @@ typedef struct {
 	// FAKK2: the world trace that hides a lens flare behind the world (tr_lensflare.c)
 	void	(*CM_BoxTrace)( trace_t *results, const vec3_t start, const vec3_t end,
 				vec3_t mins, vec3_t maxs, int model, int brushmask, int capsule );
+	// FAKK2: the game module's debug lines, which RE_DebugLine adds to and
+	// the renderer draws (tr_main.c)
+	debugline_t	**DebugLines;
+	int			*numDebugLines;
 
 	// a -1 return means the file does not exist
 	// NULL can be passed for buf to just determine existence

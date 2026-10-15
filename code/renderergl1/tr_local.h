@@ -1241,6 +1241,9 @@ extern	cvar_t	*r_overBrightBits;
 extern	cvar_t	*r_mapOverBrightBits;
 
 extern	cvar_t	*r_debugSurface;
+extern	cvar_t	*r_stipplelines;
+extern	cvar_t	*r_debuglines_depthmask;
+extern	cvar_t	*g_numdebuglines;
 extern	cvar_t	*r_simpleMipMaps;
 
 extern	cvar_t	*r_showImages;

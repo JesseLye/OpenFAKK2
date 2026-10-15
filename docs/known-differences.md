@@ -130,9 +130,6 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- Debug lines: the game's (`G_DebugLine`, which `cam show` and the AI's node display use)
-  and the client game module's are accepted and never drawn; with them
-  `r_debuglines_depthmask`, `r_stipplelines` and the server's `g_numdebuglines`.
 - Renderer: `r_showskel`, `r_showlod`, `r_light_lines`, `r_light_sun_line`,
   `r_light_nolight`, `r_light_int_scale`, `r_place_sunflare`, `r_skyportal`,
   `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
@@ -1198,8 +1195,20 @@ What is implemented, and on what basis:
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). On the world they are much
   dimmer than retail's: a muzzle flash that lights the floor yellow around Julie in
-  retail barely shows here (`probe-fx-guns`). Debug lines are accepted and not drawn;
-  swipes are drawn (see "Weapon effects").
+  retail barely shows here (`probe-fx-guns`). Swipes are drawn (see "Weapon effects").
+- **Debug lines**: the game module's (`G_DebugLine`: `cam show`, the AI's node display,
+  `csys_draw`) and the client game module's are drawn as `fakk2.exe` draws them. The
+  renderer is handed the game's array and count (`ri.DebugLines`, as retail's refimport
+  at `0xcdbd50`); `R_DebugLine` (`0x461fb0`) adds a solid, one pixel line to it, up to
+  `g_numdebuglines` (which the renderer registers too, "4096", latched), and the game
+  clears it each server frame. `R_RenderView` (`0x4646d0`) draws them after sorting the
+  view's surfaces (`0x462060`), except in a view without the world or the sky portal's:
+  unblended in their colour, depth tested without writing depth, or with
+  `r_debuglines_depthmask 1` written at the nearest depth (`glDepthRange 0 0`), so in
+  front of everything; with `r_stipplelines 1` (the default) each line keeps its own
+  stipple pattern and width (`G_LineStipple`). Both cvars are archived and "0" and "1"
+  by default. `probe-dlines` on `zoo` draws the `csys_draw` axes from inside a box and
+  matched retail's shots, both depth tested and with `r_debuglines_depthmask`.
 - **The player's buttons and the inventory bar.** `default.cfg` binds `+attackleft`,
   `+attackright`, `+use` and `+cameralook`, which Quake III's client does not know, so
   the keys fired nothing (an unknown command goes to the server as chat). The client

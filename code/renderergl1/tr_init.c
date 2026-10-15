@@ -160,6 +160,9 @@ cvar_t	*r_overBrightBits;
 cvar_t	*r_mapOverBrightBits;
 
 cvar_t	*r_debugSurface;
+cvar_t	*r_stipplelines;			// FAKK2: debug lines drawn with their stipple pattern and width
+cvar_t	*r_debuglines_depthmask;	// FAKK2: debug lines in front of everything
+cvar_t	*g_numdebuglines;			// FAKK2: how many debug lines the game's array holds
 cvar_t	*r_simpleMipMaps;
 
 cvar_t	*r_showImages;
@@ -1258,6 +1261,10 @@ void R_Register( void )
 	r_verbose = ri.Cvar_Get( "r_verbose", "0", CVAR_CHEAT );
 	r_logFile = ri.Cvar_Get( "r_logFile", "0", CVAR_CHEAT );
 	r_debugSurface = ri.Cvar_Get ("r_debugSurface", "0", CVAR_CHEAT);
+	// FAKK2: fakk2.exe 0x460f0c, 0x46153d, 0x461715
+	g_numdebuglines = ri.Cvar_Get( "g_numdebuglines", "4096", CVAR_LATCH );
+	r_stipplelines = ri.Cvar_Get( "r_stipplelines", "1", CVAR_ARCHIVE );
+	r_debuglines_depthmask = ri.Cvar_Get( "r_debuglines_depthmask", "0", CVAR_ARCHIVE );
 	r_nobind = ri.Cvar_Get ("r_nobind", "0", CVAR_CHEAT);
 	r_showtris = ri.Cvar_Get ("r_showtris", "0", CVAR_CHEAT);
 	r_showsky = ri.Cvar_Get ("r_showsky", "0", CVAR_CHEAT);

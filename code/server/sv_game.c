@@ -308,9 +308,6 @@ game_export_t	*ge;
 static void			*gameLibrary;
 static game_import_t	gameImport;
 
-// debug line storage the game writes into directly
-static debugline_t	*sv_debugLines;
-static int			sv_numDebugLines;
 
 // read when snapshots are built
 int					sv_farPlaneSquared;
@@ -1137,8 +1134,8 @@ static void SV_FillGameImport( game_import_t *import ) {
 	import->SoundAmplitudes = SV_SoundAmplitudes;
 
 	import->CalcCRC = SV_GameCalcCRC;
-	import->DebugLines = &sv_debugLines;
-	import->numDebugLines = &sv_numDebugLines;
+	import->DebugLines = &com_debugLines;
+	import->numDebugLines = &com_numDebugLines;
 	import->LocateGameData = SV_LocateGameData;
 	import->SetFarPlane = SV_GameSetFarPlane;
 	import->SetSkyPortal = SV_GameSetSkyPortal;

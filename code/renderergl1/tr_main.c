@@ -1562,6 +1562,76 @@ void R_DebugPolygon( int color, int numPoints, float *points ) {
 
 /*
 ====================
+R_DrawDebugLines
+
+FAKK2: the game module's debug lines (G_DebugLine, and the client game
+module's through RE_DebugLine), drawn over the view as fakk2.exe 0x462060
+draws them: unblended in their colour, depth tested without writing depth,
+or with r_debuglines_depthmask written at the nearest depth so that they
+show through everything. With r_stipplelines each line keeps its own
+stipple pattern and width. Not in the sky portal's view.
+====================
+*/
+static void R_DrawDebugLines( void ) {
+	const debugline_t	*line;
+	float				width = -1;
+	unsigned short		factor = 4, pattern = 0xffff;
+	int					i;
+
+	if ( !ri.DebugLines || !*ri.DebugLines || !ri.numDebugLines || !*ri.numDebugLines ) {
+		return;
+	}
+	if ( ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) || tr.viewParms.isPortalSky ) {
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	GL_Bind( tr.whiteImage );
+	if ( r_debuglines_depthmask->integer ) {
+		GL_State( GLS_DEPTHMASK_TRUE );
+		qglDepthRange( 0, 0 );
+	} else {
+		GL_State( 0 );
+	}
+	qglDisableClientState( GL_COLOR_ARRAY );
+	qglDisableClientState( GL_TEXTURE_COORD_ARRAY );
+
+	if ( r_stipplelines->integer ) {
+		qglEnable( GL_LINE_STIPPLE );
+		qglLineStipple( 4, 0xffff );
+		qglLineWidth( 1 );
+	}
+
+	qglBegin( GL_LINES );
+	line = *ri.DebugLines;
+	for ( i = 0; i < *ri.numDebugLines; i++, line++ ) {
+		if ( r_stipplelines->integer
+			&& ( line->width != width || line->factor != factor || line->pattern != pattern ) ) {
+			qglEnd();
+			qglLineStipple( line->factor, line->pattern );
+			qglLineWidth( line->width );
+			qglBegin( GL_LINES );
+			width = line->width;
+			factor = line->factor;
+			pattern = line->pattern;
+		}
+		qglColor4f( line->color[0], line->color[1], line->color[2], line->alpha );
+		qglVertex3fv( line->start );
+		qglVertex3fv( line->end );
+	}
+	qglEnd();
+
+	if ( r_stipplelines->integer ) {
+		qglDisable( GL_LINE_STIPPLE );
+		qglLineStipple( 1, 0xffff );
+		qglLineWidth( 1 );
+	}
+	qglDepthRange( 0, 1 );
+}
+
+/*
+====================
 R_DebugGraphics
 
 Visualization aid for movement clipping debugging
@@ -1629,6 +1699,8 @@ void R_RenderView (viewParms_t *parms) {
 	}
 
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
+
+	R_DrawDebugLines();
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();

@@ -3336,6 +3336,8 @@ void CL_InitRef( void ) {
 	ri.CM_ClusterPVS = CM_ClusterPVS;
 	ri.CM_DrawDebugSurface = CM_DrawDebugSurface;
 	ri.CM_BoxTrace = CM_BoxTrace;
+	ri.DebugLines = &com_debugLines;
+	ri.numDebugLines = &com_numDebugLines;
 
 	ri.FS_ReadFile = FS_ReadFile;
 	ri.FS_FreeFile = FS_FreeFile;

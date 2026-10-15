@@ -1,0 +1,22 @@
+// The game module's debug lines: on zoo, the coordinate system axes (csys_draw,
+// G_DrawCSystem: red forward, green right, blue up, 48 units) drawn from inside a
+// box, framed by a script camera. Shot 0 has the lines depth tested; shot 1 sets
+// r_debuglines_depthmask, which draws them over everything. That cvar is archived:
+// take it out of both sandboxes' config.cfg afterwards.
+probe:
+waitforplayer
+wait 2
+spawn obj_box1.tik origin "-2150 1568 0" targetname "dlbox"
+spawn Camera targetname dlcam origin "-2280 1500 80" angles "15 25 0"
+stuffcmd "set csys_posx -2150; set csys_posy 1568; set csys_posz 16; set csys_z 0; set csys_draw 1"
+wait .2
+cuecamera $dlcam
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set r_debuglines_depthmask 1"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set r_debuglines_depthmask 0; quit"
+end

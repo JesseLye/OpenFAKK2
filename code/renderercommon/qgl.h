@@ -118,6 +118,7 @@ extern void (APIENTRYP qglUnlockArraysEXT) (void);
 	GLE(void, Color3f, GLfloat red, GLfloat green, GLfloat blue) \
 	GLE(void, Color4ubv, const GLubyte *v) \
 	GLE(void, End, void) \
+	GLE(void, LineStipple, GLint factor, GLushort pattern) \
 	GLE(void, Frustum, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble near_val, GLdouble far_val) \
 	GLE(void, Ortho, GLdouble left, GLdouble right, GLdouble bottom, GLdouble top, GLdouble near_val, GLdouble far_val) \
 	GLE(void, TexCoord2f, GLfloat s, GLfloat t) \

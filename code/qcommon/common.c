@@ -120,6 +120,11 @@ int		time_backend;		// renderer backend time
 int			com_frameTime;
 int			com_frameNumber;
 
+// FAKK2: the game module's debug lines; it points com_debugLines at its own
+// array and clears the count each frame, and the renderer adds to and draws them
+debugline_t	*com_debugLines;
+int			com_numDebugLines;
+
 qboolean	com_errorEntered = qfalse;
 qboolean	com_fullyInitialized = qfalse;
 qboolean	com_gameRestarting = qfalse;

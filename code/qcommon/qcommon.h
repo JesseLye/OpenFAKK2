@@ -909,6 +909,9 @@ extern	int		time_backend;		// renderer backend time
 
 extern	int		com_frameTime;
 
+extern	debugline_t	*com_debugLines;
+extern	int			com_numDebugLines;
+
 extern	qboolean	com_errorEntered;
 extern	qboolean	com_fullyInitialized;
 
