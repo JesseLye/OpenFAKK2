@@ -708,7 +708,7 @@ void RB_CalcAlphaFromOneMinusEntity( unsigned char *dstColors )
 /*
 ** RB_CalcWaveColor
 */
-void RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors )
+void RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors, const byte *scaleColor )
 {
 	int i;
 	int v;
@@ -733,8 +733,15 @@ void RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors )
 		glow = 1;
 	}
 
-	v = ri.ftol(255 * glow);
-	color[0] = color[1] = color[2] = v;
+	if ( scaleColor ) {
+		// FAKK2's colorwave: the stage's colour times the wave (0x4943e8)
+		color[0] = (int)( scaleColor[0] * glow );
+		color[1] = (int)( scaleColor[1] * glow );
+		color[2] = (int)( scaleColor[2] * glow );
+	} else {
+		v = ri.ftol(255 * glow);
+		color[0] = color[1] = color[2] = v;
+	}
 	color[3] = 255;
 	v = *(int *)color;
 	
@@ -1044,6 +1051,105 @@ void RB_CalcScaleTexCoords( const float scale[2], float *st )
 	{
 		st[0] *= scale[0];
 		st[1] *= scale[1];
+	}
+}
+
+/*
+** RB_CalcDotAlpha
+**
+** FAKK2's "alphaGen dot" and "oneMinusDot" (fakk2.exe 0x494120, 0x494200):
+** d is the vertex normal's dot product with the direction to the viewer; dot
+** gives min + d * (max - min), d no less than 0, and oneMinusDot puts
+** (1 - d) squared, at most 1, in place of d
+*/
+void RB_CalcDotAlpha( qboolean oneMinus, float min, float max, unsigned char *colors )
+{
+	int		i;
+
+	for ( i = 0; i < tess.numVertexes; i++, colors += 4 )
+	{
+		vec3_t	v;
+		float	d;
+
+		VectorSubtract( backEnd.or.viewOrigin, tess.xyz[i], v );
+		VectorNormalize( v );
+		d = DotProduct( v, tess.normal[i] );
+		if ( oneMinus ) {
+			d = ( 1 - d ) * ( 1 - d );
+			if ( d > 1 ) {
+				d = 1;
+			}
+		} else if ( d < 0 ) {
+			d = 0;
+		}
+		colors[3] = (int)( ( min + d * ( max - min ) ) * 255 );
+	}
+}
+
+/*
+** RB_CalcMacroTexCoords
+**
+** FAKK2's "tcMod macro": coordinates from each vertex's world position,
+** projected on the axis plane its normal faces most (Quake II's base axes,
+** the table at fakk2.exe 0x4fb844, chosen as 0x495240 chooses), scaled by
+** 1/size and divided by the first stage's image size (0x495330)
+*/
+static const vec3_t macroAxes[6][3] = {
+	{ { 0, 0, 1 }, { 1, 0, 0 }, { 0, -1, 0 } },		// floor
+	{ { 0, 0, -1 }, { 1, 0, 0 }, { 0, -1, 0 } },	// ceiling
+	{ { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, -1 } },		// west wall
+	{ { -1, 0, 0 }, { 0, 1, 0 }, { 0, 0, -1 } },	// east wall
+	{ { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } },		// south wall
+	{ { 0, -1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } }		// north wall
+};
+
+static int RB_MacroAxis( const float *n ) {
+	float	best;
+	int		i, axis;
+
+	if ( n[0] == 1 ) return 2;
+	if ( n[0] == -1 ) return 3;
+	if ( n[1] == 1 ) return 4;
+	if ( n[1] == -1 ) return 5;
+	if ( n[2] == 1 ) return 0;
+	if ( n[2] == -1 ) return 1;
+
+	best = 0;
+	axis = 0;
+	for ( i = 0 ; i < 6 ; i++ ) {
+		float	d = DotProduct( macroAxes[i][0], n );
+
+		if ( d > best ) {
+			best = d;
+			axis = i;
+		}
+	}
+	return axis;
+}
+
+void RB_CalcMacroTexCoords( const float scale[2], float *st )
+{
+	const image_t	*image = NULL;
+	float			w = 1, h = 1;
+	int				i;
+
+	if ( tess.shader->stages[0] ) {
+		image = tess.shader->stages[0]->bundle[0].image[0];
+	}
+	if ( image ) {
+		w = image->uploadWidth;
+		h = image->uploadHeight;
+	}
+
+	for ( i = 0; i < tess.numVertexes; i++, st += 2 )
+	{
+		const vec3_t	*axes = macroAxes[RB_MacroAxis( tess.normal[i] )];
+		vec3_t			sVec, tVec;
+
+		VectorScale( axes[1], scale[0], sVec );
+		VectorScale( axes[2], scale[1], tVec );
+		st[0] = DotProduct( tess.xyz[i], sVec ) / w;
+		st[1] = DotProduct( tess.xyz[i], tVec ) / h;
 	}
 }
 

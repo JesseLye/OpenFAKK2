@@ -172,7 +172,9 @@ typedef enum {
 	AGEN_CONST,
 	AGEN_SKY_ALPHA,				// the scene's sky alpha
 	AGEN_ONE_MINUS_SKY_ALPHA,
-	AGEN_FARPLANE_FOG			// FAKK2: distance over the far plane distance
+	AGEN_FARPLANE_FOG,			// FAKK2: distance over the far plane distance
+	AGEN_DOT,					// FAKK2: facing the viewer, from alphaMin to alphaMax
+	AGEN_ONE_MINUS_DOT
 } alphaGen_t;
 
 typedef enum {
@@ -188,7 +190,8 @@ typedef enum {
 	CGEN_LIGHTING_DIFFUSE,
 	CGEN_FOG,				// standard fog
 	CGEN_CONST,				// fixed color
-	CGEN_FARPLANE_FOG		// FAKK2: the far plane's colour, alpha as AGEN_FARPLANE_FOG
+	CGEN_FARPLANE_FOG,		// FAKK2: the far plane's colour, alpha as AGEN_FARPLANE_FOG
+	CGEN_COLORWAVE			// FAKK2: constantColor scaled by rgbWave
 } colorGen_t;
 
 typedef enum {
@@ -245,7 +248,8 @@ typedef enum {
 	TMOD_STRETCH,
 	TMOD_ROTATE,
 	TMOD_ENTITY_TRANSLATE,
-	TMOD_PARALLAX			// FAKK2: offset by the view's position, rates in scroll[]
+	TMOD_PARALLAX,			// FAKK2: offset by the view's position, rates in scroll[]
+	TMOD_MACRO				// FAKK2: world-aligned coordinates, 1/size in scale[]
 } texMod_t;
 
 #define	MAX_SHADER_DEFORMS	3
@@ -321,6 +325,7 @@ typedef struct {
 
 	waveForm_t		alphaWave;
 	alphaGen_t		alphaGen;
+	float			alphaMin, alphaMax;			// FAKK2: for AGEN_DOT and AGEN_ONE_MINUS_DOT
 
 	byte			constantColor[4];			// for CGEN_CONST and AGEN_CONST
 
@@ -1633,6 +1638,8 @@ void	RB_CalcScrollTexCoords( const float scroll[2], float *dstTexCoords );
 void	RB_CalcRotateTexCoords( float rotSpeed, float *dstTexCoords );
 void	RB_CalcScaleTexCoords( const float scale[2], float *dstTexCoords );
 void	RB_CalcParallaxTexCoords( const float rate[2], float *dstTexCoords );
+void	RB_CalcMacroTexCoords( const float scale[2], float *dstTexCoords );
+void	RB_CalcDotAlpha( qboolean oneMinus, float min, float max, unsigned char *colors );
 void	RB_CalcTurbulentTexCoords( const waveForm_t *wf, float *dstTexCoords );
 void	RB_CalcTransformTexCoords( const texModInfo_t *tmi, float *dstTexCoords );
 void	RB_CalcModulateColorsByFog( unsigned char *dstColors );
@@ -1643,7 +1650,7 @@ void	RB_CalcModulateRGBAsByFarplaneFog( unsigned char *colors );
 void	RB_CalcModulateAlphasByFog( unsigned char *dstColors );
 void	RB_CalcModulateRGBAsByFog( unsigned char *dstColors );
 void	RB_CalcWaveAlpha( const waveForm_t *wf, unsigned char *dstColors );
-void	RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors );
+void	RB_CalcWaveColor( const waveForm_t *wf, unsigned char *dstColors, const byte *scaleColor );
 void	RB_CalcAlphaFromEntity( unsigned char *dstColors );
 void	RB_CalcAlphaFromOneMinusEntity( unsigned char *dstColors );
 void	RB_CalcStretchTexCoords( const waveForm_t *wf, float *texCoords );

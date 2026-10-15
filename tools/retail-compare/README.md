@@ -120,6 +120,10 @@ frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+s
 and remove the archived `fps` from both sandboxes' `config.cfg` afterwards.
 `probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
 on `zoo`; copy that tik into both sandboxes' `fakk\models` first.
+`probe-hay` frames the hay (`tcMod macro`) and the slime pool (`rgbGen colorwave`) on
+`creeperpens` from two script cameras.
+`probe-dot` frames the suck juice pool on `swamp2` (`alphaGen oneMinusDot`, an `rgbGen`
+after `nextBundle`).
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

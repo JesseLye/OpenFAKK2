@@ -744,7 +744,10 @@ static void ComputeColors( shaderStage_t *pStage )
 			}
 			break;
 		case CGEN_WAVEFORM:
-			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors );
+			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors, NULL );
+			break;
+		case CGEN_COLORWAVE:
+			RB_CalcWaveColor( &pStage->rgbWave, ( unsigned char * ) tess.svars.colors, pStage->constantColor );
 			break;
 		case CGEN_ENTITY:
 			RB_CalcColorFromEntity( ( unsigned char * ) tess.svars.colors );
@@ -783,6 +786,11 @@ static void ComputeColors( shaderStage_t *pStage )
 		for ( i = 0; i < tess.numVertexes; i++ ) {
 			tess.svars.colors[i][3] = tess.farplaneFogFactor[i] * 255;
 		}
+		break;
+	case AGEN_DOT:
+	case AGEN_ONE_MINUS_DOT:
+		RB_CalcDotAlpha( pStage->alphaGen == AGEN_ONE_MINUS_DOT, pStage->alphaMin, pStage->alphaMax,
+			( unsigned char * ) tess.svars.colors );
 		break;
 	case AGEN_SKY_ALPHA:
 	case AGEN_ONE_MINUS_SKY_ALPHA:
@@ -1006,6 +1014,11 @@ static void ComputeTexCoords( shaderStage_t *pStage ) {
 
 			case TMOD_SCALE:
 				RB_CalcScaleTexCoords( pStage->bundle[b].texMods[tm].scale,
+									 ( float * ) tess.svars.texcoords[b] );
+				break;
+
+			case TMOD_MACRO:
+				RB_CalcMacroTexCoords( pStage->bundle[b].texMods[tm].scale,
 									 ( float * ) tess.svars.texcoords[b] );
 				break;
 

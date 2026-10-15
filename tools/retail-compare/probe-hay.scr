@@ -1,0 +1,20 @@
+// Shader keywords on creeperpens, from two script cameras: the hay on the floor
+// (textures/creeperpens/edenhay, two "tcMod macro" stages) and the slime pool
+// (wa_vmamaslime, two "rgbGen colorwave" stages).
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname haycam origin "150 2600 140" angles "30 0 0"
+wait .2
+cuecamera $haycam
+wait 1
+stuffcmd "screenshot"
+wait 1
+spawn Camera targetname slimecam origin "-448 1400 -400" angles "40 90 0"
+wait .2
+cuecamera $slimecam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

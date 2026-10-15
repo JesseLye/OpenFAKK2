@@ -138,9 +138,6 @@ Missing from OpenFAKK2, to be done:
   `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
-- Shader scripts: `tcMod macro`, `alphaGen dot` and `oneMinusDot`, and `rgbGen colorwave`
-  are approximations (see the renderer's "Shader scripts" below), and retail scripts use
-  all four.
 - TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
 - The client game module's imports that are still stubs: `get_camera_offset` (what
   `+cameralook` turns), `S_SetGlobalAmbientVolumeLevel`, `S_UpdateEntity`'s velocity, and
@@ -1000,9 +997,25 @@ What is implemented, and on what basis:
   parentheses, `rgbGen constant|colorwave|fromEntity|fromClient|global`,
   `alphaGen constant|fromEntity|fromClient|global|skyAlpha|oneMinusSkyAlpha`,
   `depthMask`, `noDepthTest`, `portalsky`, `skyParms full|half`, `tcMod macro|offset`,
-  animated textures of up to 64 frames. From the scripts' own usage. Approximations:
-  `tcMod macro` is a plain scale, `alphaGen dot|oneMinusDot` is opaque, `colorwave`
-  ignores its colour, `surfaceColor` and similar are ignored. From `fakk2.exe`:
+  animated textures of up to 64 frames. From the scripts' own usage; `surfaceColor` and
+  similar are ignored. From `fakk2.exe`: `tcMod macro <s> <t>` (`0x478476`) takes the
+  coordinates from the vertex's world position on the axis plane its normal faces most
+  (Quake II's base axes, the table at `0x4fb844`), times 1/size and divided by the first
+  stage's image size (`0x495240`, `0x495330`); `alphaGen dot|oneMinusDot [min] [max]`
+  (`0x47689b`, `0x47691a`) is min + d (max - min), d the normal's dot product with the
+  direction to the viewer, at least 0, or (1 - d) squared, at most 1, for `oneMinusDot`
+  (`0x494120`, `0x494200`); `rgbGen colorwave <r> <g> <b> <wave>` (`0x4763d7`) scales the
+  colour by the wave (`0x4943e8`). `probe-hay` on `creeperpens` (the hay's two macro
+  stages, the slime pool's two colorwave stages) went from a mean of 15.7/13.1/11.0 and
+  27.5/8.1/16.0 against retail to 12.8/11.1/10.6 and 4.9/8.0/5.0; what is left is the
+  models' lighting and the slime wave's phase. `nextBundle` (`0x476bbc`) moves on to the
+  stage's next texture and goes on parsing the same stage, and `rgbGen` and `alphaGen`
+  write the stage's own fields (`0x476353`, `0x476654`), so one written after
+  `nextBundle` replaces the first texture's. `probe-dot` on `swamp2` frames the suck juice
+  pool, whose `oneMinusDot` stage was opaque blue and whose multitextured stage takes
+  `rgbGen constant 1 .7 0` after its `nextBundle`: blue went from a mean of 5.3 against
+  retail to 1.1, and over eight shots a quarter second apart the pool's red swings over
+  26 to 88 on ours and 32 to 77 on retail with the alpha waves, out of phase.
   `tcMod parallax <s> <t>` (`0x4783ed`) moves the coordinates by the view's x and y times
   the rates (`0x4951f0`); `animMapOnce` (`0x476d71`) is `animMap` stopping on its last
   image, and `frameFromEntity` (`0x476c03`) shows the image the entity's frame names,
