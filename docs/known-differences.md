@@ -85,9 +85,8 @@ Impact: unknown. Possibly none.
 
 ## Cvar differences
 
-From `cvarlist` after loading `zoo` on both engines. Only server-relevant ones are listed;
-retail also has about 70 client, sound and input cvars that OpenFAKK2 lacks until the
-client is ported.
+From `cvarlist` after loading `zoo` on both engines. Only server-relevant ones are listed
+here; the client's are under "Commands and cvars the retail engine has" below.
 
 | Cvar | Retail | OpenFAKK2 | Note |
 | --- | --- | --- | --- |
@@ -101,6 +100,100 @@ client is ported.
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
 | `paused` | 0 | 0 | Was ioquake3's `cl_paused`, renamed; `sv_paused` stays, read-only |
 | `cl_run` | 0 | 0 | Was 1 (Quake III's). Registered at `0x422626` with "0", `CVAR_ARCHIVE`; the run button (`0x41e540`) is set when `in_speed.active == (cl_run == 0)`. Julie walks with `+forward` alone until the player turns "always run" on; the shipped `default.cfg` binds only `SHIFT +speed` and sets no `cl_run` |
+
+## Commands and cvars the retail engine has
+
+Compared on 2026-10-15 by running `cmdlist` and `cvarlist` on `zoo` in the retail client
+and in OpenFAKK2's, and checked against Ritual's design documents (`tools\ritual-docs.ps1`).
+Retail writes only changed cvars to its `config.cfg`, and the sandbox's sets none of
+these, so the retail values are its registered defaults. Retail lists its commands before
+the client game module loads, so the module's own commands are not part of the
+comparison. What the game and client game modules register comes with Ritual's code in
+`code/fakk` and is not listed.
+
+Cvars whose default differs, with the effect where it shows:
+
+| Cvar | Retail | OpenFAKK2 | Note |
+| --- | --- | --- | --- |
+| `r_picmip` | 0 | 1 | Textures load at half size |
+| `r_ambientScale` | 0.5 | 0.6 | `R_SetupEntityLighting` (`0x48f0b5`) multiplies a model's ambient light by it |
+| `r_overBrightBits` | 0 | 1 | |
+| `r_textureMode` | `GL_LINEAR_MIPMAP_NEAREST` | `GL_LINEAR_MIPMAP_LINEAR` | |
+| `r_ignoreFastPath` | 0 | 1 | |
+| `r_swapInterval` | 0 | 1 | |
+| `cl_timeout` | 125 | 200 | |
+
+Missing from OpenFAKK2, to be done:
+
+- `exec menu.cfg` and `exec localized.cfg` at startup (both strings are in `fakk2.exe`):
+  `menu.cfg` gives the menus' defaults (`g_skill`, `cl_altbindings`, `cl_ctrlbindings`,
+  the third-person camera), `localized.cfg` the dialog texts.
+- Weapon groups: `altbind`, `ctrlbind`, `unaltbind`, `unctrlbind`, `altbindlist`,
+  `ctrlbindlist`, the `cl_altbindings` and `cl_ctrlbindings` switches (advanced options),
+  and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
+  `weapgroup<n>` and CTRL+n to `saveweaps <n>`; here those twenty lines fail.
+- Console: `add`, `subtract`, `scale` (cvar arithmetic, which Ritual's TIKI document uses
+  for `r_lodscale`), `alias` and `aliasdump`, `cd`, and the `mapdir` and `com_dropsim`
+  cvars.
+- Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
+  `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
+  `+holster`; no retail file binds either.
+- Sound: `s_loadas8bit` (advanced options' "Force 8-bit Sound"), `s_separation`.
+- The `fps` counter: frame rate and triangle counts at the bottom left, and a warning
+  below 18 frames a second.
+- `cl_avidemo <n>`: a screenshot every frame at 1/n of a second a frame (Ritual's
+  "Dumping Demo AVI").
+- Debug lines: the game's (`G_DebugLine`, which `cam show` and the AI's node display use)
+  and the client game module's are accepted and never drawn; with them
+  `r_debuglines_depthmask`, `r_stipplelines` and the server's `g_numdebuglines`.
+- Renderer: `r_showskel`, `r_showlod`, `r_light_lines`, `r_light_sun_line`,
+  `r_light_nolight`, `r_light_int_scale`, `r_place_sunflare`, `r_skyportal`,
+  `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
+  `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
+  `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
+- Shader scripts: `tcMod parallax` and `frameFromEntity` (an animated stage's frame from
+  the game's `shader frame`), which retail parses and no retail script uses. TIKI
+  definitions: `lightoffset <x y z>` in the setup section, which retail stores with the
+  definition (`TIKI_ParseSetup` `0x44c170`, at `0x44c3eb`) and no retail model uses.
+- TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
+- The client game module's imports that are still stubs: `get_camera_offset` (what
+  `+cameralook` turns), `S_SetGlobalAmbientVolumeLevel`, `S_UpdateEntity`'s velocity, and
+  `R_AddPolyToScene`'s render flags.
+- The interface: `ui_minicon` (the mini console, advanced options), the console as a
+  window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
+  `ui_loadconsolepos`), `ui_drawcoords`, `ui_showmouse`, `ui_hidemouse`, `ui_hud`,
+  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `inv_restart`, `vidmode`, `dialog`,
+  and the tools `notepad`, `editscript`, `editshader`, `maplist` and `soundpicker`. The
+  development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
+  `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
+  `additem`.
+
+Being done elsewhere: saving and loading (`savegame`, `loadgame`, `autosavegame`,
+`loadbrokengame`, `saveshot`), carrying the player's state from level to level
+(`gamemap`), and the intro (`_intro`, `dointro`).
+
+Left out on purpose:
+
+- `cl_classlist`, `cl_classtree`, `cl_classevents`, `cl_dumpclassevents`,
+  `cl_dumpallclasses`, `cl_dumpevents`, `cl_eventhelp`, `cl_eventlist`,
+  `cl_pendingevents`, `cl_eventlimit`, `cl_eventstats`, `cl_showevents` and
+  `cl_timeevents` list and time the retail engine's own C++ classes and events, which
+  OpenFAKK2's engine does not have. (The client game module's `cg_` versions of these
+  work.)
+- What only served Miles, IPX, MIDI, DirectInput, SMP, Windows or the CD:
+  `s_milesdriver`, `s_speaker_type`, `s_khz`, `net_noipx`, `net_noudp`, `in_midi*`,
+  `midiinfo`, `in_debugjoystick`, `in_joyBallScale`, `r_glDriver`, `r_maskMinidriver`,
+  `r_smp`, `r_showSmp`, `r_ext_compress_textures`, `r_ext_gamma_control`,
+  `r_ext_texture_env_combine`, `r_fastdlights`, `r_stereo`, `win_*`, `sys_cpuid`,
+  `arch_*_version`, `fs_cdpath`, `fs_copyfiles`, `fs_restrict`, `cl_cdkey`, `cl_motd`,
+  `cl_updateInfoString`, `gamedll`, `cgamedll`, `viewlog`.
+- The demo loop's command strings (`cliff`, `fog`, `homes`, `pens`, `swamps`, `train`,
+  `loadmaps*`), which name demos the game does not ship.
+
+Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`,
+`sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
+`testmodel`, `nextframe`, `prevframe`, `nextskin`, `prevskin`), and list `twosided` as a
+TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477510`).
 
 ## Rules inferred, not read from the binary
 
@@ -131,8 +224,8 @@ corresponding retail code has not been examined.
   (`0x43ca60`). Two choices of OpenFAKK2's own: bones no animation of the state moves
   take the main animation's frame (retail leaves them zero), and an invalid request
   gives a zero origin with identity axes (retail returns all zeros from the plain
-  function and identity from the lerped one). Bone quaternions scale by 1/32768 as in
-  retail (the TIKI code used 1/32767).
+  function and identity from the lerped one). Bone quaternions scale by 1/32767, as
+  retail decodes them (`0x4d57dc`; see "Skeletal models" under the renderer).
 - **`Anim_AbsoluteDelta`** returns the same value as `Anim_Delta`.
 - **The delta-driven animation flag is never set.** Retail's cached definitions flag only
   four animations, all in the unused `oldjulie` model, and the keyword that sets the flag
@@ -788,9 +881,9 @@ Still different:
 
 ## The renderer and the map viewer
 
-None of this has been compared with the retail game's picture, and none of the retail
-renderer has been read. It follows the SDK headers, the data, and OpenMoHAA's renderer
-where noted.
+Each item below says what it was taken from: the retail renderer in `fakk2.exe` where an
+address is given, and a capture of the retail game's picture where one was compared;
+otherwise the SDK headers, the data, or OpenMoHAA's renderer.
 
 The map viewer (`viewmap <name>` in the client) draws what the map file says, with no
 server and no game module. That differs from the game in ways that are by design:
@@ -1143,9 +1236,10 @@ What is implemented, and on what basis:
   defaults (none, black, culling on); a level script's later changes to it are not seen
   there.
 
-Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
-light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
-beams, level of detail, cross-blending between animations.
+Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read, the
+`.skb` collapse maps are not, and neither is applied). Not compared with retail: fog
+volumes (`fogParms` brushes on `cemetery`, `water` and the swamps), which go through
+Quake III's fog code.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
