@@ -137,7 +137,7 @@ Missing from OpenFAKK2, to be done:
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`),
-  `ui_resetcvars`, `ui_checkrestart`,
+  `ui_checkrestart`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
@@ -619,6 +619,10 @@ Not read, done another way:
   interface lay themselves out again, `0x4223a0`) and sets `r_mode` when that worked;
   OpenFAKK2's renderer has no switch in place, so it sets `r_mode` and runs
   `vid_restart` (`probe-vidmode`: both end at 800x600 with `r_mode` 4).
+  `ui_resetcvars` (`0x40d8f0`, `0x4a44c0`, `0x4a3da0`) sets every cvar a widget of the
+  menu on top links to back to its default (`probe-resetcv`: the same values on both).
+  Retail takes one of two menus its window manager keeps (`+0x14`, else `+0x18`, which a
+  push sets, `0x4a2fd9`); OpenFAKK2 takes the top of its stack, and does nothing without one.
 
   `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
   `ui/bind.scr` header pictures in the title colours) over a label per `binditem`

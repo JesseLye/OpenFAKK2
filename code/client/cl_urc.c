@@ -4269,6 +4269,31 @@ static void URC_Hud_f( void ) {
 	urc_hudOn = atoi( Cmd_Argv( 1 ) ) != 0;
 }
 
+/*
+=================
+URC_ResetCvars_f
+
+ui_resetcvars (fakk2.exe 0x40d8f0, 0x4a44c0, 0x4a3da0): every cvar a
+widget of the menu on top links to goes back to its default.
+=================
+*/
+static void URC_ResetCvars_f( void ) {
+	urcMenu_t	*menu;
+	int			i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		const char	*name = urc_widgets[menu->firstWidget + i].linkcvar;
+
+		if ( name[0] ) {
+			Cvar_Reset( name );
+		}
+	}
+}
+
 void URC_Init( void ) {
 	ui_drawcoords = Cvar_Get( "ui_drawcoords", "0", 0 );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
@@ -4298,6 +4323,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "ui_hud", URC_Hud_f );
 	Cmd_AddCommand( "dialog", URC_Dialog_f );
 	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
+	Cmd_AddCommand( "ui_resetcvars", URC_ResetCvars_f );
 	urc_initialised = qtrue;
 	urc_lastState = -1;
 }
@@ -4322,6 +4348,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "widgetcommand" );
 	Cmd_RemoveCommand( "dialog" );
 	Cmd_RemoveCommand( "ui_testlist" );
+	Cmd_RemoveCommand( "ui_resetcvars" );
 	URC_CloseAllWindows();		// their materials die with the renderer
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer

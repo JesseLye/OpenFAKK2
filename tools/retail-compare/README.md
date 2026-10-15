@@ -141,7 +141,8 @@ with the HUD and after `ui_hud 0`. `probe-dialog` brings up a `dialog` on `zoo`;
 crashes on quitting with it open, which the capture survives. `probe-tlist` does the same
 with `ui_testlist`; retail shows only the first floating window of a run. `probe-vidmode`
 runs `vidmode 4` on `zoo` and shoots at 800x600; remove `r_mode` from both sandboxes'
-`config.cfg` afterwards.
+`config.cfg` afterwards. `probe-resetcv` prints two of the GameCamera menu's cvars before and
+after `ui_resetcvars`; compare the logs (it takes no screenshot).
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as
