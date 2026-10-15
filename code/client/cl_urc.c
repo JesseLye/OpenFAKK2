@@ -1556,6 +1556,7 @@ void URC_PushMenu( const char *name ) {
 	urc_stack[urc_stackDepth++] = menu - urc_menus;
 	URC_ShowMenu( menu );
 	URC_UpdateCatcher();
+	INV_Close();		// not retail's: its weapon bar stays over the menu (cl_inv.c)
 }
 
 void URC_PopMenu( void ) {

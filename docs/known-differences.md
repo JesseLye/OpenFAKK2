@@ -897,6 +897,14 @@ What is implemented, and on what basis:
   a screen of this client's own layout, a row per slot with the items the player
   carries, which the arrows, the wheel and the number keys move through, the attack
   keys equip from, and escape closes.
+- **The inventory bar under a menu (deliberate).** Retail leaves the weapon bar drawn
+  over a menu: Escape and `pushmenu` both reach the same push (`0x40bf90`), which closes
+  the full-screen inventory instead of pushing (`0x408470`) but leaves the bar alone,
+  and the bar's own five-second close event (`0x408ac0`) is all that removes it, so
+  the bar covers the main menu's buttons for the rest of those seconds
+  (`probe-menu`: retail's bar is still over the menu 4 s after it opened and gone by
+  12 s). OpenFAKK2 closes the bar when a menu is pushed and does not draw it while a
+  menu is up, so the main menu comes up clear.
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for
