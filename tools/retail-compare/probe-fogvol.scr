@@ -7,7 +7,7 @@ probe:
 waitforplayer
 wait 40
 spawn Camera targetname fogcam1 origin "1523 -1968 784" angles "30 0 0"
-spawn Camera targetname fogcam2 origin "1823 -2200 560" angles "0 90 0"
+spawn Camera targetname fogcam2 origin "1823 -2120 600" angles "10 90 0"
 spawn Camera targetname fogcam3 origin "-2391 -1216 1200" angles "35 0 0"
 wait .2
 cuecamera $fogcam1

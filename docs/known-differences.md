@@ -1437,10 +1437,10 @@ What is implemented, and on what basis:
   less than 0 and with no ceiling, its low byte kept (`0x4944f0`, `0x494650`,
   `0x4945c0`), where Quake III takes 1 - R_FogFactor. `probe-fogvol` on `cemetery` (from
   above the blood and the water entrances' fogs) went from a mean of 20.8 in red and 16.7
-  in blue against retail to 1.7 and 1.8. From inside the blood fog the walls now match,
-  but under them ours draws the floor black and a pillar red where retail draws the
-  floor red and the pillar black (10.3 in red; the same before this change), not yet
-  understood. `fogParms`' fifth value is skipped as retail skips it; `foggen <wave>`
+  in blue against retail to 1.7 and 1.8, and from inside the blood fog (a pool 48 units
+  deep, the camera at z 600) it matches within 1.7. (A first camera at z 560 was under the
+  pool, inside solid ground, where the two engines draw the unvisible world differently;
+  no player sees from there.) `fogParms`' fifth value is skipped as retail skips it; `foggen <wave>`
   (`0x4772da`), which varies the depth for opaque and no retail shader uses, is not read.
 
 Not implemented: level of detail (the `.tan` collapse maps and `minLod` are read, the
