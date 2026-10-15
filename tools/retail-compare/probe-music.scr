@@ -1,0 +1,12 @@
+// swamp1's soundtrack on zoo, which has no soundtrack and no ambient sound, so a
+// loopback recording holds the music alone (sound-record.ps1 -Probe probe-music -Music 0.6):
+// its level against the tone probes' shows how the music sits against the world.
+probe:
+waitforplayer
+wait 2
+stuffcmd "loadsoundtrack music/swamp1.mus"
+wait 1
+stuffcmd "playsong normal"
+wait 40
+stuffcmd "pendingevents"
+end
