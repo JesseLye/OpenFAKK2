@@ -1,0 +1,56 @@
+TIKI
+// Effect test (probe-sprites.scr): explsmoke held still with the explosion's timing
+// (life 2) under three alpha rules, left to right: fadein 0.5 plus fade (as
+// fx_explosion.tik's smoke), fade alone, and fadedelay 1 alone.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      cache explsmoke.spr
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+      {
+      client
+         {
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 0 100 0
+            life 2.0
+            fadein 0.5
+            fade
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 0 0 0
+            life 2.0
+            fade
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 0 -100 0
+            life 2.0
+            fadedelay 1
+            )
+         }
+      }
+   }

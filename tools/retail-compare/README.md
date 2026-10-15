@@ -53,6 +53,31 @@ retail game again. Choose the probe with `-Probe`:
   6 units short of retail (see `docs/known-differences.md`, "With scripted input");
   `-Extra "+set sv_fps 40"` closes it.
 
+Weapon effects are drawn by the client, so these probes are for the real client on
+`zoo` (`.claude\skills\retail-probe\scripts\probe-client.ps1` for ours,
+`run-retail-client.ps1 -After "+script thread <probe>.scr::probe"` for retail, the probe
+copied to `build\sandbox\retail\fakk\maps`) and are compared by their screenshots:
+
+- `probe-shotgun` fires the shotgun's plasma blast (its holes and green puffs) and a
+  grenade; `probe-rocket` fires a rocket at the floor (explosion, smoke, soot);
+  `probe-sword` swings the green sword and the fire sword (swipes).
+- `probe-fx-guns` (chaingun, uzi, hand gun), `probe-fx-range` (crossbow, flamethrower,
+  soul sucker) and `probe-fx-melee` (electric sword, axe, chain sword, flashbang, gas
+  sling) sweep the other weapons.
+- `probe-fx-expl` spawns the flashbang's, gas pod's and soul sucker's explosion models.
+  `probe-sprites` and `probe-fx-order` spawn the test models in `fx\` (still sprites,
+  the fade rules, overlapping sprites); copy `fx\*.tik` into each engine's
+  `fakk\models` first. A model spawned by a script does not start its animation, so the
+  probes name it and send `anim idle`.
+
+A dual-handed weapon's primary fire is `+attackleft` and its alternate `+attackright`
+(`global/julie_torso.st`); one-handed weapons attack with `+attackright`.
+
+The retail client drops the end of a long command line without a word: with
+`run-retail-client.ps1 -Extra "+set r_mode 4"` a `+script thread` naming a probe longer
+than 14 characters never ran (the game loaded and the probe did nothing). Keep client
+probe names short, or the other arguments.
+
 `-RetailTwice` runs the retail game a second time in place of OpenFAKK2. The game seeds
 its random numbers from the clock, so retail differs from itself on some maps; this shows
 by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.

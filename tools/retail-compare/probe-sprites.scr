@@ -1,0 +1,28 @@
+// Effect sprites in isolation, for the real client on zoo, where the player starts
+// looking down +x. Spawns tools/retail-compare/fx/test_sprites.tik (still sprites) and
+// test_fade.tik (the alpha rules over a 2 s life) ahead of her and screenshots them;
+// copy the fx tiks into each engine's fakk/models first. A spawned model does not
+// start its animation by itself, so each is named and sent "anim idle", which runs
+// the entry commands that make the effects.
+probe:
+waitforplayer
+wait 2
+spawn test_sprites.tik origin "-2100 1568 120" targetname "fxsprites"
+wait 0.1
+$fxsprites anim idle
+wait 1
+stuffcmd "screenshot"
+wait 1
+spawn test_fade.tik origin "-2050 1568 230" targetname "fxfade"
+wait 0.1
+$fxfade anim idle
+wait 0.25
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.75
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "pendingevents"
+end

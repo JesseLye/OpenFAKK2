@@ -257,7 +257,7 @@ refEntity_t *RE_GetRenderEntity( int entityNumber ) {
 
 /*
 =====================
-RE_DebugLine, RE_Swipe*
+RE_DebugLine
 
 Not drawn yet.
 =====================
@@ -265,13 +265,93 @@ Not drawn yet.
 void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float b, float alpha ) {
 }
 
+/*
+=====================
+RE_SwipeBegin, RE_SwipePoint, RE_SwipeEnd
+
+FAKK2: the client game module's swipes (fakk2.exe 0x480eb0, 0x480f50; the
+end call does nothing). The first swipe begun in a frame clears the ones
+from earlier frames, so a swipe that is no longer handed over stays and
+fades out (R_AddSwipeSurfaces) until a new one is begun. Past 32 swipes in
+a frame a new one is ignored and its edges go to the last.
+=====================
+*/
+static srfSwipe_t	r_swipes[MAX_SWIPES];
+static int			r_numSwipes;
+static int			r_swipeFrame = -1;
+
 void RE_SwipeBegin( float thistime, float life, qhandle_t shader ) {
+	srfSwipe_t	*swipe;
+
+	if ( tr.frameCount != r_swipeFrame ) {
+		r_numSwipes = 0;
+	} else if ( r_numSwipes >= MAX_SWIPES ) {
+		return;
+	}
+
+	swipe = &r_swipes[r_numSwipes++];
+	swipe->surfaceType = SF_SWIPE;
+	swipe->life = life;
+	swipe->thistime = thistime;
+	swipe->lastDrawTime = 0;
+	swipe->shader = shader;
+	swipe->numPoints = 0;
+
+	r_swipeFrame = tr.frameCount;
 }
 
 void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time ) {
+	srfSwipe_t		*swipe;
+	swipePoint_t	*point;
+
+	if ( !r_numSwipes ) {
+		return;
+	}
+	swipe = &r_swipes[r_numSwipes - 1];
+	if ( swipe->numPoints >= MAX_SWIPE_POINTS ) {
+		return;
+	}
+	point = &swipe->points[swipe->numPoints++];
+	VectorCopy( p1, point->point1 );
+	VectorCopy( p2, point->point2 );
+	point->time = time;
 }
 
 void RE_SwipeEnd( void ) {
+}
+
+/*
+=====================
+R_AddSwipeSurfaces
+
+FAKK2: adds the swipes that still have edges to the view, as world surfaces
+with no fog (fakk2.exe 0x480fd0). A swipe drawn again in a later frame
+without being handed over anew is aged by the time that has passed, which
+fades it out.
+=====================
+*/
+void R_AddSwipeSurfaces( void ) {
+	int		i;
+
+	tr.currentEntityNum = REFENTITYNUM_WORLD;
+	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
+
+	for ( i = 0 ; i < r_numSwipes ; i++ ) {
+		srfSwipe_t	*swipe = &r_swipes[i];
+		int			elapsed = 0;
+
+		if ( !swipe->numPoints ) {
+			continue;
+		}
+		if ( swipe->lastDrawTime ) {
+			elapsed = tr.refdef.time - swipe->lastDrawTime;
+		}
+		swipe->lastDrawTime = tr.refdef.time;
+		if ( elapsed ) {
+			swipe->thistime += elapsed;
+		}
+		R_AddDrawSurf( &swipe->surfaceType, R_GetShaderByHandle( swipe->shader ), 0, 0 );
+	}
 }
 
 

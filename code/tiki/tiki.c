@@ -212,19 +212,6 @@ static tikiCommand_t *TIKI_AddCommand( tikiCommandList_t *list, int frame, char 
 	return cmd;
 }
 
-static void TIKI_AppendArgs( tikiCommand_t *cmd, char **tokens, int numTokens ) {
-	char	**grown = TIKI_Alloc( ( cmd->numArgs + numTokens ) * sizeof( char * ) );
-	int		i;
-
-	memcpy( grown, cmd->args, cmd->numArgs * sizeof( char * ) );
-	for ( i = 0 ; i < numTokens ; i++ ) {
-		grown[cmd->numArgs + i] = TIKI_CopyString( tokens[i] );
-	}
-	free( cmd->args );
-	cmd->args = grown;
-	cmd->numArgs += numTokens;
-}
-
 static void TIKI_FreeCommands( tikiCommandList_t *list ) {
 	int		i, j;
 
@@ -639,32 +626,27 @@ static tikiAnim_t *TIKI_NewAnim( tiki_t *tiki ) {
 	return &tiki->anims[tiki->numAnims++];
 }
 
-// returns qfalse when the selector is not one; the line then continues the previous command
-static qboolean TIKI_ParseFrameSelector( const char *token, int *frame ) {
-	const char	*p;
-
-	if ( !Q_stricmp( token, "first" ) ) {
-		*frame = 0;
-	} else if ( !Q_stricmp( token, "last" ) ) {
-		*frame = TIKI_FRAME_CMD_LAST;
-	} else if ( !Q_stricmp( token, "every" ) ) {
-		*frame = TIKI_FRAME_CMD_EVERY_FRAME;
-	} else if ( !Q_stricmp( token, "exit" ) ) {
-		*frame = TIKI_FRAME_CMD_EXIT;
-	} else if ( !Q_stricmp( token, "entry" ) || !Q_stricmp( token, "enter" ) ) {
-		*frame = TIKI_FRAME_CMD_ENTRY;
-	} else {
-		for ( p = token ; *p ; p++ ) {
-			if ( !isdigit( (unsigned char)*p ) ) {
-				return qfalse;
-			}
-		}
-		if ( p == token ) {
-			return qfalse;
-		}
-		*frame = atoi( token );
+// the frame a command line's first token names (fakk2.exe 0x44b760): "start" and
+// "first" are the first frame, "last" and "end" the last, "every", "exit" and
+// "entry" or "enter" the special frames, and anything else is read as a number,
+// so a word there is frame 0
+static int TIKI_ParseFrameSelector( const char *token ) {
+	if ( !Q_stricmp( token, "start" ) || !Q_stricmp( token, "first" ) ) {
+		return 0;
 	}
-	return qtrue;
+	if ( !Q_stricmp( token, "last" ) || !Q_stricmp( token, "end" ) ) {
+		return TIKI_FRAME_CMD_LAST;
+	}
+	if ( !Q_stricmp( token, "every" ) ) {
+		return TIKI_FRAME_CMD_EVERY_FRAME;
+	}
+	if ( !Q_stricmp( token, "exit" ) ) {
+		return TIKI_FRAME_CMD_EXIT;
+	}
+	if ( !Q_stricmp( token, "entry" ) || !Q_stricmp( token, "enter" ) ) {
+		return TIKI_FRAME_CMD_ENTRY;
+	}
+	return atoi( token );
 }
 
 static void TIKI_ParseSetup( tikiParse_t *parse, char **tokens, int numTokens ) {
@@ -747,6 +729,8 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 	tiki_t		*tiki = parse->tiki;
 	int			level = 0;
 	int			animIndex = -1;
+	qboolean	inEffectBlock = qfalse;	// between the "(" and ")" lines of a client effect
+	int			lastFrame = 0;			// the frame of the command line above
 	char		*line = text;
 
 	while ( line && *line ) {
@@ -856,16 +840,30 @@ static void TIKI_ParseText( tikiParse_t *parse, char *text, int depth ) {
 				}
 			} else if ( level == 2 ) {
 				sub = !Q_stricmp( head, "server" ) ? SUB_SERVER : SUB_CLIENT;
+				inEffectBlock = qfalse;
+				lastFrame = 0;
 			} else if ( level == 3 && animIndex >= 0 ) {
 				tikiAnim_t			*anim = &tiki->anims[animIndex];
 				tikiCommandList_t	*list = sub == SUB_SERVER ? &anim->serverCmds : &anim->clientCmds;
-				int					frame;
 
-				if ( TIKI_ParseFrameSelector( head, &frame ) ) {
-					TIKI_AddCommand( list, frame, tokens + 1, numTokens - 1 );
-				} else if ( list->count ) {
-					// client effect commands spread their parameters over following lines
-					TIKI_AppendArgs( &list->cmds[list->count - 1], tokens, numTokens );
+				// As the retail engine reads them (fakk2.exe 0x44b760): a client
+				// effect spreads its parameters over the lines between a "(" line
+				// and a ")" line, and each of those lines, the brackets included,
+				// is a command of its own at the frame of the line above, with no
+				// frame selector. The client game module needs it so: "(" and ")"
+				// are commands (StartBlock, EndBlock in cg_commands.cpp), and ")"
+				// is what makes the effect. Any other line starts with its frame.
+				if ( !strcmp( head, "(" ) ) {
+					inEffectBlock = qtrue;
+					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
+				} else if ( !strcmp( head, ")" ) ) {
+					inEffectBlock = qfalse;
+					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
+				} else if ( inEffectBlock ) {
+					TIKI_AddCommand( list, lastFrame, tokens, numTokens );
+				} else {
+					lastFrame = TIKI_ParseFrameSelector( head );
+					TIKI_AddCommand( list, lastFrame, tokens + 1, numTokens - 1 );
 				}
 			}
 			break;

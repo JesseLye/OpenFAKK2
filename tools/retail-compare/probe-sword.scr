@@ -1,0 +1,44 @@
+// Sword swipes, for the real client on zoo: swings the green sword, then the fire
+// sword, with screenshots through each swing. The trail is a swipe: the sword's
+// "swipeon" frame command makes the client hand the renderer a strip through the
+// blade's two tags every frame, fading with age. Right-hand weapons attack with
+// +attackright.
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_sword.tik"
+wait 0.5
+stuffcmd "use GreenSword right"
+wait 2
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.15
+stuffcmd "screenshot"
+wait 0.3
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "give weapon_firesword.tik"
+wait 0.5
+stuffcmd "use FireSword right"
+wait 2
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.15
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pendingevents"
+end

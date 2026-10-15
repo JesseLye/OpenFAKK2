@@ -1,0 +1,46 @@
+// Shotgun fire effects. The holes, the impact puffs and the muzzle burst are client
+// frame commands on the weapon's "fire" animation (weapon_shotgun.tik); the grenade's
+// explosion is the fx_grenade_explosion.tik event entity.
+// For the real client (probe-client.ps1, or run-retail-client.ps1 on retail): turn a
+// little right and aim a little down, so the blast lands beside Julie rather than
+// behind her, fire the primary and take screenshots of the burst, the puffs and the
+// holes; then fire the alternate (grenade) and catch its explosion. (Not a sidestep:
+// moving while the fire animation plays carries Julie much further on ours.)
+// A dual-handed weapon's primary is +attackleft, its alternate +attackright
+// (julie_torso.st, CHECK_ATTACK_LEFT / CHECK_ATTACK_RIGHT).
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 2
+stuffcmd "+right"
+wait 0.2
+stuffcmd "-right"
+stuffcmd "+lookdown"
+wait 0.25
+stuffcmd "-lookdown"
+wait 0.3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.6
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 2.15
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

@@ -205,6 +205,7 @@ static qhandle_t R_RegisterSpr( const char *name, model_t *mod ) {
 	}
 	mod->type = MOD_SPRITE;
 	mod->spriteShader = sh;
+	R_SpriteHalfSize( sh, &mod->spriteHalfWidth, &mod->spriteHalfHeight );
 	return mod->index;
 }
 

@@ -1,0 +1,88 @@
+TIKI
+// Effect test (probe-sprites.scr): five sprites from the weapon effects, side by
+// side, standing still for 30 seconds with no fade, so a screenshot compares their
+// size, colour, blending and orientation between engines. Left to right as seen from
+// a player looking down +x: explsmoke, explsmokewhite, explosion1, explshock,
+// plasmasmoke; the last row repeats explsmoke and explosion1 rolled 45 degrees.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      cache explsmoke.spr
+      cache explsmokewhite.spr
+      cache explosion1.spr
+      cache explshock.spr
+      cache plasmasmoke.spr
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+      {
+      client
+         {
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 0 150 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmokewhite.spr
+            offset 0 75 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explosion1.spr
+            offset 0 0 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explshock.spr
+            offset 0 -75 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model plasmasmoke.spr
+            offset 0 -150 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 0 75 -90
+            angles 0 0 45
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explosion1.spr
+            offset 0 -75 -90
+            angles 0 0 45
+            life 30
+            )
+         }
+      }
+   }

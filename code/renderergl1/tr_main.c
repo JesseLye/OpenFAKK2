@@ -1184,6 +1184,89 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 
 /*
 =================
+R_AddSpriteDrawSurf
+
+FAKK2: a .spr model's surface. The retail renderer keeps sprites in a list
+of their own that is sorted apart and drawn after every other surface of
+the view (fakk2.exe 0x4643c0 builds it, 0x463e40 sorts and submits both
+lists), so a sprite whose shader sorts as opaque (explosion smoke) is never
+painted over by a wall drawn after it. Here the sprite's key gets the top
+bit, which no other surface uses, and R_SortSpriteSurfs orders that tail.
+=================
+*/
+static void R_AddSpriteDrawSurf( trRefEntity_t *ent, shader_t *shader ) {
+	R_AddDrawSurf( &entitySurface, shader, R_SpriteFogNum( ent ), 0 );
+	tr.refdef.drawSurfs[( tr.refdef.numDrawSurfs - 1 ) & DRAWSURF_MASK].sort |= QSORT_SPRITE_BIT;
+}
+
+/*
+=================
+R_SortSpriteSurfs
+
+FAKK2: orders the sprite surfaces at the end of the sorted list the way the
+retail renderer orders its sprite list (fakk2.exe 0x464516): by the key
+sortedIndex << 22 | (2^28 - the squared distance from the view, at least 0),
+smallest first. The distance term is 28 bits wide and is ORed over the low
+six bits of the shader index, so for every sprite nearer than 2048 units
+those bits read as ones: sprites whose shaders fall in the same block of 64
+sorted shaders are drawn back to front, whatever their shaders, and blocks
+in shader order. Which shaders share a block depends on the sorted shader
+list, which is not the same as retail's.
+=================
+*/
+typedef struct {
+	unsigned	key;
+	drawSurf_t	surf;
+} spriteSort_t;
+
+static spriteSort_t	spriteSorts[MAX_DRAWSURFS];
+
+static int R_CompareSpriteSorts( const void *a, const void *b ) {
+	unsigned	ka = ( (const spriteSort_t *)a )->key;
+	unsigned	kb = ( (const spriteSort_t *)b )->key;
+
+	return ka < kb ? -1 : ka > kb;
+}
+
+static void R_SortSpriteSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
+	int		first, i, count;
+
+	for ( first = numDrawSurfs ; first > 0 ; first-- ) {
+		if ( !( drawSurfs[first - 1].sort & QSORT_SPRITE_BIT ) ) {
+			break;
+		}
+	}
+	count = numDrawSurfs - first;
+	if ( count < 2 ) {
+		return;
+	}
+
+	for ( i = 0 ; i < count ; i++ ) {
+		drawSurf_t	*surf = &drawSurfs[first + i];
+		shader_t	*shader;
+		int			entityNum, fogNum, dlightMap;
+		vec3_t		delta;
+		double		distance;
+
+		R_DecomposeSort( surf->sort, &entityNum, &shader, &fogNum, &dlightMap );
+		VectorSubtract( tr.refdef.entities[entityNum].e.origin, tr.viewParms.or.origin, delta );
+		distance = DotProduct( delta, delta );
+		if ( distance > 268435456.0 ) {
+			distance = 268435456.0;
+		}
+		spriteSorts[i].key = ( (unsigned)shader->sortedIndex << 22 ) | (unsigned)( 268435456.0 - distance );
+		spriteSorts[i].surf = *surf;
+	}
+
+	qsort( spriteSorts, count, sizeof( spriteSorts[0] ), R_CompareSpriteSorts );
+
+	for ( i = 0 ; i < count ; i++ ) {
+		drawSurfs[first + i] = spriteSorts[i].surf;
+	}
+}
+
+/*
+=================
 R_DecomposeSort
 =================
 */
@@ -1255,6 +1338,9 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 	// sort the drawsurfs by sort type, then orientation, then shader
 	R_RadixSort( drawSurfs, numDrawSurfs );
+
+	// FAKK2: the sprites, which that sort put last, in the retail order
+	R_SortSpriteSurfs( drawSurfs, numDrawSurfs );
 
 	// the sky portal's view goes underneath this one
 	R_RenderSkyPortal();
@@ -1336,7 +1422,7 @@ void R_AddEntitySurfaces (void) {
 					continue;
 				}
 				ent->e.radius = R_SpriteRadius( sprModel->spriteShader, ent->e.scale );
-				R_AddDrawSurf( &entitySurface, sprModel->spriteShader, R_SpriteFogNum( ent ), 0 );
+				R_AddSpriteDrawSurf( ent, sprModel->spriteShader );
 				continue;
 			}
 		}
@@ -1382,7 +1468,7 @@ void R_AddEntitySurfaces (void) {
 					}
 					ent->e.reType = RT_SPRITE;
 					ent->e.radius = R_SpriteRadius( tr.currentModel->spriteShader, ent->e.scale );
-					R_AddDrawSurf( &entitySurface, tr.currentModel->spriteShader, R_SpriteFogNum( ent ), 0 );
+					R_AddSpriteDrawSurf( ent, tr.currentModel->spriteShader );
 					break;
 				case MOD_MDR:
 					R_MDRAddAnimSurfaces( ent );
@@ -1420,6 +1506,11 @@ R_GenerateDrawSurfs
 */
 void R_GenerateDrawSurfs( void ) {
 	R_AddWorldSurfaces ();
+
+	// FAKK2: the client game module's swipes, in views of the world
+	if ( !( tr.refdef.rdflags & RDF_NOWORLDMODEL ) ) {
+		R_AddSwipeSurfaces();
+	}
 
 	R_AddPolygonSurfaces();
 

@@ -1,0 +1,48 @@
+// Gun effects, for the real client on zoo: the chaingun (dual, primary is
+// +attackleft), the uzi and the hand gun (one-handed, +attackright), each fired at
+// the floor a little ahead, with screenshots while firing and after. Their flashes,
+// tracers, impact puffs and holes are client frame commands on the fire animations.
+probe:
+waitforplayer
+wait 2
+stuffcmd "+lookdown"
+wait 0.15
+stuffcmd "-lookdown"
+stuffcmd "give weapon_chaingun.tik"
+wait 0.5
+stuffcmd "use Chaingun dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.4
+stuffcmd "screenshot"
+wait 0.4
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 0.6
+stuffcmd "screenshot"
+wait 1
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+wait 2.5
+stuffcmd "+attackright"
+wait 0.4
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 0.6
+stuffcmd "screenshot"
+wait 1
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+wait 2.5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.6
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pendingevents"
+end

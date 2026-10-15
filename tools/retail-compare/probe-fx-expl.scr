@@ -1,0 +1,26 @@
+// Weapon explosion effects without the weapon, for the real client on zoo: spawns the
+// flashbang's, the gas pod's and the soul sucker projectile's explosion models ahead
+// of the player one after another, with screenshots as each goes off and after.
+probe:
+waitforplayer
+wait 2
+spawn fx_flashexpl.tik origin "-2150 1568 130"
+wait 0.15
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 2
+spawn fx_gasexpl.tik origin "-2150 1568 110"
+wait 0.15
+stuffcmd "screenshot"
+wait 0.8
+stuffcmd "screenshot"
+wait 3
+spawn fx_soulsuckerexpl.tik origin "-2150 1568 130"
+wait 0.15
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pendingevents"
+end

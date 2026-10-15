@@ -1656,9 +1656,29 @@ static qboolean ParseShader( char **text )
 			}
 			continue;
 		}
-		// FAKK2 parameters for its map compiler and sprite models
+		// FAKK2: how a sprite's quad is laid out. As in retail, it also puts
+		// the sprite back to its image's size, so a spriteScale must follow it
+		else if ( !Q_stricmp( token, "spriteGen" ) ) {
+			token = COM_ParseExt( text, qfalse );
+			if ( !token[0] ) {
+				ri.Printf( PRINT_WARNING, "WARNING: missing spritegen parm in shader '%s'\n", shader.name );
+				continue;
+			}
+			if ( !Q_stricmp( token, "parallel" ) ) {
+				shader.spriteGen = SPRITEGEN_PARALLEL;
+			} else if ( !Q_stricmp( token, "parallel_oriented" ) ) {
+				shader.spriteGen = SPRITEGEN_PARALLEL_ORIENTED;
+			} else if ( !Q_stricmp( token, "parallel_upright" ) ) {
+				shader.spriteGen = SPRITEGEN_PARALLEL_UPRIGHT;
+			} else if ( !Q_stricmp( token, "oriented" ) ) {
+				shader.spriteGen = SPRITEGEN_ORIENTED;
+			}
+			shader.spriteScale = 1.0f;
+			continue;
+		}
+		// FAKK2 parameters for its map compiler
 		else if ( !Q_stricmp( token, "surfaceColor" ) || !Q_stricmp( token, "surfaceDensity" )
-			|| !Q_stricmp( token, "subdivisions" ) || !Q_stricmp( token, "spriteGen" )
+			|| !Q_stricmp( token, "subdivisions" )
 			|| !Q_stricmp( token, "deform" )
 			|| !Q_stricmp( token, "fogOnly" ) || !Q_stricmp( token, "force32bit" ) ) {
 			SkipRestOfLine( text );
@@ -3176,9 +3196,10 @@ int RE_GetShaderHeight( qhandle_t hShader ) {
 ====================
 R_SpriteRadius
 
-FAKK2: a sprite's half size on screen is its image's size scaled by the
-shader's spriteScale and the entity's scale. (How the retail renderer sizes
-sprites has not been read; this follows OpenMoHAA's.)
+FAKK2: the reach a sprite is given when the scene is built, for the fog
+test: its image's width scaled by the shader's spriteScale and the entity's
+scale (fakk2.exe 0x4643c0). The quad itself is laid out from the image's
+half width and half height (RB_SurfaceSprite).
 ====================
 */
 float R_SpriteRadius( shader_t *sh, float scale ) {
@@ -3191,7 +3212,22 @@ float R_SpriteRadius( shader_t *sh, float scale ) {
 	if ( scale ) {
 		size *= scale;
 	}
-	return size * 0.5f;
+	return size;
+}
+
+/*
+====================
+R_SpriteHalfSize
+
+FAKK2: half the width and height of a sprite shader's first image, the size
+of a .spr model's quad before scaling (fakk2.exe 0x491e40).
+====================
+*/
+void R_SpriteHalfSize( shader_t *sh, float *halfWidth, float *halfHeight ) {
+	image_t	*image = R_ShaderFirstImage( sh );
+
+	*halfWidth = ( image ? image->width : 32 ) * 0.5f;
+	*halfHeight = ( image ? image->height : 32 ) * 0.5f;
 }
 
 /*

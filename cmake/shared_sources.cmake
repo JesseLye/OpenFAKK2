@@ -6,6 +6,7 @@ include(utils/disable_warnings)
 set(COMMON_SOURCES
     ${SOURCE_DIR}/qcommon/alias.c
     ${SOURCE_DIR}/qcommon/cm_load.c
+    ${SOURCE_DIR}/qcommon/cm_marks.c
     ${SOURCE_DIR}/qcommon/cm_patch.c
     ${SOURCE_DIR}/qcommon/cm_polylib.c
     ${SOURCE_DIR}/qcommon/cm_test.c

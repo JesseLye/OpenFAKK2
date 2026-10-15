@@ -19,6 +19,7 @@ choosing how to run it, and reading what comes back.
 | Server-side state after scripted keys, compared with retail | `tools\retail-compare\compare-player.ps1 -Map <m> -Probe <p>` (headless test player) | Yes: retail runs the same probe |
 | Anything that needs aim pitch, the mouse, the camera or the HUD | `scripts\probe-client.ps1 -Probe <p> -Map <m>` (the real client, this repo's build) | No retail run; compare builds instead |
 | "Did my change fix it?" | `probe-client.ps1` twice: `-Bin <main checkout>\build\x86-Release\Release -Name before`, then the default build `-Name fixed` | Before/after |
+| What the client draws (weapon effects, decals, sprites, swipes) | `probe-client.ps1` for ours and `tools\retail-compare\run-retail-client.ps1 -After "+script thread <p>.scr::probe"` for retail, the probe taking `screenshot`s | Yes: compare the screenshots |
 
 The headless test player (`sv_testplayer 1`) only knows the movement and attack keys:
 `+forward +back +moveleft +moveright +moveup +movedown +left +right +attackleft
@@ -30,6 +31,16 @@ obvious with 0.6 s of `+lookdown`.
 
 Both runners resolve paths from their own location, so a worktree tests its own build in
 its own `build\` tree. Point `-Bin` at another checkout's build to compare two versions.
+
+For a picture comparison, copy the probe into `build\sandbox\retail\fakk\maps` (run
+`run-retail.ps1` once, after dot-sourcing `common.ps1`, to create that sandbox in a fresh
+worktree); retail's screenshots land in `build\sandbox\retail\fakk\screenshots` as
+`.tg` files (a truncated name; they are ordinary TGAs). The retail client silently drops
+the end of a long command line, so a long probe name plus `-Extra` means the probe never
+starts: keep client probe names short. To test one effect alone, spawn its model from
+the probe (`spawn fx_explosion.tik origin "x y z" targetname "fx"`); a model spawned by a
+script does not start its animation, so follow with `$fx anim idle` when its effects are
+animation commands. `tools\retail-compare\fx` has test models for sprites.
 
 ## Write the probe
 
