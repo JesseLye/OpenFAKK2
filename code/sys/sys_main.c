@@ -770,6 +770,11 @@ void Sys_SigHandler( int signal )
 	else
 	{
 		signalcaught = qtrue;
+#ifdef _WIN32
+		if ( signal == SIGSEGV || signal == SIGILL || signal == SIGFPE ) {
+			Sys_CrashReport();
+		}
+#endif
 		VM_Forced_Unload_Start();
 #ifndef DEDICATED
 		CL_Shutdown(va("Received signal %d", signal), qtrue, qtrue);

@@ -1784,6 +1784,22 @@ What is implemented, and on what basis:
   largest has 604 vertexes); and OpenFAKK2 leaves out a `RF_THIRD_PERSON` model outside a
   portal before culling, so no `r_showlod` figures show over it, where retail still works
   it out and draws them.
+- **A shader made in the middle of a frame** (`FixRenderCommandList`, `tr_shader.c`;
+  ioquake3's, not taken from retail). A shader sorts among the others, so the draw
+  surfaces already queued for the frame are renumbered past it. The walk over the
+  queued commands went on until it met the end-of-list mark, which is only written
+  when the frame is issued; past the commands queued so far it read what earlier,
+  longer frames had left, and could take a float in one of them for a draw surfaces
+  command and its pointer. The menus register their pictures as they are first drawn
+  (`URC_LoadWidgetShaders`), so this is where it showed: with the "Starting Julie's
+  House" autosave of a session that had played `training` loaded, the main menu's
+  first frame crashed (reading `0x41800000`, 16.0, as the draw surfaces' address),
+  with the rebuilt or the retail `gamex86.dll`. The walk now stops at the end of the
+  commands queued, and steps over the screenshot, video frame, colour mask and depth
+  clear commands, where it used to stop and leave the draw surfaces after them
+  unrenumbered. Other saves and states did not crash, as what lies past the queued
+  commands depends on the frames before: `probe-lsload` needs that session's save
+  (see its header) and crashed on every run before the change.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

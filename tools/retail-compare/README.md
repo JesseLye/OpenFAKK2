@@ -76,6 +76,19 @@ retail game again. Choose the probe with `-Probe`:
   steps must stay even across the menu: before the client's clock was held through a
   pause, the player stood still and then jumped ahead (and retail does this too; its
   `wait` counts milliseconds, so its menu is up for a shorter time).
+- `probe-lsload` loads a saved game, `fakkhouse0004`, and opens the main menu and the
+  load/save menu over it, taking a screenshot of the list. It is the regression probe for
+  the renderer's crash on the main menu's first frame (`FixRenderCommandList`, see
+  `docs/known-differences.md`), which only that save showed: copy the crashed session's
+  `config_fakkhouse0004.*` into `build\sandbox\home\fakk\save` first. Real clients only:
+  `.claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-lsload -Map fakkhouse`.
+  It finishes ("loadsave menu up") or the client exits with code 2.
+
+When the engine crashes on Windows it prints the fault and the stack into the console log
+as module-relative addresses and writes `crash.dmp` beside the log (`Sys_CrashReport`,
+`code/sys/sys_win32.c`). `python tools/crash-symbols.py <log>` names the functions from
+the linker maps of the build in `build\x86-Release\Release` (pass another build's folder
+as a second argument); it needs the build that crashed, unchanged.
 
 Weapon effects are drawn by the client, so these probes are for the real client on
 `zoo` and are compared by their screenshots, run on both games by the `retail-capture`
