@@ -328,7 +328,8 @@ Not read, done another way:
   smoke, the intro's meteor trails) as `RT_SPRITE` with the model handle and no custom
   shader; Quake III's sprite path would draw the custom shader at the entity's radius,
   which are none and zero, so nothing appeared. The renderer now draws such an entity
-  with the model's shader at the size the entity's scale gives (`R_AddEntitySurfaces`).
+  with the model's shader at the size the entity's scale gives (`R_AddEntitySurfaces`),
+  laid out as the retail renderer lays sprites out (see "Weapon effects").
   The intro's trails match the retail capture at 60 seconds.
 - **Level changes.** The game module ends a level with `gamemap <next>` (`G_ExitLevel`),
   which Quake III names but this tree had dropped; it is the `map` command again. The
@@ -618,6 +619,89 @@ and hid the problem). The same function confirmed the inferred `SOLID_NOT` /
 also records that entity's number in the accumulated trace, which Quake III did not.
 `SV_PointContents` has not been compared.
 
+### Weapon effects
+
+Compared through the real client on both engines with the same probes and screenshots
+(`probe-shotgun`, `probe-rocket`, `probe-sword`, `probe-fx-guns`, `probe-fx-range`,
+`probe-fx-melee`, `probe-fx-expl`; `probe-sprites` and `probe-fx-order` spawn the test
+models in `tools/retail-compare/fx`). Every weapon's muzzle burst, impact puffs, holes,
+explosion, soot, beams and swipes now appear as in retail. What it took:
+
+- **Client effect blocks in TIKI frame commands** (`TIKI_ParseFrameCommands`,
+  `0x44b760`). A client effect spreads its parameters over the lines between a `(` line
+  and a `)` line; each of those lines, the brackets included, is a command of its own at
+  the frame of the line above, with no frame selector. The client game module relies on
+  it: `(` and `)` are commands (`StartBlock`, `EndBlock` in `cg_commands.cpp`), and `)`
+  is what makes the effect. This port had joined the whole block onto its first line,
+  cut it to ten arguments, and so never closed it: no `tagspawn`, `originspawn`,
+  `tagtraceimpactmark` or other block effect on an animation frame ever ran (the
+  shotgun's holes and puffs, every explosion's fire and smoke). The selectors are
+  `start` or `first` (frame 0), `last` or `end` (the last frame), `every`, `exit`,
+  `entry` or `enter`, and any other word outside a block is read as a number, so it is
+  frame 0. Two shipped definitions rely on the extra words: `claw.tik`'s `start melee`
+  and `bspurt.tik`'s `end remove`.
+- **Decals are fitted to the collision model** (`CM_MarkFragments`, `0x426a90`; the
+  client game module's `CM_MarkFragments` import is slot 0x1d of `CL_InitCGameImport`
+  `0x41ce90`), not to the drawn surfaces as in Quake III's `R_MarkFragments`. For each
+  brush the decal's box touches (`CM_BoxBrushes`, `0x42a790`, 32 at most), each side not
+  flagged `SURF_NOIMPACT` or `SURF_NOMARKS` whose plane faces the projection with a
+  cosine of -0.9 or less takes the decal's corners moved along the projection to one
+  unit short of the plane, as long as that is within the projection's length either way,
+  clipped by the brush's other sides (`0x426e00`, Quake III's `R_ChopPolyBehindPlane`
+  with 16-point buffers and a 0.5 epsilon). The one-unit standoff is why retail's marks
+  never fight the wall they lie on: the mark shaders have no `polygonOffset` (and the
+  retail renderer applies polygon offset only from that keyword, `0x47c640`), so marks
+  fitted exactly to the surface z-fought it, which was the rocket's soot. Curved patches
+  take no marks. The client game module's `CM_ImpactMark` (projection 32 units, at most
+  10 points a fragment) and its per-frame `CG_Decal` for a decal entity (`0x300206e0`, so
+  a decal that lives a server frame is laid several times over) are retail's own.
+- **Sprites** (`.spr` models). A sprite is half its shader's image wide and half its
+  image high either side of its origin (`0x491e40` records the image's size), times the
+  shader's `spriteScale` and the entity's scale; `spriteGen` lays the quad out
+  (`0x4773c6` parses it and puts `spriteScale` back to 1; `0x491790` builds the quad):
+  `parallel` faces the viewer, `parallel_oriented` faces the viewer turned by the
+  entity's roll (`atan2` of its left axis's z and y), `oriented` lies in the plane of the
+  entity's left and up axes (an explosion's shockwave ring), and `parallel_upright`
+  stands vertical, turned to face the viewer about the world's up axis, and is not drawn
+  when the view is within a degree of straight up or down. The texture runs from the
+  top left as the quad is laid out, which mirrors a `parallel_oriented` sprite against a
+  `parallel` one, and the triangles are wound as retail winds them. This port had
+  ignored `spriteGen`, so every sprite was a viewer-facing square as wide as its image.
+- **Sprites are drawn after everything else.** Retail keeps them in a list of their own
+  (`0x4643c0`), sorted apart and submitted after every other surface of the view
+  (`0x463e40` takes both lists). In one sorted list an alpha-blended sprite whose shader
+  sorts as opaque, the explosion's `explsmoke`, was painted over by any wall or floor
+  drawn after it, and the rocket's smoke cloud vanished against the floor. Within the
+  sprite list the key is `sortedIndex << 22 | (2^28 - the squared distance from the
+  view)`, smallest first; the distance term is 28 bits wide and is ORed over the shader
+  index's low six bits, so for sprites nearer than 2048 units those bits read as ones:
+  sprites whose shaders fall in the same block of 64 sorted shaders are drawn back to
+  front, blocks in shader order. OpenFAKK2 computes the same key from its own sorted
+  shader list, which is not numbered as retail's, so which shaders share a block can
+  differ: two overlapping sprites of different shaders can come out in the other order
+  (`probe-fx-order`, a few levels of brightness at the overlap).
+- **Swipes** (the trails of the swords, the axe, the chain sword and the soul sucker,
+  and an explosion's burning debris) are drawn, where this port had ignored them.
+  `RE_SwipeBegin` (`0x480eb0`) starts one of 32 swipes a frame (the first begun in a new
+  frame clears the old ones), `RE_SwipePoint` (`0x480f50`) adds an edge of two points
+  and a time (1024 at most), and `RE_SwipeEnd` does nothing. Each swipe is a world
+  surface without fog, added after the world (`0x480fd0`), and drawn as a triangle strip
+  through its edges (`0x481060`): an edge is as opaque as its age allows,
+  `1 - (thistime - time) / life`, at most 1, with its colour scaled alike; a faded edge,
+  or one newer than `thistime`, is left out, and when the newest has faded the swipe is
+  emptied. `s` runs from 0 to 1 over the edges, `t` is 1 at an edge's first point and 0
+  at its second. A swipe no longer handed over is drawn again with `thistime` aged by
+  the time since it was last drawn, so a finished swing fades out.
+
+Still different:
+
+- **Dynamic lights on the world** are Quake III's (see the renderer section): a muzzle
+  flash, the crossbow's charge and an explosion light the floor around them far more
+  brightly in retail.
+- **Moving while a weapon's fire animation plays** carried Julie much further on ours: a
+  0.6-second `+moveleft` right after a shotgun blast moved her to the corridor wall on
+  ours and a few units in retail. Seen in passing; not looked into.
+
 ## The renderer and the map viewer
 
 None of this has been compared with the retail game's picture, and none of the retail
@@ -704,17 +788,12 @@ What is implemented, and on what basis:
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
   bones. Level of detail is not applied in the renderer.
-- **Sprites**: a `.spr` model is the shader of that name, drawn as the retail renderer
-  draws it (`0x491790`; the model keeps the shader's image size, `0x491e40`). The quad is
-  the image's width and height times the shader's `spriteScale` times the entity's scale,
-  centred on the entity. The shader's `spriteGen` (`0x47738a`; `spriteScale` defaults to
-  1, and any `spriteGen` line sets it back to 1) lays it out: `parallel` faces the viewer,
-  `parallel_oriented` faces the viewer turned by the roll in the entity's axes (and is
-  mirrored left to right against `parallel`, as in retail), `oriented` lies in the plane of
-  the entity's left and up axes, and `parallel_upright` turns about the world's vertical
-  and is not drawn within a degree of looking straight up or down. Until `spriteGen` was
-  read every sprite faced the viewer, so the crosshair (`oriented`, turned by the game to
-  the surface its trace hits) stood upright and half sank into the floor; it now lies on
+- **Sprites**: a `.spr` model is the shader of that name, sized, laid out by its
+  `spriteGen` and sorted as the retail renderer does it (read from `fakk2.exe`; see
+  "Weapon effects" under "With a player present"). Its reach for the fog test is the
+  image's full width times `spriteScale` and the entity's scale (`0x4643c0`).
+  Until `spriteGen` was read the crosshair (`oriented`, turned by the game to the
+  surface its trace hits) stood upright and half sank into the floor; it now lies on
   the floor as in the retail capture (`tools/retail-compare/probe-crosshair.scr`). Not
   done: the retail sprite path also skips a quad whose corners are all outside one
   frustum plane, which only saves drawing.
@@ -778,8 +857,10 @@ What is implemented, and on what basis:
   the same camera matches the retail capture within a unit or two on every patch
   measured; `r_debugLight 3` prints each model's cube and the lights that went into it.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
-  and the lens flare bits give the light a lens flare (next). Debug lines and sword
-  swipes are accepted and not drawn.
+  and the lens flare bits give the light a lens flare (next). On the world they are much
+  dimmer than retail's: a muzzle flash that lights the floor yellow around Julie in
+  retail barely shows here (`probe-fx-guns`). Debug lines are accepted and not drawn;
+  swipes are drawn (see "Weapon effects").
 - **The player's buttons and the inventory bar.** `default.cfg` binds `+attackleft`,
   `+attackright`, `+use` and `+cameralook`, which Quake III's client does not know, so
   the keys fired nothing (an unknown command goes to the server as chat). The client
@@ -915,7 +996,7 @@ What is implemented, and on what basis:
 
 Not implemented: fog volumes (`fogParms` brushes), the light grid (models are lit with a default
 light; the map's grid is reported as a mismatch and ignored), entity lights, lens flares,
-beams, decals, level of detail, cross-blending between animations.
+beams, level of detail, cross-blending between animations.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

@@ -535,7 +535,8 @@ static clipHandle_t CL_CG_CM_TempBoxModel( const vec3_t mins, const vec3_t maxs,
 
 static int CL_CG_CM_MarkFragments( int numPoints, const vec3_t *points, const vec3_t projection,
 								   int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t *fragmentBuffer ) {
-	return re.MarkFragments( numPoints, points, projection, maxPoints, pointBuffer, maxFragments, fragmentBuffer );
+	// FAKK2 fits decals to the collision model's brushes, not the drawn surfaces
+	return CM_MarkFragments( numPoints, points, projection, maxPoints, pointBuffer, maxFragments, fragmentBuffer );
 }
 
 // sound

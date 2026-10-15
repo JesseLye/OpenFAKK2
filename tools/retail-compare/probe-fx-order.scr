@@ -1,0 +1,13 @@
+// Draw order of overlapping effect sprites (fx/test_order.tik), for the real client on
+// zoo. See probe-sprites.scr for how the test model is spawned and started.
+probe:
+waitforplayer
+wait 2
+spawn test_order.tik origin "-2100 1568 120" targetname "fxorder"
+wait 0.1
+$fxorder anim idle
+wait 1
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pendingevents"
+end

@@ -1,0 +1,61 @@
+TIKI
+// Effect test (probe-fx-order.scr): which of two overlapping sprites is drawn on top.
+// Left pair: explsmoke (sort opaque, alpha blended) 40 units nearer the camera than
+// explosion1 (sort additive). Right pair: the smoke 40 units farther than the fire.
+// The camera looks down +x, so a negative x offset is nearer.
+setup
+   {
+   scale 1.0
+   path models/fx/dummy
+   }
+
+init
+   {
+   server
+      {
+      classname Animate
+      }
+   client
+      {
+      cache explsmoke.spr
+      cache explosion1.spr
+      }
+   }
+
+animations
+   {
+   idle dummy2.tan
+      {
+      client
+         {
+         entry originspawn
+            (
+            count 1
+            model explosion1.spr
+            offset 0 70 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset -40 60 -10
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explosion1.spr
+            offset 0 -70 0
+            life 30
+            )
+         entry originspawn
+            (
+            count 1
+            model explsmoke.spr
+            offset 40 -60 -10
+            life 30
+            )
+         }
+      }
+   }

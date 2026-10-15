@@ -193,26 +193,19 @@ typedef struct
 R_RegisterSpr
 
 FAKK2: a ".spr" model is a sprite drawn with the shader of that name. There
-is no file; the shader scripts define them. Like the retail renderer
-(fakk2.exe 0x491e40), the sprite keeps the size of the shader's image.
+is no file; the shader scripts define them.
 ====================
 */
 static qhandle_t R_RegisterSpr( const char *name, model_t *mod ) {
 	shader_t	*sh = R_FindShader( name, LIGHTMAP_NONE, qtrue );
-	image_t		*image;
 
 	if ( sh->defaultShader ) {
 		ri.Printf( PRINT_DEVELOPER, "R_RegisterSpr: no shader for %s\n", name );
 		return 0;
 	}
-	image = R_ShaderFirstImage( sh );
-	if ( !image ) {
-		ri.Printf( PRINT_WARNING, "Could not find image for sprite in shader %s\n", name );
-	}
 	mod->type = MOD_SPRITE;
 	mod->spriteShader = sh;
-	mod->spriteWidth = image ? image->width : 32;
-	mod->spriteHeight = image ? image->height : 32;
+	R_SpriteHalfSize( sh, &mod->spriteHalfWidth, &mod->spriteHalfHeight );
 	return mod->index;
 }
 

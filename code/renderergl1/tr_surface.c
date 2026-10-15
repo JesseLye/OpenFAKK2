@@ -147,12 +147,115 @@ void RB_AddQuadStamp( vec3_t origin, vec3_t left, vec3_t up, byte *color ) {
 
 /*
 ==============
+RB_SurfaceSpriteModel
+
+FAKK2: the quad of a .spr model (fakk2.exe 0x491790). It is half its
+shader's image wide and high either side of the origin, times the shader's
+spriteScale and the entity's scale, laid out by the shader's spriteGen:
+parallel faces the viewer; parallel_oriented also faces the viewer, turned
+by the entity's roll; oriented lies in the plane of the entity's left and up
+axes; parallel_upright stands vertical, turned about the world's up axis to
+face the viewer, and is not drawn when the view looks within a degree of
+straight up or down.
+==============
+*/
+static void RB_SurfaceSpriteModel( const model_t *mod ) {
+	const refEntity_t	*e = &backEnd.currentEntity->e;
+	const shader_t		*sh = mod->spriteShader;
+	const float			*viewLeft = backEnd.viewParms.or.axis[1];
+	const float			*viewUp = backEnd.viewParms.or.axis[2];
+	vec3_t				left, up, normal, top, bottom;
+	float				scale;
+	int					ndx, i;
+
+	switch ( sh->spriteGen ) {
+	case SPRITEGEN_PARALLEL_ORIENTED: {
+		float	roll = atan2( e->axis[1][2], e->axis[1][1] );
+		float	s = sin( roll ), c = cos( roll );
+
+		for ( i = 0 ; i < 3 ; i++ ) {
+			left[i] = c * viewLeft[i] + s * viewUp[i];
+			up[i] = c * viewUp[i] - s * viewLeft[i];
+		}
+		break;
+	}
+	case SPRITEGEN_ORIENTED:
+		VectorCopy( e->axis[1], left );
+		VectorCopy( e->axis[2], up );
+		break;
+	case SPRITEGEN_PARALLEL_UPRIGHT: {
+		const float	*forward = backEnd.viewParms.or.axis[0];
+
+		if ( forward[2] > 0.999848f || forward[2] < -0.999848f ) {
+			return;
+		}
+		VectorSet( left, forward[1], -forward[0], 0 );
+		VectorNormalize( left );
+		VectorSet( up, 0, 0, 1 );
+		break;
+	}
+	default:
+		VectorCopy( viewUp, up );
+		if ( backEnd.viewParms.isMirror ) {
+			VectorCopy( viewLeft, left );
+		} else {
+			VectorNegate( viewLeft, left );
+		}
+		break;
+	}
+
+	scale = ( sh->spriteScale ? sh->spriteScale : 1.0f ) * e->scale;
+	VectorScale( left, scale * mod->spriteHalfWidth, left );
+	VectorScale( up, scale * mod->spriteHalfHeight, up );
+	VectorAdd( e->origin, up, top );
+	VectorSubtract( e->origin, up, bottom );
+
+	RB_CHECKOVERFLOW( 4, 6 );
+
+	ndx = tess.numVertexes;
+
+	VectorSubtract( top, left, tess.xyz[ndx] );
+	VectorAdd( top, left, tess.xyz[ndx + 1] );
+	VectorSubtract( bottom, left, tess.xyz[ndx + 2] );
+	VectorAdd( bottom, left, tess.xyz[ndx + 3] );
+
+	tess.indexes[tess.numIndexes] = ndx + 2;
+	tess.indexes[tess.numIndexes + 1] = ndx + 1;
+	tess.indexes[tess.numIndexes + 2] = ndx;
+	tess.indexes[tess.numIndexes + 3] = ndx + 2;
+	tess.indexes[tess.numIndexes + 4] = ndx + 3;
+	tess.indexes[tess.numIndexes + 5] = ndx + 1;
+
+	VectorNegate( backEnd.viewParms.or.axis[0], normal );
+	for ( i = 0 ; i < 4 ; i++ ) {
+		VectorCopy( normal, tess.normal[ndx + i] );
+		tess.texCoords[ndx + i][0][0] = tess.texCoords[ndx + i][1][0] = ( i & 1 ) ? 1.0f : 0.0f;
+		tess.texCoords[ndx + i][0][1] = tess.texCoords[ndx + i][1][1] = ( i & 2 ) ? 1.0f : 0.0f;
+		* ( unsigned int * ) &tess.vertexColors[ndx + i] = * ( unsigned int * ) e->shaderRGBA;
+	}
+
+	tess.numVertexes += 4;
+	tess.numIndexes += 6;
+}
+
+/*
+==============
 RB_SurfaceSprite
 ==============
 */
 static void RB_SurfaceSprite( void ) {
 	vec3_t		left, up;
 	float		radius;
+
+	// FAKK2: a .spr temp model from the client game module
+	if ( backEnd.currentEntity->e.hModel ) {
+		const model_t	*mod = R_GetModelByHandle( backEnd.currentEntity->e.hModel );
+
+		if ( mod->type == MOD_SPRITE ) {
+			RB_SurfaceSpriteModel( mod );
+			return;
+		}
+	}
 
 	// calculate the xyz locations for the four corners
 	radius = backEnd.currentEntity->e.radius;
@@ -178,110 +281,6 @@ static void RB_SurfaceSprite( void ) {
 	}
 
 	RB_AddQuadStamp( backEnd.currentEntity->e.origin, left, up, backEnd.currentEntity->e.shaderRGBA );
-}
-
-
-/*
-==============
-RB_SurfaceSpriteModel
-
-FAKK2: a .spr model's sprite, built as the retail renderer builds it
-(fakk2.exe 0x491790). The quad is the shader's image, scaled by the shader's
-spriteScale and the entity's scale and centred on the entity. The shader's
-spriteGen lays it out:
-
-  parallel           facing the viewer
-  parallel_oriented  facing the viewer, turned by the roll in the entity's axes
-  oriented           in the plane of the entity's left and up axes
-  parallel_upright   facing the viewer about the world's vertical; not drawn
-                     when the view is within a degree of straight up or down
-
-The crosshair is "oriented" (scripts/beau.shader). The game turns it to the
-surface its trace hit, so it lies on that surface.
-==============
-*/
-static void RB_SurfaceSpriteModel( const model_t *mod ) {
-	const refEntity_t	*e = &backEnd.currentEntity->e;
-	const shader_t		*sh = mod->spriteShader;
-	vec3_t				*viewAxis = backEnd.viewParms.or.axis;
-	vec3_t				left, up, normal;
-	vec3_t				corners[4];
-	float				scale, halfWidth, halfHeight;
-	float				ang, s, c;
-	int					i, ndx;
-	static const float	st[4][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } };
-
-	switch ( sh->spriteGen ) {
-	case SPRITE_PARALLEL_ORIENTED:
-		ang = atan2( e->axis[1][2], e->axis[1][1] );
-		s = sin( ang );
-		c = cos( ang );
-		for ( i = 0 ; i < 3 ; i++ ) {
-			left[i] = c * viewAxis[1][i] + s * viewAxis[2][i];
-			up[i] = c * viewAxis[2][i] - s * viewAxis[1][i];
-		}
-		break;
-	case SPRITE_ORIENTED:
-		VectorCopy( e->axis[1], left );
-		VectorCopy( e->axis[2], up );
-		break;
-	case SPRITE_PARALLEL_UPRIGHT:
-		if ( viewAxis[0][2] > 0.999848 || viewAxis[0][2] < -0.999848 ) {
-			return;
-		}
-		left[0] = viewAxis[0][1];
-		left[1] = -viewAxis[0][0];
-		left[2] = 0;
-		VectorNormalize( left );
-		VectorSet( up, 0, 0, 1 );
-		break;
-	default:	// SPRITE_PARALLEL
-		VectorCopy( viewAxis[2], up );
-		if ( backEnd.viewParms.isMirror ) {
-			VectorCopy( viewAxis[1], left );
-		} else {
-			VectorScale( viewAxis[1], -1, left );
-		}
-		break;
-	}
-
-	// the texture's left edge is on the -left side, its top on the +up side
-	scale = sh->spriteScale * e->scale;
-	halfWidth = mod->spriteWidth * 0.5f;
-	halfHeight = mod->spriteHeight * 0.5f;
-	VectorScale( left, scale * halfWidth, left );
-	VectorScale( up, scale * halfHeight, up );
-
-	VectorAdd( e->origin, up, corners[0] );
-	VectorSubtract( corners[0], left, corners[0] );
-	VectorAdd( e->origin, up, corners[1] );
-	VectorAdd( corners[1], left, corners[1] );
-	VectorSubtract( e->origin, up, corners[2] );
-	VectorSubtract( corners[2], left, corners[2] );
-	VectorSubtract( e->origin, up, corners[3] );
-	VectorAdd( corners[3], left, corners[3] );
-
-	RB_CHECKOVERFLOW( 4, 6 );
-
-	ndx = tess.numVertexes;
-	VectorSubtract( vec3_origin, viewAxis[0], normal );
-	for ( i = 0 ; i < 4 ; i++ ) {
-		VectorCopy( corners[i], tess.xyz[ndx + i] );
-		VectorCopy( normal, tess.normal[ndx + i] );
-		tess.texCoords[ndx + i][0][0] = tess.texCoords[ndx + i][1][0] = st[i][0];
-		tess.texCoords[ndx + i][0][1] = tess.texCoords[ndx + i][1][1] = st[i][1];
-		* ( unsigned int * ) &tess.vertexColors[ndx + i] = * ( unsigned int * ) e->shaderRGBA;
-	}
-
-	tess.indexes[tess.numIndexes + 0] = ndx + 2;
-	tess.indexes[tess.numIndexes + 1] = ndx + 1;
-	tess.indexes[tess.numIndexes + 2] = ndx;
-	tess.indexes[tess.numIndexes + 3] = ndx + 2;
-	tess.indexes[tess.numIndexes + 4] = ndx + 3;
-	tess.indexes[tess.numIndexes + 5] = ndx + 1;
-
-	tess.numVertexes += 4;
-	tess.numIndexes += 6;
 }
 
 
@@ -1151,23 +1150,93 @@ static void RB_SurfaceAxis( void ) {
 
 /*
 ====================
+RB_SurfaceSwipe
+
+FAKK2: a swipe as a triangle strip through its edges (fakk2.exe 0x481060).
+An edge is as opaque as its age allows, 1 - (thistime - time) / life, at
+most 1, with its colour scaled the same way; an edge that has faded out, or
+is newer than thistime, is left out and the strip runs on past it, and once
+the newest edge has faded the swipe is empty. Along the strip s runs from 0
+to 1 over the edges; each edge's first point is at t = 1, its second at 0.
+====================
+*/
+static void RB_SurfaceSwipe( srfSwipe_t *swipe ) {
+	vec3_t	normal;
+	float	invLife;
+	int		first, count, i;
+
+	if ( swipe->life <= 0 ) {
+		return;
+	}
+	invLife = 1.0f / swipe->life;
+
+	// the client game module keeps 64 edges at most; a longer swipe than one
+	// batch can hold would stop the renderer, so it is cut to fit
+	if ( swipe->numPoints > SHADER_MAX_VERTEXES / 2 - 1 ) {
+		swipe->numPoints = SHADER_MAX_VERTEXES / 2 - 1;
+	}
+
+	RB_CHECKOVERFLOW( swipe->numPoints * 2, swipe->numPoints * 6 );
+
+	VectorNegate( backEnd.viewParms.or.axis[0], normal );
+	first = tess.numVertexes;
+
+	for ( i = 0 ; i < swipe->numPoints ; i++ ) {
+		const swipePoint_t	*point = &swipe->points[i];
+		float				alpha = 1.0f - ( swipe->thistime - point->time ) * invLife;
+		float				s;
+		byte				color[4];
+		int					j;
+
+		if ( alpha <= 0 || swipe->thistime < point->time ) {
+			if ( i == swipe->numPoints - 1 ) {
+				swipe->numPoints = 0;
+			}
+			continue;
+		}
+		if ( alpha > 1.0f ) {
+			alpha = 1.0f;
+		}
+
+		color[0] = color[1] = color[2] = (byte)( tr.identityLightByte * alpha );
+		color[3] = (byte)( 255 * alpha );
+		s = (float)i / swipe->numPoints;
+
+		for ( j = 0 ; j < 2 ; j++ ) {
+			int		ndx = tess.numVertexes++;
+
+			VectorCopy( j ? point->point2 : point->point1, tess.xyz[ndx] );
+			VectorCopy( normal, tess.normal[ndx] );
+			tess.texCoords[ndx][0][0] = tess.texCoords[ndx][1][0] = s;
+			tess.texCoords[ndx][0][1] = tess.texCoords[ndx][1][1] = j ? 0.0f : 1.0f;
+			* ( unsigned int * ) &tess.vertexColors[ndx] = * ( unsigned int * ) color;
+		}
+	}
+
+	count = tess.numVertexes - first;
+	if ( count < 3 ) {
+		tess.numVertexes = first;
+		return;
+	}
+	for ( i = 0 ; i < count - 2 ; i++ ) {
+		int		odd = i & 1;
+
+		tess.indexes[tess.numIndexes++] = first + i + odd;
+		tess.indexes[tess.numIndexes++] = first + i + 1 - odd;
+		tess.indexes[tess.numIndexes++] = first + i + 2;
+	}
+}
+
+/*
+====================
 RB_SurfaceEntity
 
 Entities that have a single procedurally generated surface
 ====================
 */
 static void RB_SurfaceEntity( surfaceType_t *surfType ) {
-	model_t	*mod;
-
 	switch( backEnd.currentEntity->e.reType ) {
 	case RT_SPRITE:
-		// FAKK2: a .spr model drawn with its own shader (R_AddEntitySurfaces)
-		mod = R_GetModelByHandle( backEnd.currentEntity->e.hModel );
-		if ( backEnd.currentEntity->e.hModel && mod->type == MOD_SPRITE
-			&& tess.shader == mod->spriteShader ) {
-			RB_SurfaceSpriteModel( mod );
-			break;
-		}
 		RB_SurfaceSprite();
 		break;
 	case RT_BEAM:
@@ -1215,5 +1284,6 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
 	(void(*)(void*))RB_SurfaceEntity,		// SF_ENTITY
 	(void(*)(void*))RB_SurfaceTan,			// SF_TAN
-	(void(*)(void*))RB_SurfaceSkel			// SF_SKEL
+	(void(*)(void*))RB_SurfaceSkel,			// SF_SKEL
+	(void(*)(void*))RB_SurfaceSwipe			// SF_SWIPE
 };

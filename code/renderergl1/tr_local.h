@@ -351,15 +351,15 @@ typedef struct {
 	float	depthForOpaque;
 } fogParms_t;
 
-// FAKK2: a shader's "spriteGen", the plane a .spr sprite is drawn in. The
-// values are the retail renderer's own (fakk2.exe 0x4773c6)
-typedef enum {
-	SPRITE_PARALLEL,			// facing the viewer
-	SPRITE_PARALLEL_ORIENTED,	// facing the viewer, turned by the entity's roll
-	SPRITE_ORIENTED,			// in the plane of the entity's left and up axes
-	SPRITE_PARALLEL_UPRIGHT		// facing the viewer about the world's vertical
-} spriteGen_t;
 
+// FAKK2: a sprite shader's "spriteGen", the layout of a .spr model's quad
+// (fakk2.exe parses it at 0x4773c6 and lays the quad out at 0x491790)
+typedef enum {
+	SPRITEGEN_PARALLEL,				// faces the viewer
+	SPRITEGEN_PARALLEL_ORIENTED,	// faces the viewer, turned by the entity's roll
+	SPRITEGEN_ORIENTED,				// in the plane of the entity's left and up axes
+	SPRITEGEN_PARALLEL_UPRIGHT		// stands upright, turned about the vertical to face the viewer
+} spriteGen_t;
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
@@ -388,7 +388,7 @@ typedef struct shader_s {
 	skyParms_t	sky;
 	fogParms_t	fogParms;
 	float		spriteScale;			// FAKK2: a sprite's size relative to its image, 0 = 1
-	spriteGen_t	spriteGen;			// FAKK2: how a .spr sprite's quad is laid out
+	spriteGen_t	spriteGen;				// FAKK2: how a sprite's quad is laid out
 
 	float		portalRange;			// distance to fog out at
 
@@ -563,6 +563,7 @@ typedef enum {
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
 	SF_TAN,					// FAKK2 vertex animation surface
 	SF_SKEL,				// FAKK2 skeletal surface
+	SF_SWIPE,				// FAKK2 trail of a sword or other swipe (srfSwipe_t)
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -588,6 +589,29 @@ typedef struct srfPoly_s {
 	polyVert_t		*verts;
 } srfPoly_t;
 
+
+// FAKK2: a swipe, the trail a sword, an axe or a soul sucker beam leaves. The
+// client game module hands over the whole trail every frame between
+// RE_SwipeBegin and RE_SwipeEnd: edges of two points, each with the time it
+// was made (fakk2.exe 0x480eb0, 0x480f50; the record is retail's, 28696 bytes)
+#define	MAX_SWIPES			32
+#define	MAX_SWIPE_POINTS	1024
+
+typedef struct {
+	vec3_t			point1;		// drawn at t = 1
+	vec3_t			point2;		// drawn at t = 0
+	float			time;
+} swipePoint_t;
+
+typedef struct srfSwipe_s {
+	surfaceType_t	surfaceType;
+	float			life;			// how long an edge takes to fade out
+	float			thistime;		// the time the edges' ages are measured at
+	int				lastDrawTime;	// tr.refdef.time when last added to a view
+	qhandle_t		shader;
+	int				numPoints;
+	swipePoint_t	points[MAX_SWIPE_POINTS];
+} srfSwipe_t;
 
 typedef struct srfFlare_s {
 	surfaceType_t	surfaceType;
@@ -861,8 +885,8 @@ typedef struct model_s {
 	md3Header_t	*md3[MD3_MAX_LODS];	// only if type == MOD_MESH
 	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM | MOD_TIKI)
 	shader_t	*spriteShader;	// only if type == MOD_SPRITE
-	float		spriteWidth;	// the sprite shader's image size, only if type == MOD_SPRITE
-	float		spriteHeight;
+	float		spriteHalfWidth;	// half the shader's image size, before scaling
+	float		spriteHalfHeight;
 
 	int			 numLods;
 } model_t;
@@ -906,11 +930,13 @@ the bits are allocated as follows:
 2-6   : fog index
 7-16  : entity index
 17-30 : sorted shader index
+31    : FAKK2 sprite (QSORT_SPRITE_BIT)
 */
 #define	QSORT_FOGNUM_SHIFT	2
 #define	QSORT_REFENTITYNUM_SHIFT	7
 #define	QSORT_SHADERNUM_SHIFT	(QSORT_REFENTITYNUM_SHIFT+REFENTITYNUM_BITS)
-#if (QSORT_SHADERNUM_SHIFT+SHADERNUM_BITS) > 32
+#define	QSORT_SPRITE_BIT	0x80000000u	// FAKK2: a .spr model, drawn after every other surface
+#if (QSORT_SHADERNUM_SHIFT+SHADERNUM_BITS) > 31
 	#error "Need to update sorting, too many bits."
 #endif
 
@@ -1530,11 +1556,12 @@ void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float
 void RE_SwipeBegin( float thistime, float life, qhandle_t shader );
 void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time );
 void RE_SwipeEnd( void );
+void R_AddSwipeSurfaces( void );
 void RE_DrawBox( float x, float y, float w, float h );
 int RE_GetShaderWidth( qhandle_t hShader );
 int RE_GetShaderHeight( qhandle_t hShader );
 float R_SpriteRadius( shader_t *sh, float scale );
-image_t *R_ShaderFirstImage( shader_t *sh );
+void R_SpriteHalfSize( shader_t *sh, float *halfWidth, float *halfHeight );
 float RE_ModelRadius( qhandle_t handle );
 float RE_Noise( float x, float y, float z, float t );
 void RE_RenderScene( const refdef_t *fd );

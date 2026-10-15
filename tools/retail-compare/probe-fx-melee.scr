@@ -1,0 +1,65 @@
+// Melee and thrown weapon effects, for the real client on zoo: the electric sword
+// (a beam emitter on the blade plus its swipe), the axe and the chain sword (swipes),
+// a thrown flashbang and a gas pod from the gas sling.
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_elecsword.tik"
+wait 0.5
+stuffcmd "use ElecSword right"
+wait 2.5
+stuffcmd "screenshot"
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 0.2
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "give weapon_axe.tik"
+wait 0.5
+stuffcmd "use Axe dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 0.25
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "give weapon_chainsword.tik"
+wait 0.5
+stuffcmd "use ChainSword dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 0.25
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "give weapon_flashbang.tik"
+wait 0.5
+stuffcmd "use Flashbang right"
+wait 2.5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "give weapon_sling_gas.tik"
+wait 0.5
+$player ammo "Gas Pod" 5
+wait 0.5
+stuffcmd "use GasSling dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 1
+stuffcmd "-attackleft"
+wait 0.9
+stuffcmd "screenshot"
+wait 0.6
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pendingevents"
+end

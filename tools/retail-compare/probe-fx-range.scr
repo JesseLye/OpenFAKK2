@@ -1,0 +1,48 @@
+// Crossbow, flamethrower and soul sucker effects, for the real client on zoo. The
+// crossbow charges and fires a bolt on release that explodes and leaves a blast mark;
+// the flamethrower's flames are frame emitters; the soul sucker's primary is a beam.
+probe:
+waitforplayer
+wait 2
+stuffcmd "+lookdown"
+wait 0.15
+stuffcmd "-lookdown"
+stuffcmd "give weapon_cbow.tik"
+wait 0.5
+stuffcmd "use Crossbow right"
+wait 2.5
+stuffcmd "+attackright"
+wait 1.2
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 0.4
+stuffcmd "screenshot"
+wait 0.4
+stuffcmd "screenshot"
+wait 1.2
+stuffcmd "screenshot"
+wait 1
+stuffcmd "give weapon_flamethrower.tik"
+wait 0.5
+stuffcmd "use Flamethrower dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 1.5
+stuffcmd "give weapon_soulsucker.tik"
+wait 0.5
+stuffcmd "use Soulsucker dual"
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+stuffcmd "-attackleft"
+wait 0.5
+stuffcmd "pendingevents"
+end

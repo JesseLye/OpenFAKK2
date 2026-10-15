@@ -37,8 +37,12 @@ wait 2                          // the raise animation has to finish before it c
 @hold attackright 1.5           // sling: charge, then fire on release. Guns fire on press.
 ```
 
-Right-hand and dual weapons fire with `+attackright`; a left-hand weapon with
-`+attackleft`. The sling's `maxchargetime` is 1.5 s. Projectiles are `Classname
+A dual-handed weapon fires its primary mode with `+attackleft` and its alternate with
+`+attackright` (`global/julie_torso.st`, `CHECK_ATTACK_LEFT` / `CHECK_ATTACK_RIGHT`): the
+shotgun's plasma blast is `+attackleft`, its grenade `+attackright`. The sling charges on
+either (the right button is its alternate mode). A right-hand weapon (the swords, the
+uzi, the hand gun) attacks with `+attackright`, a left-hand one with `+attackleft`.
+The sling's `maxchargetime` is 1.5 s. Projectiles are `Classname
 Projectile` in `whatis`; their `Edict Owner` is the player's entity number (0) until the
 game clears it. A rock that lands sits with `Movetype 10` at floor height plus its half
 size (8.125 on a floor at 0.125); one that hits a wall or an actor is removed, so a sweep

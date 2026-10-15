@@ -1,0 +1,31 @@
+// Rocket launcher: the muzzle burst is client frame commands on the weapon's "fire"
+// animation; the projectile carries emitters (smoke trail, flare); on impact the server
+// spawns fx_explosion.tik (a sendonce event entity whose entry commands draw the fire,
+// smoke, sparks, shockwave and debris) and a Decal with the blastmark shader.
+// For the real client: aim down so the rocket hits the floor ahead in view, fire once,
+// take screenshots during the explosion and after it.
+probe:
+waitforplayer
+wait 2
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+wait 2
+stuffcmd "+lookdown"
+wait 0.4
+stuffcmd "-lookdown"
+wait 0.3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 0.25
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 2.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end
