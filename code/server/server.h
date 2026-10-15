@@ -147,6 +147,7 @@ typedef struct client_s {
 	int				challenge;
 
 	usercmd_t		lastUsercmd;
+	int				enterStallTime;		// sv.time until which a client that has just entered is treated as still loading
 	int				lastMessageNum;		// for delta compression
 	int				lastClientCommand;	// reliable client message sequence
 	char			lastClientCommandString[MAX_STRING_CHARS];
@@ -307,6 +308,7 @@ extern	cvar_t	*sv_gametype;
 extern	cvar_t	*sv_pure;
 extern	cvar_t	*sv_floodProtect;
 extern	cvar_t	*sv_lanForceRate;
+extern	cvar_t	*sv_enterstall;
 #ifndef STANDALONE
 extern	cvar_t	*sv_strictAuth;
 #endif
@@ -373,6 +375,7 @@ void SV_GetUserinfo( int index, char *buffer, int bufferSize );
 
 void SV_ChangeMaxClients( void );
 void SV_SpawnServer( char *server, qboolean killBots );
+void SV_MapBaseName( const char *map, char *out, int outSize );
 
 
 
@@ -396,6 +399,7 @@ void SV_DropClient( client_t *drop, const char *reason );
 
 void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK );
 void SV_ClientThink (client_t *cl, usercmd_t *cmd);
+qboolean SV_ClientEnterStalled( const client_t *cl );
 
 //
 // sv_testplayer.c

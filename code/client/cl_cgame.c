@@ -1091,6 +1091,7 @@ void CL_InitCGame( void ) {
 	char				loadedFrom[MAX_OSPATH];
 	const char			*info;
 	const char			*mapname;
+	const char			*spawnpos;
 	int					t1, t2;
 
 	t1 = Sys_Milliseconds();
@@ -1101,7 +1102,10 @@ void CL_InitCGame( void ) {
 	// find the current mapname
 	info = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SERVERINFO ];
 	mapname = Info_ValueForKey( info, "mapname" );
-	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%s.bsp", mapname );
+	// FAKK2: a spawn point may follow the bsp's name after a '$'
+	spawnpos = strchr( mapname, '$' );
+	Com_sprintf( cl.mapname, sizeof( cl.mapname ), "maps/%.*s.bsp",
+		spawnpos ? (int)( spawnpos - mapname ) : (int)strlen( mapname ), mapname );
 
 	// load the library
 	CL_ShutdownCGame();

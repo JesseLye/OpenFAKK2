@@ -765,6 +765,9 @@ void SV_SendClientMessages(void)
 		if(SV_IsTestPlayer(c) && SV_TestPlayer_Stalled(c))
 			continue;		// imitating a client that is still loading
 
+		if(SV_ClientEnterStalled(c))
+			continue;		// just entered: the retail client is still loading then
+
 		if(svs.time - c->lastSnapshotTime < c->snapshotMsec * com_timescale->value)
 			continue;		// It's not time yet
 

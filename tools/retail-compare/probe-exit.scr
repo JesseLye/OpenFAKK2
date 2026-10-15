@@ -1,0 +1,9 @@
+// Leave fakkhouse for training the way its trainer cinematic does, with the spawn point
+// after a '$'. The level must change, and Julie must start at spawn_fakkhouse. The probe
+// ends with the level; read the log ("Server: training$spawn_fakkhouse", no "Can't find
+// map"), or put a whatis thread in a sandbox copy of training.scr to read her position.
+probe:
+waitforplayer
+wait 2
+map training$spawn_fakkhouse
+end

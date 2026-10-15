@@ -379,6 +379,25 @@ static void SV_TouchFile( const char *filename ) {
 
 /*
 ================
+SV_MapBaseName
+
+FAKK2 map names can carry the spawn point to use after a '$'
+("training$spawn_fakkhouse", from fakkhouse's exit cinematic). Copies the
+part naming the bsp.
+================
+*/
+void SV_MapBaseName( const char *map, char *out, int outSize ) {
+	const char	*spawnpos;
+
+	Q_strncpyz( out, map, outSize );
+	spawnpos = strchr( map, '$' );
+	if ( spawnpos && spawnpos - map < outSize ) {
+		out[spawnpos - map] = '\0';
+	}
+}
+
+/*
+================
 SV_SpawnServer
 
 Change the server to a new map, taking all connected
@@ -391,6 +410,7 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	int			checksum;
 	qboolean	isBot;
 	char		systemInfo[16384];
+	char		bspname[MAX_QPATH];
 	const char	*p;
 	struct {
 		sharedEntity_t	*gentities;
@@ -484,7 +504,12 @@ void SV_SpawnServer( char *server, qboolean killBots ) {
 	sv.checksumFeed = ( ((unsigned int)rand() << 16) ^ (unsigned int)rand() ) ^ Com_Milliseconds();
 	FS_Restart( sv.checksumFeed );
 
-	CM_LoadMap( va("maps/%s.bsp", server), qfalse, &checksum );
+	// FAKK2: the retail SV_SpawnServer (0x445e90) loads the bsp named before a
+	// '$', but keeps the whole name, spawn point and all, as mapname and passes
+	// that to the game, which splits it again (Level::SpawnEntities); so does
+	// the client game for the world it draws
+	SV_MapBaseName( server, bspname, sizeof( bspname ) );
+	CM_LoadMap( va("maps/%s.bsp", bspname), qfalse, &checksum );
 
 	// set serverinfo visible name
 	Cvar_Set( "mapname", server );
@@ -701,6 +726,9 @@ void SV_Init (void)
 	sv_killserver = Cvar_Get ("sv_killserver", "0", 0);
 	sv_mapChecksum = Cvar_Get ("sv_mapChecksum", "", CVAR_ROM);
 	sv_lanForceRate = Cvar_Get ("sv_lanForceRate", "1", CVAR_ARCHIVE );
+	// the retail client is still busy for a few frames after it enters: under
+	// retail no snapshot has been built 200 ms after entry and one has by 500 ms
+	sv_enterstall = Cvar_Get ("sv_enterstall", "300", 0 );
 #ifndef STANDALONE
 	sv_strictAuth = Cvar_Get ("sv_strictAuth", "1", CVAR_ARCHIVE );
 #endif
