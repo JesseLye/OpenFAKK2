@@ -877,8 +877,10 @@ extern	cvar_t	*com_basegame;
 extern	cvar_t	*com_homepath;
 
 // both client and server must agree to pause
-extern	cvar_t	*cl_paused;
+extern	cvar_t	*cl_paused;		// FAKK2: the cvar is called paused
 extern	cvar_t	*sv_paused;
+extern	cvar_t	*com_deathmatch;
+void	Com_Pause( void );		// FAKK2: the pause command's toggle
 
 extern	cvar_t	*cl_packetdelay;
 extern	cvar_t	*sv_packetdelay;

@@ -176,6 +176,7 @@ static urcPrint_t	urc_centerprint;
 static urcPrint_t	urc_locprint;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
+static int			urc_pausedByMenu;		// 1: the menus paused the game, 2: it was paused already
 static urcAlias_t	urc_aliases[URC_MAX_ALIASES];
 static int			urc_numAliases;
 static float		urc_cursorX = 320, urc_cursorY = 240;	// 640x480 units
@@ -1784,6 +1785,26 @@ void URC_Draw( void ) {
 		// music/intro.mus, the title theme, when no map is active
 		MUSIC_NewSoundtrack( "music/intro" );
 		MUSIC_UpdateMood( 1, 1 );		// mood_normal
+	}
+
+	// the retail update (0x40af50) pauses the game while a menu is up, unless
+	// it was paused already, and lifts the pause it put on when the last menu
+	// closes with the game active (the pause itself refuses without a local
+	// server, so the main menu of a game that is not running changes nothing)
+	if ( urc_stackDepth ) {
+		if ( !urc_pausedByMenu ) {
+			if ( !cl_paused->integer ) {
+				Com_Pause();
+				urc_pausedByMenu = 1;
+			} else {
+				urc_pausedByMenu = 2;
+			}
+		}
+	} else if ( clc.state == CA_ACTIVE && urc_pausedByMenu ) {
+		if ( urc_pausedByMenu == 1 && cl_paused->integer ) {
+			Com_Pause();
+		}
+		urc_pausedByMenu = 0;
 	}
 
 	URC_UpdateHud();

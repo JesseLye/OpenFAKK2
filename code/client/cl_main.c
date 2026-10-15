@@ -1981,7 +1981,7 @@ void CL_Vid_Restart_f( void ) {
 		cls.soundRegistered = qfalse;
 
 		// unpause so the cgame definitely gets a snapshot and renders a frame
-		Cvar_Set("cl_paused", "0");
+		Cvar_Set("paused", "0");
 
 		// initialize the renderer interface
 		CL_InitRef();
@@ -3367,7 +3367,7 @@ void CL_InitRef( void ) {
 	re = *ret;
 
 	// unpause so the cgame definitely gets a snapshot and renders a frame
-	Cvar_Set( "cl_paused", "0" );
+	Cvar_Set( "paused", "0" );
 }
 
 

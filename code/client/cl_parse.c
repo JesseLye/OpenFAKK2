@@ -575,7 +575,7 @@ void CL_ParseGamestate( msg_t *msg ) {
 	CL_InitDownloads();
 
 	// make sure the game starts
-	Cvar_Set( "cl_paused", "0" );
+	Cvar_Set( "paused", "0" );
 }
 
 

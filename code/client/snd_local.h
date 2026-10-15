@@ -144,6 +144,7 @@ typedef struct
 	sfx_t		*thesfx;		// sfx structure
 	qboolean	doppler;
 	qboolean	fullVolume;
+	qboolean	paused;			// FAKK2: held while the game is paused
 	float		minDist;		// full volume within this distance
 } channel_t;
 
