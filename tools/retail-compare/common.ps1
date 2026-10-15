@@ -86,6 +86,7 @@ function Reset-RetailConfig([string]$GameDir) {
 # PowerShell process ends, so a run cut short (Ctrl+C, a pipeline stopped early, a killed
 # shell) leaves no game behind, and none that writes into a home after it has gone.
 $HarnessLockFile = Join-Path $MainRoot 'build\harness.lock'
+$HarnessQueue = "$HarnessLockFile.queue"
 New-Item -ItemType Directory -Force (Split-Path $HarnessLockFile) | Out-Null
 
 if (-not ('OpenFakk2Harness.KillJob' -as [type])) {
@@ -135,39 +136,61 @@ function Enter-HarnessLock([string]$What = '') {
     $deadline = (Get-Date).AddSeconds($waitSecs)
     $owner = "$HarnessLockFile.owner"
     $lastWhy = ''
-    while ($true) {
-        $stream = $null
-        try { $stream = [IO.File]::Open($HarnessLockFile, 'OpenOrCreate', 'ReadWrite', 'None') } catch [IO.IOException] { }
-        if ($stream) {
-            $games = @(Get-FakkGames)
-            $player = @($games | Where-Object { -not $_.Harness })
-            if ($player.Count) {
-                $stream.Dispose()
-                throw ("The player's own game is running ({0}, pid {1}, {2}). The harness does not start a game beside it: close it and run this again." -f $player[0].Name, $player[0].Id, $player[0].Path)
+    # Runners queue for the lock in the order they asked: each leaves a ticket named by the
+    # time it asked, and only the oldest ticket of a live process may take the lock. A run
+    # that takes the lock game after game (refresh-retail.ps1) would otherwise take it back
+    # the moment it let go, before a waiter polling every second could see it free.
+    New-Item -ItemType Directory -Force $HarnessQueue | Out-Null
+    $ticket = Join-Path $HarnessQueue ('{0:D20}-{1}' -f [DateTime]::UtcNow.Ticks, $PID)
+    Set-Content -Path $ticket -Value "pid $PID`: $What ($RepoRoot)" -Encoding utf8
+    try {
+        while ($true) {
+            $first = $null
+            foreach ($t in @(Get-ChildItem $HarnessQueue -File | Sort-Object Name)) {
+                $tpid = [int]($t.Name -replace '^\d+-', '')
+                if (-not (Get-Process -Id $tpid -ErrorAction SilentlyContinue)) { Remove-Item $t.FullName -Force -ErrorAction SilentlyContinue; continue }
+                $first = $t; break
             }
-            # a harness game whose runner has gone (killed before it could stop the game,
-            # by a runner older than the job object) is stopped, or every later run would wait on it
-            foreach ($o in @($games | Where-Object Orphan)) {
-                Write-Host "harness: stopping $($o.Name) (pid $($o.Id)), left running by a harness run that has ended"
-                Stop-Process -Id $o.Id -Force -ErrorAction SilentlyContinue
+            $why = ''
+            if ($first -and $first.FullName -ne $ticket) {
+                $why = "waiting in line behind $(Get-Content $first.FullName -ErrorAction SilentlyContinue | Select-Object -First 1)"
             }
-            $busy = @($games | Where-Object { -not $_.Orphan })
-            if (-not $busy.Count) {
-                $global:OpenFakk2HarnessLock = @{ Stream = $stream; Depth = 1 }
-                Set-Content -Path $owner -Value "pid $PID since $(Get-Date -Format s): $What ($RepoRoot)" -Encoding utf8
-                return
+            else {
+                $stream = $null
+                try { $stream = [IO.File]::Open($HarnessLockFile, 'OpenOrCreate', 'ReadWrite', 'None') } catch [IO.IOException] { }
+                if ($stream) {
+                    $games = @(Get-FakkGames)
+                    $player = @($games | Where-Object { -not $_.Harness })
+                    if ($player.Count) {
+                        $stream.Dispose()
+                        throw ("The player's own game is running ({0}, pid {1}, {2}). The harness does not start a game beside it: close it and run this again." -f $player[0].Name, $player[0].Id, $player[0].Path)
+                    }
+                    # a harness game whose runner has gone (killed before it could stop the game,
+                    # by a runner older than the job object) is stopped, or every later run would wait on it
+                    foreach ($o in @($games | Where-Object Orphan)) {
+                        Write-Host "harness: stopping $($o.Name) (pid $($o.Id)), left running by a harness run that has ended"
+                        Stop-Process -Id $o.Id -Force -ErrorAction SilentlyContinue
+                    }
+                    $busy = @($games | Where-Object { -not $_.Orphan })
+                    if (-not $busy.Count) {
+                        $global:OpenFakk2HarnessLock = @{ Stream = $stream; Depth = 1 }
+                        Set-Content -Path $owner -Value "pid $PID since $(Get-Date -Format s): $What ($RepoRoot)" -Encoding utf8
+                        return
+                    }
+                    $stream.Dispose()
+                    $why = "waiting for a game another harness run started without the lock: $($busy[0].Name) (pid $($busy[0].Id))"
+                }
+                else {
+                    $who = Get-Content $owner -ErrorAction SilentlyContinue | Select-Object -First 1
+                    $why = "waiting for the harness lock, held by $(if ($who) { $who } else { 'a run that is starting' })"
+                }
             }
-            $stream.Dispose()
-            $why = "waiting for a game another harness run started without the lock: $($busy[0].Name) (pid $($busy[0].Id))"
+            if ((Get-Date) -gt $deadline) { throw "harness: gave up after ${waitSecs}s $why" }
+            if ($why -ne $lastWhy) { Write-Host "harness: $why"; $lastWhy = $why }
+            Start-Sleep -Milliseconds 1000
         }
-        else {
-            $who = Get-Content $owner -ErrorAction SilentlyContinue | Select-Object -First 1
-            $why = "waiting for the harness lock, held by $who"
-        }
-        if ((Get-Date) -gt $deadline) { throw "harness: gave up after ${waitSecs}s $($why -replace '^waiting', 'waiting')" }
-        if ($why -ne $lastWhy) { Write-Host "harness: $why"; $lastWhy = $why }
-        Start-Sleep -Seconds 2
     }
+    finally { Remove-Item $ticket -Force -ErrorAction SilentlyContinue }
 }
 
 function Exit-HarnessLock {
