@@ -25,7 +25,10 @@ comparing against the definitions the retail engine cached in the game's
 #define	TIKI_MAX_INCLUDE_DEPTH	8
 #define	TIKI_MAX_LINE			2048
 
-// .tan vertex animation
+// .tan vertex animation. The sizes and offsets match tikiHeader_t, tikiFrame_t,
+// tikiTag_t, tikiTagData_t and tikiSurface_t in qfiles.h of Ritual's tools
+// release, and the layout max2tan writes (models.c); every .tan a retail .tik
+// names fits them.
 #define	TAN_IDENT				((' '<<24)+('N'<<16)+('A'<<8)+'T')	// "TAN " on disk
 #define	TAN_VERSION				2
 #define	TAN_MAX_TAGS			16
@@ -35,7 +38,10 @@ comparing against the definitions the retail engine cached in the game's
 #define	TAN_TAG_DATA_SIZE		48
 #define	TAN_SURFACE_HEADER_SIZE	104
 
-// .skb skeleton and .ska skeletal animation
+// .skb skeleton and .ska skeletal animation: skelHeader_t, skelBoneName_t,
+// skelSurface_t, skelAnimHeader_t, skelFrame_t and skelBone_t in qfiles.h, as
+// max2skl writes them. The retail archives also hold version 1 and 2 files that
+// no .tik names.
 #define	SKB_IDENT				((' '<<24)+('L'<<16)+('K'<<8)+'S')	// "SKL " on disk
 #define	SKA_IDENT				(('N'<<24)+('A'<<16)+('K'<<8)+'S')	// "SKAN" on disk
 #define	SKEL_VERSION			3
@@ -47,7 +53,11 @@ comparing against the definitions the retail engine cached in the game's
 #define	SKA_FRAME_HEADER_SIZE	40
 #define	SKA_BONE_SIZE			16
 
-#define	SKEL_QUAT_SCALE			( 1.0f / 32768.0f )	// 3.051851e-05 in fakk2.exe
+// A bone's quaternion is stored times 32767 and its offset times 63
+// (qfiles.h TIKI_BONE_QUAT_MULTIPLIER, TIKI_BONE_OFFSET_MULTIPLIER); fakk2.exe
+// decodes with 1/32767 (0x4d57dc, read by the tag code and R_AddSkelSurfaces)
+// and 1/63.
+#define	SKEL_QUAT_SCALE			( 1.0f / 32767.0f )
 #define	SKEL_OFFSET_SCALE		( 1.0f / 63.0f )
 
 // a "last" frame selector, resolved to a frame number once the animation is loaded
@@ -467,7 +477,8 @@ static qboolean TIKI_LoadSkb( tiki_t *tiki, const char *name ) {
 
 			// a bone may only hang off an earlier bone, which keeps evaluation a single pass
 			tiki->boneParents[i] = ( parent >= 0 && parent < i ) ? parent : -1;
-			// a bone whose flags are exactly 1 belongs to the legs (fakk2.exe 0x44ee40, 0x4872d0)
+			// a bone whose flags are exactly 1 belongs to the legs (fakk2.exe 0x44ee40, 0x4872d0);
+			// max2skl writes 1 (qfiles.h TIKI_BONEFLAG_LEG) for a LEGBONE and 0 otherwise
 			tiki->legBones[i] = TIKI_ReadInt( b + 4 ) == 1;
 			Q_strncpyz( tiki->tagNames[i], (const char *)b + 8, MAX_QPATH );
 		}

@@ -58,7 +58,10 @@ Level of detail, tags, cross-blending and torso animations are not handled.
 #define	PIECE_VERTS				( SHADER_MAX_VERTEXES - 100 )
 #define	PIECE_INDEXES			( SHADER_MAX_INDEXES - 600 )
 
-#define	SKEL_QUAT_SCALE			( 1.0f / 32768.0f )
+// stored times 32767 and 63 (qfiles.h TIKI_BONE_QUAT_MULTIPLIER,
+// TIKI_BONE_OFFSET_MULTIPLIER); R_AddSkelSurfaces (0x4872d0) decodes with
+// 1/32767 (0x4d57dc) and 1/63
+#define	SKEL_QUAT_SCALE			( 1.0f / 32767.0f )
 #define	SKEL_OFFSET_SCALE		( 1.0f / 63.0f )
 
 typedef struct {
@@ -1088,7 +1091,10 @@ void RB_SurfaceTan( void *surface ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
 			outXyz[j] = newXyz[j] * newFrame->scale[j] + newFrame->offset[j];
 		}
-		// the normal is two angles, as in Quake III's models
+		// the normal is two angles, as in Quake III's models: max2tan
+		// (MyNormalToLatLong in models.c) puts the angle around z in the
+		// high byte and the angle from +z in the low one, at 255 steps a
+		// turn; they are read back at 256, as Quake III does (under a degree)
 		lat = ( ( newXyz[3] >> 8 ) & 0xff ) * ( FUNCTABLE_SIZE / 256 );
 		lng = ( newXyz[3] & 0xff ) * ( FUNCTABLE_SIZE / 256 );
 		newNormal[0] = tr.sinTable[( lat + ( FUNCTABLE_SIZE / 4 ) ) & FUNCTABLE_MASK] * tr.sinTable[lng];

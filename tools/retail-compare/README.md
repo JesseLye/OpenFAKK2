@@ -98,8 +98,9 @@ Screenshot probes end with `stuffcmd "quit"` instead and are run on both games b
 `retail-capture` skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <p>
 -Map <m>`), which pairs the shots. `probe-crosshair` wields the shotgun in `training` and
 shoots the crosshair on a target and on the floor; `probe-swbranch` cues three cameras on
-`swamp1`; `probe-hud` steps the health and water gauges; `probe-shot-*` shoot the intro at
-fixed times.
+`swamp1`; `probe-hud` steps the health and water gauges; `probe-font` puts up a centre
+print and a location print in `facfont-20` (glyph spacing and height); `probe-shot-*`
+shoot the intro at fixed times.
 
 OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
 `fs_homepath`; the retail runs use a clean copy of the install. So that ours does not

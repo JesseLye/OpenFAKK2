@@ -730,8 +730,12 @@ server and no game module. That differs from the game in ways that are by design
 
 What is implemented, and on what basis:
 
-- **`.ftx` textures**: a twelve byte header (width, height, has-alpha) and RGBA pixels.
-  From the files: all 2948 in the retail archives fit this.
+- **`.ftx` textures**: a twelve byte header (width, height, has-alpha) and RGBA pixels,
+  top row first. This is `ftx_t` in `qfiles.h` of Ritual's tools release, and the
+  order `ftxconvert` reads the pixels in. All 2948 files in the retail archives fit it.
+  `qfiles.h` calls the files "pre mipmapped", but none holds anything after the
+  full-size image. A file whose has-alpha is 0 has its alpha set to 255; in the retail
+  files those bytes are already 255.
 - **Shader scripts**: `if mtex|no_mtex|0|1` ... `endif`, `nextbundle`, vectors without
   parentheses, `rgbGen constant|colorwave|fromEntity|fromClient|global`,
   `alphaGen constant|fromEntity|fromClient|global|skyAlpha|oneMinusSkyAlpha`,
@@ -763,10 +767,26 @@ What is implemented, and on what basis:
   swamp's gas pods drew as nothing. The retail engine also loads the shipped `.cik` cache
   in preference to the `.tik` (`TIKI_RegisterTiki` `0x44d5e0` tries `TIKI_LoadCachedTIKI`
   `0x44d3a0` first); OpenFAKK2 parses the `.tik`, and on the retail data the two agree on
-  every surface's shader. Assumed:
-  that vertex normals use Quake III's two-angle encoding. The origin is added before
-  scaling, as `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso
-  animations and level of detail are not applied.
+  every surface's shader. The file layout is `qfiles.h`'s `tikiHeader_t`, `tikiFrame_t`,
+  `tikiTag_t`/`tikiTagData_t`, `tikiSurface_t` and `tikiXyzNormal_t` (Ritual's tools
+  release), as `max2tan` writes it: frames after the header, then each tag's name and
+  per-frame data, then the surfaces with their triangles, collapse map, texture
+  coordinates and packed vertexes. All 569 version 2 files in the retail archives have
+  exactly this layout, and in all of them a frame's `offset` is its lower bound and its `scale` is
+  its size over 65535. Of what is read, the file's own frame bounds and radius and the
+  collapse map and `minLod` (level of detail) are not used; the bounds are taken from
+  the vertexes. The vertex normal is two angles in a short, as in Quake III: `max2tan`'s
+  `MyNormalToLatLong` puts the angle around z in the high byte and the angle from +z in
+  the low one, both at 255/360 of a step per degree, while the decoder takes 256 steps a
+  turn as Quake III's does (under a degree off). How retail decodes the normal has not
+  been read; `fakk2.exe` holds no floating point constant for either step, so it
+  probably uses a table. Retail's `TIKI_LoadAnimTan` (`0x449a10`) refuses a version
+  other than 2 or no frames and only warns past 1000 vertexes or 2000 triangles a
+  surface; ours refuses past 1200 and 4096 (`qfiles.h`'s `TIKI_MAX_VERTS`,
+  `TIKI_MAX_TRIANGLES`). The largest retail surface has 601 and 787. One `.tan` in the
+  archives is empty and no `.tik` names it. The origin is added before scaling, as
+  `TIKI_Tag_Orientation` (`0x44fe40`) places tags. Cross-blending, torso animations and
+  level of detail are not applied.
 - **Skeletal models** (`.skb` with `.ska` animations): the skeleton's bones and
   weighted vertexes are read at registration and each animation's frames on first use.
   Bones are composed root first the way `TIKI_Tag_Orientation` (`0x44fe40`) does it: a
@@ -774,8 +794,26 @@ What is implemented, and on what basis:
   the entity's bone controllers; its origin is the parent's plus the bone's offset
   turned by the parent's axes (`0x43c800`, Quake's axis convention; the matrix is
   `0x43c980`); the root gets the definition's origin and everything is scaled at the
-  end. Frame quaternions are stored as shorts over 32768 and offsets over 63. Vertexes
-  are the weighted sum of each bone's placed offset. From the retail renderer's
+  end. Frame quaternions (x y z w) are stored as shorts times 32767 and offsets times
+  63 (`qfiles.h` `TIKI_BONE_QUAT_MULTIPLIER`, `TIKI_BONE_OFFSET_MULTIPLIER`), and retail
+  decodes them with 1/32767 (`0x4d57dc`, read by the tag code and `R_AddSkelSurfaces`)
+  and 1/63. Every frame quaternion in the 1140 retail version 3 `.ska` files has a
+  length within 2 of 32767. OpenFAKK2 divided by 32768 until the format audit; the
+  difference is 3 parts in 100000. Vertexes
+  are the weighted sum of each bone's placed offset. The file layout is `qfiles.h`'s
+  `skelHeader_t`, `skelBoneName_t`, `skelSurface_t`, `skelVertex_t`, `skelWeight_t`,
+  `skelAnimHeader_t`, `skelFrame_t` and `skelBone_t`, as `max2skl` writes them: the
+  version 3 files in the archives (29 `.skb`, 1140 `.ska` and `marktest.ska` below) all
+  fit it apart from `marktest.ska`. Every bone's parent
+  is -1 or an earlier bone, and a `.skb` bone's flags are `TIKI_BONEFLAG_LEG` (1, for a
+  `LEGBONE`) or 0. No vertex has more than 6 weights (`max2skl`'s default limit is 8).
+  Retail's `TIKI_LoadSkel` (`0x449fd0`) refuses a version other than 3 or more than
+  100 bones and only warns past 1000 vertexes or 2000 triangles a surface. Not read: a
+  `.ska`'s `type`. `max2skl` never sets it, and 29 retail files hold the uninitialised
+  `0xcccccccc`. The collapse map (level of detail) is not read either. The archives also
+  hold version 1 and 2 skeletons and animations (6 `.skb`, 132 `.ska`), an empty `.ska`, and
+  `models/monster/grawlix/marktest.ska`, whose layout does not fit; no `.tik` names
+  any of them. From the retail renderer's
   `R_AddSkelSurfaces` (`0x4872d0`): a bone whose `.skb` flags are exactly 1 (Julie's
   pelvis, spine and legs) takes the entity's legs animation and every other bone the
   torso animation, when `usetorso` is set; either animation alone moves every bone;
@@ -788,6 +826,25 @@ What is implemented, and on what basis:
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
   bones. Level of detail is not applied in the renderer.
+- **Ritual fonts** (`fonts/<name>.RitualFont`, the `.urc` interface's and the prints'
+  text): `RitFont`, `height`, `aspect`, 256 `indirections` and up to 256 `locations`
+  `{ x y w h }` in pixels of a 256-wide image `256/aspect` high, registered as
+  `gfx/fonts/<name>`. This is what Ritual's `fontgen` writes and what the retail loader
+  (`0x481190`, a function Ghidra leaves undefined) reads; it stores a glyph as x/256,
+  y*aspect/256, w/256, h*aspect/256 and needs `aspect` before `locations`, as every
+  shipped font has it. The retail text draw (`0x481690`, `re` export table at `0x461f28`) and
+  string width (`0x481a40`) advance by the glyph's `w` alone, add nothing for a
+  character without a glyph, count a tab as three space glyphs, and draw every glyph
+  as tall as the font's `height`, whatever its rectangle's height (`facfont-20`'s glyphs
+  are 22 pixels, so the prints' text is squeezed into 20; arial's and comic's 19 and 15
+  are stretched to 20 and 16). `fontgen` leaves one pixel after each glyph in the image
+  for filtering, and the two factors the draw multiplies by (`0x4fa79c`, `0x4fa7a0`) are
+  1 and never written. Until the format audit OpenFAKK2 advanced by `w + 1`, gave a
+  missing space a third of the height and drew each glyph at its own height: a centre
+  print in `facfont-20` came out 36 pixels wider than retail's. With the fix,
+  `tools/retail-compare/probe-font.scr` puts the centre and location prints where
+  retail does and ending on the same pixel; of the text's rows, 6.5% and 8.3% of the pixels still differ
+  (outlines, and the scene behind), against 28% before.
 - **Sprites**: a `.spr` model is the shader of that name, sized, laid out by its
   `spriteGen` and sorted as the retail renderer does it (read from `fakk2.exe`; see
   "Weapon effects" under "With a player present"). Its reach for the fog test is the
