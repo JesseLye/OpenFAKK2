@@ -601,6 +601,20 @@ Not read, done another way:
   is still stretched. The renderer's new
   `ShaderImageSize` tells the UI an image's size. Captured at 100, 75, 50, 25 and 5
   health and water (`probe-hud.scr`), the gauges match the retail captures.
+- **The stat bars' flash** (health, water, ammo): when a bar's fill changes, retail
+  (UIFakkLabel's bar, 0x418270) draws the bar and then adds its
+  `statbar_tileshader_flash` over it in SetColor(i, i, i, i), i fading from 1 to 0 over
+  750 ms. This port drew the flash shader *instead of* the bar for 500 ms in the widget's
+  fgcolor, which in every HUD `.urc` is black; the flash shaders are additive with
+  `rgbGen global`, so the gauges and ammo bars vanished for half a second at every change.
+  The flash restarts on a change of the fill rather than of the stat, so a new range (the
+  ammo of another weapon) flashes too, and an empty bar is not drawn and does not count.
+  The fill is the stat over the range, retail's `stat / (max - min)` (0x4185e0). A
+  `statbar_shader` (the boss bar) is the whole image squeezed into the filled width, where
+  this port had cut it off. Not settled: retail never initialises the last fill, so
+  whether the first draw flashes is unknown; this port does not flash it. Captured 0.15 s
+  and 0.4 s after a change (`probe-flash.scr`) and after a shotgun shot
+  (`probe-ammofl.scr`), the bars match retail's.
 - **`com_abnormalExitDialog 0`** (a startup cvar, default 1) skips ioquake3's "didn't
   exit properly, start in safe mode?" dialog that a stale pid file brings up after the
   game was stopped rather than quit; the harness and debugging launches pass it, since

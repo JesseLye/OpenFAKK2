@@ -1,0 +1,26 @@
+// Changes Julie's health and water and screenshots the HUD's gauges while
+// their flash is up (0.15 s and 0.4 s after a change, of its 750 ms) and once
+// it has gone, for comparing the stat bars' flash with OpenFAKK2's.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-flash -Map training -MaskNotify
+probe:
+waitforplayer
+wait 25
+$player health 100
+$player waterpower 100
+wait 2
+stuffcmd "screenshot"
+wait 3.5
+$player health 60
+$player waterpower 60
+wait 0.15
+stuffcmd "screenshot"
+wait 3.5
+$player health 30
+$player waterpower 30
+wait 0.4
+stuffcmd "screenshot"
+wait 3.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

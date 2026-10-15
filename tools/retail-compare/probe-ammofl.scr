@@ -1,0 +1,23 @@
+// Wields the shotgun, fires one shot and screenshots the HUD's ammo bars
+// while their flash is up and once it has gone, for comparing the stat bars'
+// flash with OpenFAKK2's (probe-flash does the health and water gauges).
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-ammofl -Map training -MaskNotify
+probe:
+waitforplayer
+wait 25
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 3
+stuffcmd "screenshot"
+wait 3.5
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 0.1
+stuffcmd "screenshot"
+wait 3.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
