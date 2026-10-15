@@ -70,6 +70,12 @@ retail game again. Choose the probe with `-Probe`:
   0.1 s through each slow-down. On the headless test player the final position reads 4 to
   6 units short of retail (see `docs/known-differences.md`, "With scripted input");
   `-Extra "+set sv_fps 40"` closes it.
+- `probe-mnwalk` holds `+forward`, opens the main menu (which pauses the game), closes it
+  again and reads the player every 0.25 s; `probe-mswalk` saves the game under the menu
+  as well. Real clients only (`probe-client.ps1`, `-Classname none -Fields Origin`). The
+  steps must stay even across the menu: before the client's clock was held through a
+  pause, the player stood still and then jumped ahead (and retail does this too; its
+  `wait` counts milliseconds, so its menu is up for a shorter time).
 
 Weapon effects are drawn by the client, so these probes are for the real client on
 `zoo` and are compared by their screenshots, run on both games by the `retail-capture`

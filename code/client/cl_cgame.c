@@ -1370,7 +1370,13 @@ void CL_SetCGameTime( void ) {
 
 	// allow pause in single player
 	if ( sv_paused->integer && CL_CheckPaused() && com_sv_running->integer ) {
-		// paused
+		// paused. FAKK2 (deliberate): the server's clock stands still, so hold
+		// ours by taking the frame off the delta. Retail (0x41d590) and Quake III
+		// let cls.realtime run on, and the first command after the pause jumped
+		// the player through the whole of it at once; the server then dropped
+		// every command after it as old for as long again (the menus pause the
+		// game, so after a save the player had no control for a while)
+		cl.serverTimeDelta -= cls.frametime;
 		return;
 	}
 
