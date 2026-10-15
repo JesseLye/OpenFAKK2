@@ -148,7 +148,7 @@ typedef struct {
 	int			ordernumber;
 	// runtime
 	int			lineTop;			// a multi-line text's first line shown
-	int			lastStat;
+	float		lastStatFrac;		// the stat bar's fill when it last drew, -1 before then
 	int			statChangeTime;
 	qboolean	disabled;			// UIWidget's "disable" (0x49e670): hidden, out of the cursor's reach
 	char		linkSnapshot[MAX_CVAR_VALUE_STRING];	// the linked cvar's value when the menu came up (0x4a3a30)
@@ -701,7 +701,7 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 	w->playerstat = w->maxplayerstat = w->invmodelrender = -1;
 	w->statMin = 0;
 	w->statMax = 100;
-	w->lastStat = -99999;
+	w->lastStatFrac = -1;
 	w->rangeMin = 0;
 	w->rangeMax = 1;
 	w->stepSize = 0;
@@ -1061,6 +1061,35 @@ static void URC_DrawPicST( float x, float y, float w, float h, float s1, float t
 	SCR_AdjustFrom640( &x, &y, &w, &h );
 	re.DrawStretchPic( x, y, w, h, s1, t1, s2, t2, shader );
 	re.SetColor( NULL );
+}
+
+/*
+=================
+URC_DrawStatBar
+
+One layer of a stat bar filled to frac (0x418270), vertical (1) from the
+bottom or horizontal from the left. A tiled bar ("statbar_tileshader") lays
+the image over the widget at its own size from the top left, as the
+renderer's DrawTilePic (0x481c60) takes texture coordinates from the
+position, and the drained part is cut off. A stretched one
+("statbar_shader") squeezes the whole image into the filled width; retail
+draws a vertical one from frac down, which no .urc uses, so it is cut off
+from the top here instead.
+=================
+*/
+static void URC_DrawStatBar( int statbar, qboolean tile, float x, float y, float w, float h, float frac, qhandle_t shader, const vec4_t color ) {
+	float	s1 = 1, t1 = 1;
+
+	if ( tile ) {
+		URC_TileST( shader, w, h, &s1, &t1 );
+	}
+	if ( statbar == 1 ) {
+		float	fh = h * frac;
+
+		URC_DrawPicST( x, y + h - fh, w, fh, 0, t1 * ( 1 - frac ), s1, t1, shader, color );
+	} else {
+		URC_DrawPicST( x, y, w * frac, h, 0, 0, tile ? s1 * frac : 1, t1, shader, color );
+	}
 }
 
 /*
@@ -2513,40 +2542,48 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 	}
 
 	// a stat bar fills from the bottom or the left with the stat's share
-	// of its range; it flashes with the other shader just after a change
+	// of its range (UIFakkLabel::Draw 0x4185e0, the bar 0x418270); after a
+	// change its flash shader is added over it, fading out over 750 ms
 	if ( w->statbar && w->playerstat >= 0 ) {
-		int			stat = URC_PlayerStat( w->playerstat );
-		float		max = w->maxplayerstat >= 0 ? URC_PlayerStat( w->maxplayerstat ) : w->statMax;
+		float		stat = URC_PlayerStat( w->playerstat );
+		float		range = w->maxplayerstat >= 0 ? URC_PlayerStat( w->maxplayerstat ) : w->statMax - w->statMin;
 		float		frac;
-		qhandle_t	barShader;
+		qhandle_t	barShader = w->statTile ? w->statTile : w->statShader;
 
-		if ( stat != w->lastStat ) {
-			if ( w->lastStat != -99999 ) {
-				w->statChangeTime = cls.realtime;
-			}
-			w->lastStat = stat;
-		}
-		frac = max > w->statMin ? ( stat - w->statMin ) / ( max - w->statMin ) : 0;
-		if ( frac < 0 ) frac = 0;
+		// retail divides by the range as it is, so an empty range (no ammo
+		// for no weapon) is a NaN and draws nothing, and a full stat over it
+		// fills the bar
+		frac = range != 0 ? stat / range : ( stat > 0 ? 1 : 0 );
 		if ( frac > 1 ) frac = 1;
-		barShader = ( w->statFlash && cls.realtime - w->statChangeTime < 500 ) ? w->statFlash :
-			( w->statTile ? w->statTile : w->statShader );
-		if ( barShader && frac > 0 ) {
-			// a "statbar_tileshader" is laid over the widget at the image's own
-			// size from the top left (the health and water gauges are 64x128
-			// images whose arcs fill the top 72 rows of a 64x72 widget) and the
-			// drained part is cut off; a "statbar_shader" is stretched over it
-			float	s1 = 1, t1 = 1;
+		if ( frac < 0 ) frac = 0;
+		if ( frac > 0 ) {
+			qboolean	tile = w->statTile || !w->statShader;
+			float		flash;
 
-			if ( barShader != w->statShader ) {
-				URC_TileST( barShader, wd, ht, &s1, &t1 );
+			// the flash restarts whenever the fill changes, a change of the
+			// range (another weapon's ammo) included; an empty bar is not
+			// drawn and so does not count. This port does not flash the
+			// first fill it draws.
+			if ( frac != w->lastStatFrac ) {
+				if ( w->lastStatFrac >= 0 ) {
+					w->statChangeTime = cls.realtime;
+				}
+				w->lastStatFrac = frac;
 			}
-			if ( w->statbar == 1 ) {
-				float	fh = ht * frac;
+			flash = w->statChangeTime ? 1 - ( cls.realtime - w->statChangeTime ) / 750.0f : 0;
+			if ( flash > 1 ) flash = 1;
 
-				URC_DrawPicST( x, y + ht - fh, wd, fh, 0, t1 * ( 1 - frac ), s1, t1, barShader, color );
-			} else {
-				URC_DrawPicST( x, y, wd * frac, ht, 0, 0, s1 * frac, t1, barShader, color );
+			if ( barShader ) {
+				URC_DrawStatBar( w->statbar, tile, x, y, wd, ht, frac, barShader, color );
+			}
+			// over the bar, not instead of it: the flash shaders add their
+			// image in the colour set for them (rgbGen global), white at the
+			// change fading to nothing, not the widget's (black) colour
+			if ( flash > 0 && w->statFlash ) {
+				vec4_t	flashColor;
+
+				Vector4Set( flashColor, flash, flash, flash, flash );
+				URC_DrawStatBar( w->statbar, tile, x, y, wd, ht, frac, w->statFlash, flashColor );
 			}
 		}
 	}
