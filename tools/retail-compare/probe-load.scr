@@ -1,0 +1,11 @@
+// Does a map load? Waits for the player, takes one screenshot three seconds after entry
+// and quits. Run it with the retail-capture skill on any map, the example maps included:
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-load -Map example/rain
+// A map that fails to load never reaches waitforplayer, so its run takes no screenshot.
+probe:
+waitforplayer
+wait 3
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "quit"
+end

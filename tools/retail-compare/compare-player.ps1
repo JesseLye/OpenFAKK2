@@ -31,13 +31,14 @@ function Wait-ForMarker($process, $files, $seconds) {
 }
 
 # --- retail game --------------------------------------------------------------------
-$retailLog = Join-Path $LogDir "player-retail-$Map-$Probe.log"
+$retailLog = Join-Path $LogDir "player-retail-$(Get-MapTag $Map)-$Probe.log"
 function Run-Retail($log) {
     $dir = Join-Path $Sandbox 'retail'
     if (-not (Test-Path "$dir\fakk2.exe")) { & (Join-Path $PSScriptRoot 'run-retail.ps1') -Name retail -Map $Map -Secs 5 | Out-Null }
     Copy-Item "$GameInstall\fakk\default.cfg" "$dir\fakk\default.cfg" -Force
-    New-Item -ItemType Directory -Force "$dir\fakk\maps" | Out-Null
-    Copy-Item $probeFile "$dir\fakk\maps\$Probe.scr" -Force
+    $probeDir = Get-ProbeDir $dir $Map
+    New-Item -ItemType Directory -Force $probeDir | Out-Null
+    Copy-Item $probeFile "$probeDir\$Probe.scr" -Force
     $console = "$dir\fakk\qconsole.log"
     Remove-Item $console -ErrorAction SilentlyContinue
     $arguments = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 +map $Map $after"
@@ -51,11 +52,11 @@ if ($Refresh -or -not (Test-Path $retailLog)) { Run-Retail $retailLog }
 
 # --- OpenFAKK2 ----------------------------------------------------------------------
 if ($RetailTwice) {
-    $ourLog = Join-Path $LogDir "player-retail2-$Map-$Probe.log"
+    $ourLog = Join-Path $LogDir "player-retail2-$(Get-MapTag $Map)-$Probe.log"
     Run-Retail $ourLog
 } else {
-$ourLog = Join-Path $LogDir "player-ours-$Map-$Probe.log"
-$homeMaps = Join-Path $Sandbox 'home\fakk\maps'
+$ourLog = Join-Path $LogDir "player-ours-$(Get-MapTag $Map)-$Probe.log"
+$homeMaps = Get-ProbeDir (Join-Path $Sandbox 'home') $Map
 New-Item -ItemType Directory -Force $homeMaps | Out-Null
 Copy-Item $probeFile "$homeMaps\$Probe.scr" -Force
 Remove-Item "$ourLog.stdout", "$ourLog.stderr" -ErrorAction SilentlyContinue

@@ -50,7 +50,7 @@ if ($Retail) {
     Copy-Item "$GameInstall\fakk\default.cfg" "$gameDir\fakk\default.cfg" -Force
     $exe = Join-Path $gameDir 'fakk2.exe'
     $workDir = $gameDir
-    $maps = Join-Path $gameDir 'fakk\maps'
+    $maps = Get-ProbeDir $gameDir $Map
     $console = Join-Path $gameDir 'fakk\qconsole.log'
     $arguments = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra +map $Map +script thread $probeName.scr::probe"
@@ -61,7 +61,7 @@ else {
     if (-not (Test-Path $exe)) { throw "no client at $exe (build it, or pass -Bin)" }
     $homeDir = Join-Path $Sandbox 'home'
     $workDir = $Bin
-    $maps = Join-Path $homeDir 'fakk\maps'
+    $maps = Get-ProbeDir $homeDir $Map
     $console = Join-Path $homeDir 'fakk\qconsole.log'
     $arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$homeDir`" +set com_abnormalExitDialog 0 " +
         "+set r_fullscreen 0 +set r_mode 4 +set in_nograb 1 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
@@ -71,7 +71,7 @@ else {
 New-Item -ItemType Directory -Force $maps | Out-Null
 Copy-Item $probeFile (Join-Path $maps "$probeName.scr") -Force
 Remove-Item $console -ErrorAction SilentlyContinue
-$log = Join-Path $LogDir "client-$Name-$Map-$probeName.log"
+$log = Join-Path $LogDir "client-$Name-$(Get-MapTag $Map)-$probeName.log"
 
 $p = Start-Process -FilePath $exe -WorkingDirectory $workDir -ArgumentList $arguments -PassThru
 

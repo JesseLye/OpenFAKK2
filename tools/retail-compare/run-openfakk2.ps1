@@ -5,7 +5,7 @@ param([string]$Map = 'zoo', [int]$Secs = 60, [string]$Extra = '', [int]$QuietSec
 $r = $RepoRoot
 $b = $EngineBin
 $g = $GameInstall
-$out = Join-Path $LogDir "of-$Map.log"
+$out = Join-Path $LogDir "of-$(Get-MapTag $Map).log"
 Remove-Item "$out.stdout", "$out.stderr" -ErrorAction SilentlyContinue
 $p = Start-Process -FilePath "$b\openfakk2ded.exe" -WorkingDirectory $b -ArgumentList "+set fs_basepath `"$g`" +set fs_homepath `"$r\build\sandbox\home`" +set developer 1 $Extra +map $Map $After" -PassThru -NoNewWindow -RedirectStandardOutput "$out.stdout" -RedirectStandardError "$out.stderr"
 $started = Get-Date; $deadline = $started.AddSeconds($Secs)

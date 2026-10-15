@@ -47,11 +47,11 @@ $text = Get-Content $probeFile -Raw
 if ($text -notmatch '(?m)^\s*waitforplayer') { "warning: $probeName has no waitforplayer; its waits count from the thread's start, not the player's entry" }
 if ($text -notmatch 'stuffcmd\s+"quit"') { "warning: $probeName does not end with stuffcmd ""quit""; each run lasts the full ${Secs}s" }
 
-$outDir = Join-Path $LogDir "captures\$probeName-$Map"
+$outDir = Join-Path $LogDir "captures\$probeName-$(Get-MapTag $Map)"
 New-Item -ItemType Directory -Force $outDir | Out-Null
 
 function Invoke-Side([string]$label, [string]$exe, [string]$workDir, [string]$gameHome, [string]$arguments, [string]$windowStyle) {
-    $maps = Join-Path $gameHome 'fakk\maps'
+    $maps = Get-ProbeDir $gameHome $Map
     $shotDir = Join-Path $gameHome 'fakk\screenshots'
     $console = Join-Path $gameHome 'fakk\qconsole.log'
     New-Item -ItemType Directory -Force $maps | Out-Null
@@ -63,7 +63,7 @@ function Invoke-Side([string]$label, [string]$exe, [string]$workDir, [string]$ga
     $p = Start-Process -FilePath $exe -WorkingDirectory $workDir -ArgumentList $arguments -PassThru -WindowStyle $windowStyle
     if (-not $p.WaitForExit($Secs * 1000)) { $p.Kill(); $p.WaitForExit(); $state = "stopped after ${Secs}s" } else { $state = "exited with code $($p.ExitCode)" }
 
-    $log = Join-Path $LogDir "capture-$label-$Map-$probeName.log"
+    $log = Join-Path $LogDir "capture-$label-$(Get-MapTag $Map)-$probeName.log"
     if (Test-Path $console) { Copy-Item $console $log -Force } else { $log = '(no console log)' }
     # this run's shots: names that are new, or rewritten since the run started. Retail
     # cuts the file's path at 127 characters, so from a deep worktree its shots can be

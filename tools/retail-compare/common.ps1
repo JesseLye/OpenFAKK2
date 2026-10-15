@@ -29,6 +29,43 @@ if (-not (Test-Path $homeAutoexec)) {
     Set-Content -Path $homeAutoexec -Value "// empty on purpose: shadows the install's autoexec.cfg so harness runs use engine defaults" -Encoding ascii
 }
 
+# Ritual's example maps (fakk\maps\example in the tools release: one small map per feature)
+# as test levels, named example/<map> on the command line. Copies the compiled maps, their
+# level scripts and path files into both sandboxes' fakk\maps\example: the retail game's
+# and ours' home, which ours searches before the install. Never into the repository (see
+# $RitualTools above). Files already there with the same size and time are left alone.
+function Install-ExampleMaps {
+    $source = Join-Path $RitualTools 'fakk\maps\example'
+    if (-not (Test-Path $source)) { throw "no example maps at $source; set FAKK2_TOOLS to a clone of Ritual's tools release" }
+    $files = Get-ChildItem $source -File | Where-Object { $_.Extension -in '.bsp', '.scr', '.pth' }
+    foreach ($game in 'retail', 'home') {
+        $dest = Join-Path $Sandbox "$game\fakk\maps\example"
+        New-Item -ItemType Directory -Force $dest | Out-Null
+        $copied = 0
+        foreach ($f in $files) {
+            $target = Join-Path $dest $f.Name
+            $old = Get-Item $target -ErrorAction SilentlyContinue
+            if ($old -and $old.Length -eq $f.Length -and $old.LastWriteTimeUtc -eq $f.LastWriteTimeUtc) { continue }
+            Copy-Item $f.FullName $target -Force
+            $copied++
+        }
+        "$game`: $copied of $($files.Count) files copied to $dest"
+    }
+}
+
+# A map name such as example/rain, made safe for a log or folder name.
+function Get-MapTag([string]$Map) { $Map -replace '[\\/]', '-' }
+
+# The folder a probe has to be in for a map. "+script thread <probe>.scr::probe" names the
+# script without a path, and the game looks for such a script in the map's own folder
+# (ScriptLibrarian::GetScript), so a probe on example/rain goes in fakk\maps\example.
+function Get-ProbeDir([string]$GameHome, [string]$Map) {
+    $dir = Join-Path $GameHome 'fakk\maps'
+    $sub = Split-Path ($Map -replace '/', '\') -Parent
+    if ($sub) { $dir = Join-Path $dir $sub }
+    $dir
+}
+
 # The probe runners start ours with "+set in_mouse 0" so that a stray mouse cannot turn
 # the player mid-probe. The engine registers in_mouse as archived, so a run that quits
 # writes "seta in_mouse 0" into this home's config.cfg, and the next game played from

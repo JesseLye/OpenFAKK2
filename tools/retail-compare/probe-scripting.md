@@ -39,6 +39,82 @@ end
 and a release, `@sweep [from] [to]` reads entities. Its `@end` adds `levelvars` and
 `pendingevents` but not `quit`, so add `stuffcmd "quit"` yourself to a picture probe.
 
+## Example maps
+
+Ritual's tools release has 32 small maps, each showing one feature. They make good test
+levels: small, quick to load, and with nothing else going on. Install them into both
+sandboxes (the retail game's and ours' home) with
+
+```
+tools\retail-compare\install-example-maps.ps1
+```
+
+It copies the `.bsp`, `.scr` and `.pth` files from `$RitualTools\fakk\maps\example`
+(`common.ps1`; `FAKK2_TOOLS` overrides it) into `build\sandbox\retail\fakk\maps\example`
+and `build\sandbox\home\fakk\maps\example`, and skips files already there. Ritual's licence
+does not allow copying them, so they stay under `build\` and are never committed. Run it
+again in each new worktree: its sandboxes are its own.
+
+Name them with their folder: `-Map example/rain`. Both games load maps from a subfolder,
+and each map's own level script (`maps\example\<map>.scr`) runs as usual. The runners
+put the probe in the map's folder, because the game looks for a script named without a
+path (`+script thread probe.scr::probe`) next to the map, not in `maps\`.
+
+`probe-load` takes one screenshot three seconds after entry and quits, which shows
+whether a map loads and what the player sees there:
+`.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-load -Map example/zoo`.
+All 32 loaded on both games with it, and the pictures matched (2026-10-15). On retail it
+also ran on `example/gibs_and_health`, a 168-character command line from `capture.ps1`, so
+the length limit under "Start and end" is not a plain count of characters.
+
+A few maps use textures that are not in the paks (`autocamera`, `box3`, `multiexploder`,
+`teleporter`, `zoo`'s sky); both games draw the default image there. The level scripts
+start at entry, so a probe's waits run alongside them.
+
+- `CameraScript`: 5 s after entry the script cuts to a camera following a spline path,
+  then to one orbiting Gruff, then back to the player (once). Gruff and an Eden male stand
+  in the room.
+- `autocamera`: automatic cameras (`func_camera` with `auto_radius`, `auto_state`) that
+  take over near monkey bars and a horizontal pipe.
+- `autosprite`: wall faces with `deformVertexes autosprite` and `autosprite2`
+  (`testsprite1`/`2` in `mark.shader`, the portal sprite), turning to face the view.
+- `beam`: two dark blue `func_beam`s; the script sets a light style on one.
+- `beam1`: one `func_beam` that hurts what crosses it (`damage 10`).
+- `box3`: an empty lit room; the plainest level here.
+- `climb`: a `func_rope` to climb.
+- `cover`: an Eden male (`edenmale_EAexample.tik`) on a path-node grid with cover nodes.
+- `door`: a use trigger sends Balthazar walking through a `func_door` to a path node.
+- `doors`: two sliding `func_door`s and two `func_rotatingdoor`s.
+- `earthquake`: a trigger that starts a four-second `func_earthquake` (the view shakes).
+- `explodeobject`: five `func_explodeobject`s (a statue, rocks with debris) and a
+  `func_multi_exploder`; hit or shoot them.
+- `exploder`: a trigger that sets off a `func_exploder`.
+- `explodingwall`: a trigger that blows out a wall of eleven `func_explodingwall` pieces.
+- `fallingrock`: a trigger drops a `func_fallingrock` that bounces along nine waypoints.
+- `fulcrum`: two `func_fulcrum` tables that tip under weight (45° limit). Its script ends
+  on its first line, so its cameras never cut.
+- `funcspawn`: a `trigger_once` that spawns a creeper (`func_spawn`).
+- `gibs_and_health`: two female Lympthorns and three health plants. The Lympthorns spit at
+  the player at random moments, so two runs differ: not for picture comparisons.
+- `letterbox`: every 13 s the script shows the letterbox bars and a red beam for 8 s
+  (first at 5 s).
+- `multiexploder`: a trigger that sets off a four-second `func_multi_exploder`.
+- `patrol`: a dark creeper walking back and forth between two path nodes.
+- `pickup`: a use trigger makes Balthazar pick up a Shgliek, carry it and throw it.
+- `pushobject`: two `func_pushobject` boxes; pushing one onto its `trigger_pushobject`
+  opens a door ("Got me!").
+- `rain`: `func_rain` and a `func_emitter` of falling leaves.
+- `runthrough`: a `func_runthrough` that throws plant seeds when walked through.
+- `scriptgravity`: four brush `script_object`s the script throws (`physics_on`,
+  `physics_velocity`) and resets, every 7 s or so.
+- `sinkobject`: four `func_sinkobject` lily pads that sink under the player.
+- `teleporter`: two teleport pads and a `func_teleportdest`.
+- `useanim`: two `func_useanim` spots where Julie plays her push animation.
+- `useobject`: a crank Julie turns (`func_useanim`, `crank_turn_forward`).
+- `vehicle`: an ATV with its tyres (`vehicles_atv`).
+- `zoo`: a corridor of 33 doors, behind each one creature, weapon or item: the game's
+  enemies and weapons. The same file as `zoo` in `pak0.pk3`, so `-Map zoo` needs no install.
+
 ## Keys
 
 The headless test player (`sv_testplayer 1`, retail-probe's `compare-player.ps1`) only
