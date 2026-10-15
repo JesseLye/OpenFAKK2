@@ -137,7 +137,7 @@ Missing from OpenFAKK2, to be done:
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`),
-  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `vidmode`,
+  `ui_resetcvars`, `ui_checkrestart`, `vidmode`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
@@ -669,6 +669,12 @@ Not read, done another way:
   three optional materials replace the label's, Ok's and Cancel's text
   (`0x4abba0`/`0x4abc70`/`0x4abd40`). Ok runs the command; Ok, Cancel and the close
   box close it. `probe-dialog` matches retail's to a mean of 0.15 over the window.
+  `ui_testlist` (`0x40d950`) makes "Test list control", 400x300 at 20, 20, inactive,
+  holding a `UIListCtrl` (`0x4ac830`) over its client frame drawn as the load list is:
+  columns "Name" 100, "Ping" 64 and "IP" 64 wide and a hundred times three rows,
+  white on white, so none can be seen; `probe-tlist` matches retail's to a mean of 0.05
+  below the console's notify lines. A click selects a row (black on white), the bar and
+  the wheel scroll it.
   Retail's label line lands 6 pixels above the centre of its frame (as if 12 shorter),
   for a reason not found; OpenFAKK2 copies the position. Windows do not bring the cursor
   up; with it up (`+togglemouse`, `ui_showmouse`, a menu) a click raises and activates

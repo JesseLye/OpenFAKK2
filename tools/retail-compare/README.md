@@ -138,7 +138,8 @@ cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
 `probe-fogvol` frames `cemetery`'s blood and water entrance fogs from three script cameras,
 40 seconds in (after the level's own cameras), each cued twice. `probe-uihud` takes `zoo`
 with the HUD and after `ui_hud 0`. `probe-dialog` brings up a `dialog` on `zoo`; retail
-crashes on quitting with it open, which the capture survives.
+crashes on quitting with it open, which the capture survives. `probe-tlist` does the same
+with `ui_testlist`; retail shows only the first floating window of a run.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

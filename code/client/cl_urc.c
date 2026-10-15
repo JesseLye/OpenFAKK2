@@ -3031,7 +3031,8 @@ its title bar and back.
 #define URC_DIALOG_MARGIN	6				// 0x4d633c
 
 typedef enum {
-	WIN_DIALOG
+	WIN_DIALOG,
+	WIN_TESTLIST
 } urcWindowKind_t;
 
 typedef enum {
@@ -3049,6 +3050,11 @@ typedef struct {
 	char			cvar[64];
 	char			command[256];
 	qhandle_t		material[3];
+	// a list: the first row shown, the selected row (1.., 0 for none), what
+	// the left button holds on its scroll bar and where on the thumb
+	int				top, selected;
+	urcScrollPart_t	held;
+	float			grab;
 } urcWindow_t;
 
 static urcWindow_t		urc_windows[URC_MAX_WINDOWS];	// bottom to top
@@ -3230,6 +3236,117 @@ static void URC_DrawDialog( const urcWindow_t *win, int index ) {
 	URC_DrawDialogButton( win, index, WINPART_CANCEL, "Cancel", win->material[2] );
 }
 
+/*
+=================
+The test list
+
+ui_testlist (0x40d950): a UIListCtrl (0x4ac830) over the client frame in
+verdana-12, its colour white, with the columns "Name" 100, "Ping" 64 and
+"IP" 64 wide and a hundred times the rows ("Item 1", "123", "1"),
+("Item 2", "60", "2"), ("Item 3", "-5", "3"). It is drawn as the load
+list is (0x4ace40): the headers 16 tall, 0.3 grey inside white lines, their
+titles white at 2, 2; a row per font height in the list's colours, white
+on white here, so retail's rows cannot be seen; the selected row black on
+white; the scroll bar down the right.
+=================
+*/
+#define URC_TESTLIST_ROWS	300
+
+static const char	*urc_testColumns[3] = { "Name", "Ping", "IP" };
+static const int	urc_testWidths[3] = { 100, 64, 64 };
+static const char	*urc_testCells[3][3] = { { "Item 1", "123", "1" }, { "Item 2", "60", "2" }, { "Item 3", "-5", "3" } };
+
+static int URC_TestListPage( const float c[4] ) {
+	int		rows = (int)( ( c[3] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) );
+
+	return rows < 1 ? 1 : rows;
+}
+
+static void URC_TestListClamp( urcWindow_t *win ) {
+	float	c[4];
+	int		page;
+
+	URC_WindowClient( win, c );
+	page = URC_TestListPage( c );
+	if ( win->top > URC_TESTLIST_ROWS - page ) {
+		win->top = URC_TESTLIST_ROWS - page;
+	}
+	if ( win->top < 0 ) {
+		win->top = 0;
+	}
+}
+
+static void URC_DrawTestList( const urcWindow_t *win, int index ) {
+	static const vec4_t	headerFill = { 0.3f, 0.3f, 0.3f, 1 };
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	black = { 0, 0, 0, 1 };
+	urcFont_t			*font = URC_LoadFont( URC_DEFAULT_FONT );
+	float				c[4], r[4], saved[4], x, y, rowH = URC_FontHeight( font );
+	int					col, i;
+
+	URC_WindowClient( win, c );
+	URC_PushClip( c, saved );
+	URC_Box( c[0], c[1], c[2], c[3], white, 1 );
+
+	x = 0;
+	for ( col = 0 ; col < 3 ; col++ ) {
+		Vector4Set( r, c[0] + x, c[1], urc_testWidths[col] + 1, URC_SAVE_HEADER );
+		URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+		URC_DrawString( font, r[0] + 2, r[1] + 2, urc_testColumns[col], white );
+		x += urc_testWidths[col];
+	}
+	Vector4Set( r, c[0] + x, c[1], c[2] - x + 1, URC_SAVE_HEADER );
+	URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+
+	for ( i = win->top, y = URC_SAVE_HEADER ; i < URC_TESTLIST_ROWS && y <= c[3] ; i++, y += rowH ) {
+		const float	*text = i + 1 == win->selected ? black : white;
+
+		x = 0;
+		for ( col = 0 ; col < 3 ; col++ ) {
+			URC_DrawString( font, c[0] + x, c[1] + y, urc_testCells[i % 3][col], text );
+			x += urc_testWidths[col];
+		}
+	}
+
+	URC_DrawScrollBar( c, URC_TESTLIST_ROWS, URC_TestListPage( c ), win->top,
+		urc_windowPress == index ? win->held : SCROLL_NONE, 1 );
+	URC_PopClip( saved );
+}
+
+// a click in the test list: its scroll bar, or a row to select
+static void URC_TestListClick( urcWindow_t *win ) {
+	float	c[4];
+	int		page, row;
+
+	URC_WindowClient( win, c );
+	page = URC_TestListPage( c );
+	win->held = URC_ScrollPart( c, URC_TESTLIST_ROWS, page, win->top, urc_cursorX, urc_cursorY );
+	switch ( win->held ) {
+	case SCROLL_UP: win->top--; break;
+	case SCROLL_DOWN: win->top++; break;
+	case SCROLL_PAGEUP: win->top -= page; break;
+	case SCROLL_PAGEDOWN: win->top += page; break;
+	case SCROLL_THUMB:
+		{
+			float	sr[4], ty, th;
+
+			URC_ScrollRect( c, sr );
+			URC_ScrollThumb( sr, URC_TESTLIST_ROWS, page, win->top, &ty, &th );
+			win->grab = urc_cursorY - ( sr[1] + ty );
+		}
+		break;
+	default:
+		if ( urc_cursorX < c[0] + c[2] - URC_SCROLL_WIDTH && urc_cursorY >= c[1] + URC_SAVE_HEADER ) {
+			row = win->top + (int)( ( urc_cursorY - c[1] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) ) + 1;
+			if ( row >= 1 && row <= URC_TESTLIST_ROWS ) {
+				win->selected = row;
+			}
+		}
+		break;
+	}
+	URC_TestListClamp( win );
+}
+
 static void URC_DrawWindow( int index ) {
 	static const vec4_t	white = { 1, 1, 1, 1 };
 	static const vec4_t	black = { 0, 0, 0, 1 };
@@ -3273,6 +3390,9 @@ static void URC_DrawWindow( int index ) {
 		case WIN_DIALOG:
 			URC_DrawDialog( win, index );
 			break;
+		case WIN_TESTLIST:
+			URC_DrawTestList( win, index );
+			break;
 		}
 	}
 	URC_PopClip( saved );
@@ -3298,12 +3418,28 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 	urcWindowPart_t	part;
 	int				i;
 
+	// the wheel scrolls a list under the cursor
+	if ( ( key == K_MWHEELUP || key == K_MWHEELDOWN ) && down ) {
+		i = URC_WindowAt( urc_cursorX, urc_cursorY );
+		if ( i < 0 ) {
+			return qfalse;
+		}
+		if ( urc_windows[i].kind == WIN_TESTLIST && !urc_windows[i].minimized ) {
+			urc_windows[i].top += key == K_MWHEELUP ? -1 : 1;
+			URC_TestListClamp( &urc_windows[i] );
+		}
+		return qtrue;
+	}
 	if ( key != K_MOUSE1 ) {
 		return qfalse;
 	}
 	if ( !down ) {
 		i = urc_windowPress;
 		urc_windowDrag = urc_windowPress = -1;
+		if ( i >= 0 && i < urc_numWindows && urc_windows[i].held != SCROLL_NONE ) {
+			urc_windows[i].held = SCROLL_NONE;
+			return qtrue;
+		}
 		if ( i < 0 || i >= urc_numWindows || URC_WindowPartAt( &urc_windows[i], urc_cursorX, urc_cursorY ) != urc_windowPressPart ) {
 			return qfalse;
 		}
@@ -3346,17 +3482,34 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 		urc_windowPress = i;
 		urc_windowPressPart = part;
 		break;
+	case WINPART_CLIENT:
+		if ( urc_windows[i].kind == WIN_TESTLIST ) {
+			URC_TestListClick( &urc_windows[i] );
+			if ( urc_windows[i].held != SCROLL_NONE ) {
+				urc_windowPress = i;
+				urc_windowPressPart = part;
+			}
+		}
+		break;
 	default:
 		break;
 	}
 	return qtrue;
 }
 
-// a window dragged by its title bar follows the cursor
+// a window dragged by its title bar follows the cursor, a list's thumb
+// the cursor's height
 static void URC_WindowMouseMove( void ) {
 	if ( urc_windowDrag >= 0 && urc_windowDrag < urc_numWindows ) {
 		urc_windows[urc_windowDrag].rect[0] = urc_cursorX - urc_windowGrab[0];
 		urc_windows[urc_windowDrag].rect[1] = urc_cursorY - urc_windowGrab[1];
+	}
+	if ( urc_windowPress >= 0 && urc_windowPress < urc_numWindows && urc_windows[urc_windowPress].held == SCROLL_THUMB ) {
+		urcWindow_t	*win = &urc_windows[urc_windowPress];
+		float		c[4];
+
+		URC_WindowClient( win, c );
+		win->top = URC_ScrollTopAt( c, URC_TESTLIST_ROWS, URC_TestListPage( c ), urc_cursorY - win->grab );
 	}
 }
 
@@ -3394,6 +3547,20 @@ static void URC_Dialog_f( void ) {
 		}
 	}
 	URC_ActivateWindow( win - urc_windows );
+}
+
+/*
+=================
+URC_TestList_f
+
+ui_testlist (fakk2.exe 0x40d950): "Test list control", 400x300 at 20, 20,
+coloured 0.1 grey, holding the test list; it is not made active.
+=================
+*/
+static void URC_TestList_f( void ) {
+	static const vec4_t	color = { 0.1f, 0.1f, 0.1f, 1 };
+
+	URC_NewWindow( WIN_TESTLIST, "Test list control", 20, 20, 400, 300, color );
 }
 
 /*
@@ -4130,6 +4297,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "widgetcommand", URC_WidgetCommand_f );
 	Cmd_AddCommand( "ui_hud", URC_Hud_f );
 	Cmd_AddCommand( "dialog", URC_Dialog_f );
+	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
 	urc_initialised = qtrue;
 	urc_lastState = -1;
 }
@@ -4153,6 +4321,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "locationprint" );
 	Cmd_RemoveCommand( "widgetcommand" );
 	Cmd_RemoveCommand( "dialog" );
+	Cmd_RemoveCommand( "ui_testlist" );
 	URC_CloseAllWindows();		// their materials die with the renderer
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer
