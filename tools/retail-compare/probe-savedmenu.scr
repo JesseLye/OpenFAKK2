@@ -1,0 +1,17 @@
+// Saves the game, which centre-prints the "GAME SAVED" picture for 4 s, shoots it once
+// it is fully faded in, then brings the main menu up over the game and shoots it twice:
+// while the menu is still fading in (the print shows through it, under it) and once it
+// is up (the print is hidden). The menu pauses the game, so the shots after it and the
+// quit are chained in one command line; retail's wait counts milliseconds and ours
+// frames (about 4 ms in the harness), so the menu shots land at 50 / 350 ms on retail
+// and about 0.2 / 1.4 s on ours, all within the print's 4 s.
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-savedmenu -Map zoo -MaskNotify
+probe:
+waitforplayer
+wait 2
+stuffcmd "savegame"
+wait 1.5
+stuffcmd "screenshot"
+wait 0.3
+stuffcmd "pushmenu main; wait 50; screenshot; wait 300; screenshot; wait 100; quit"
+end

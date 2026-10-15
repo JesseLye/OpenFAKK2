@@ -1,0 +1,13 @@
+// A centre print shot halfway through its fade-in: retail fades a print in over 750 ms
+// (0x419480), so at 375 ms its text is drawn at half strength. Compare the text's region:
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-pfade -Map zoo
+//   python -I .claude\skills\retail-capture\scripts\shots.py pair <cap>\retail-0.tga <cap>\ours-0.tga <out>.png --crop 200 220 440 260 --zoom 3
+probe:
+waitforplayer
+wait 2
+centerprint "FADE MMMM WWWW"
+wait 0.375
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "quit"
+end

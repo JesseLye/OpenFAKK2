@@ -63,9 +63,7 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 #define URC_SCROLL_FONT		"marlett"		// UIVertScroll's arrows: "5" up, "6" down (0x4b3ab0)
 #define URC_PRINT_FONT		"facfont-20"
 #define URC_PRINT_TIME		4000		// 0x418cc0 sets 4000.0; retail shows the intro's quote at 1 s and not at 4.5 s
-#define URC_PRINT_FADE		1000		// the fade inside that time; not read from retail
-#define URC_PRINT_HOLD		( URC_PRINT_TIME - URC_PRINT_FADE )
-#define URC_PRINT_FADEIN	500			// the credits fade in; the time is not read from retail
+#define URC_PRINT_FADE		750			// in and out (0x419480, 0x419770: 3250 and 750 of the 4000 left)
 
 #define Vector4Set( v, a, b, c, d )	( (v)[0] = (a), (v)[1] = (b), (v)[2] = (c), (v)[3] = (d) )
 
@@ -3087,15 +3085,25 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 		pr->active = qfalse;
 		return;
 	}
-	alpha = pr->alpha;
-	if ( elapsed < URC_PRINT_FADEIN ) {
-		alpha *= elapsed / (float)URC_PRINT_FADEIN;
-	} else if ( elapsed > URC_PRINT_HOLD ) {
-		alpha *= ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE;
+	// retail (0x419480, 0x419770): the print's alpha scales the fades only,
+	// and the time between them is drawn opaque
+	if ( elapsed < URC_PRINT_FADE ) {
+		alpha = 1.0f - ( URC_PRINT_FADE - elapsed ) / (float)URC_PRINT_FADE * pr->alpha;
+	} else if ( elapsed > URC_PRINT_TIME - URC_PRINT_FADE ) {
+		alpha = ( URC_PRINT_TIME - elapsed ) / (float)URC_PRINT_FADE * pr->alpha;
+	} else {
+		alpha = 1.0f;
+	}
+	if ( alpha < 0 ) {
+		alpha = 0;
+	} else if ( alpha > 1 ) {
+		alpha = 1;
 	}
 	Vector4Set( color, 1, 1, 1, alpha );
 	if ( pr->shader ) {
-		float	w = 256, h = 128;		// the image's own size is not known here
+		// the picture at its own size, centred (0x419480: the renderer's
+		// width and height of the image); "GAME SAVED" is 256 x 64
+		float	w = re.GetShaderWidth( pr->shader ), h = re.GetShaderHeight( pr->shader );
 
 		URC_DrawPicST( 320 - w * 0.5f, 240 - h * 0.5f, w, h, 0, 0, 1, 1, pr->shader, color );
 		return;
@@ -3878,6 +3886,16 @@ void URC_Draw( void ) {
 		return;
 	}
 
+	// the center and location prints ("GAME SAVED" is one) are drawn by the
+	// retail desktop's own Draw (0x419ba0, then 0x4193f0, the print at
+	// 0x419480 or 0x419770), and UIWidget::Display (0x49ef30) draws a widget
+	// before its children, every menu and the HUD among them: so the prints are
+	// under the menus, and the main menu, which covers the screen, hides them
+	if ( clc.state == CA_ACTIVE ) {
+		URC_DrawPrint( &urc_centerprint );
+		URC_DrawPrint( &urc_locprint );
+	}
+
 	// the widget under the cursor, and its hover sound on arrival
 	{
 		int		hover = URC_WidgetUnderCursor();
@@ -3911,11 +3929,6 @@ void URC_Draw( void ) {
 	URC_DrawPopup();
 	URC_DrawPressKey();
 	INV_Draw();
-
-	if ( clc.state == CA_ACTIVE ) {
-		URC_DrawPrint( &urc_centerprint );
-		URC_DrawPrint( &urc_locprint );
-	}
 
 	// ui_drawcoords (fakk2.exe 0x4982a3): with the cursor up, its place as
 	// "x:y" ten units right of it and ten above, in the interface's font

@@ -76,6 +76,15 @@ retail game again. Choose the probe with `-Probe`:
   steps must stay even across the menu: before the client's clock was held through a
   pause, the player stood still and then jumped ahead (and retail does this too; its
   `wait` counts milliseconds, so its menu is up for a shorter time).
+- `probe-savedmenu` saves the game on `zoo`, shoots the "GAME SAVED" print and then the
+  main menu over it, which must hide it (retail draws the prints under the menus):
+  `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-savedmenu -Map zoo
+  -MaskNotify`. The menu shots differ from retail's in the menu's fade and its clouds,
+  as the menu's waits count milliseconds on retail and frames on ours; compare whether
+  the print shows. Retail's own "Wrote screenshots/..." takes the print's place, so its
+  second shot shows that rather than "GAME SAVED".
+- `probe-pfade` shoots a centre print 375 ms into its 750 ms fade-in; crop the text
+  (`shots.py pair ... --crop 200 220 440 260`) to compare its strength with retail's.
 - `probe-lsload` loads a saved game, `fakkhouse0004`, and opens the main menu and the
   load/save menu over it, taking a screenshot of the list. It is the regression probe for
   the renderer's crash on the main menu's first frame (`FixRenderCommandList`, see

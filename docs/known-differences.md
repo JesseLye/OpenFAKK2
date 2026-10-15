@@ -641,12 +641,28 @@ Not read, done another way:
   location prints are their own messages (`svc_centerprint`: string; `svc_locprint`:
   short x, short y, string), stored per client on the server (`0x4450f0`, 256 bytes,
   "Centerprint text exceeds buffer size" beyond) and drawn with `facfont-20` for
-  4 seconds (`0x418cc0`); a text starting with `@` names a shader. OpenFAKK2 does the
+  4 seconds (`0x418cc0`); a text starting with `@` names a shader, drawn at the
+  image's own size in the middle of the screen (`0x419480`; `gamesaved`, the "GAME
+  SAVED" a save prints, is 256 x 64). A print fades in over its first 750 ms and out
+  over its last 750 (`0x419480` for a centre print, `0x419770` for a location print:
+  with 3250 and 750 of the 4000 left), the print's alpha scaling only the fades, and
+  is opaque in between. The prints are drawn by the interface's root widget itself
+  (its Draw, `0x419ba0`, then `0x4193f0`), and `UIWidget::Display` (`0x49ef30`) draws
+  a widget before its children, every menu and the HUD among them: the prints are
+  under the menus, so the main menu, which covers the screen, hides a "GAME SAVED"
+  printed just before it came up. OpenFAKK2 drew the prints after the menus, on top
+  of the main menu, a 256 x 128 picture and fades of 500 and 1000 ms; it now draws
+  them before the menus, as retail does (`probe-savedmenu` on `zoo`: the print was over
+  the main menu before and is not now, as on retail; the shot of the print alone went
+  from 2.15% of pixels off by more than 24 to 0.81%; `probe-pfade`, a centre print
+  halfway through its fade-in, from 12.11% of the text's region to 2.20%). OpenFAKK2 does the
   same, as a fresh implementation of the file grammar the 31 shipped files use. Not
   read from retail: the cinematic flag used here is `stats[STAT_CINEMATIC]` (retail
-  tests a field of its print object), the print's fade (in over the first half second,
-  out over the last), the `@shader` size (256x128), the stat-bar flash (half a second
-  after a change). `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
+  tests a field of its print object), the stat-bar flash (half a second after a
+  change). Retail keeps one print, centre or located (`+0x170` says which), where
+  OpenFAKK2 keeps one of each; and retail's `screenshot` reports "Wrote
+  screenshots/..." through it, centred, replacing a print that was up, where OpenFAKK2's
+  goes to the console. `ui_hud [1|0]` is retail's command (`0x40e010`), not a cvar. `ui_drawcoords 1`
   prints the cursor's place, `x:y`, ten units right of it and ten above, in `verdana-12`
   while a cursor is up (`0x4982a3`). The prints'
   places come from retail captures of the intro: a location print's x is its left edge
