@@ -1433,9 +1433,9 @@ void CL_KeyDownEvent( int key, unsigned time )
 	}
 
 	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
-	// skip their bindings; a menu up still takes them
+	// skip their bindings; a menu or a floating window up still takes them
 	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
-		if ( Key_GetCatcher( ) & KEYCATCH_UI && !uivm ) {
+		if ( ( Key_GetCatcher( ) & KEYCATCH_UI || URC_HasWindows() ) && !uivm ) {
 			URC_KeyEvent( key, qtrue );
 		}
 		return;
@@ -1544,7 +1544,7 @@ void CL_KeyUpEvent( int key, unsigned time )
 	// FAKK2 (0x41fad1): with +togglemouse's cursor up the mouse buttons
 	// skip their bindings
 	if ( cl_mouseShown && key >= K_MOUSE1 && key <= K_MOUSE5 ) {
-		if ( Key_GetCatcher( ) & KEYCATCH_UI && !uivm ) {
+		if ( ( Key_GetCatcher( ) & KEYCATCH_UI || URC_HasWindows() ) && !uivm ) {
 			URC_KeyEvent( key, qfalse );
 		}
 		return;

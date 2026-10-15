@@ -137,7 +137,7 @@ Missing from OpenFAKK2, to be done:
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`),
-  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `vidmode`, `dialog`,
+  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `vidmode`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
@@ -655,6 +655,28 @@ Not read, done another way:
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
+- **Floating windows.** uilib's `UIFloatingWindow` (`Create` `0x4a1600`,
+  `FrameInitialized` `0x4a1700`, `Draw` `0x4a19a0`) is filled with a widget's default
+  background (0.75 grey) under a 20-pixel title bar: active, the window's colour inside a
+  raised edge in its light shade (one pixel at the top and left, two at the bottom and
+  right), the title white; inactive, the default background inside two thirds of it, the
+  title black. The title is `verdana-14` at 3, 3; the close box (16x16 at w-18, 2) shows
+  marlett's "r", the minimise box (w-36, 2) its "0"; the children sit in 2, 20, w-4,
+  h-22. `dialog <title> <cvar> <command> [width] [height] [materials]` (`0x423250`,
+  `0x40cf10`, `UIDialog` `0x4ab690`/`0x4ab890`) makes one 300x200 by default, centred,
+  coloured 0.1 grey and active: a `verdana-12` label showing the cvar over the client
+  frame, and raised 64x32 "Ok" and "Cancel" buttons 6 in from its bottom corners; the
+  three optional materials replace the label's, Ok's and Cancel's text
+  (`0x4abba0`/`0x4abc70`/`0x4abd40`). Ok runs the command; Ok, Cancel and the close
+  box close it. `probe-dialog` matches retail's to a mean of 0.15 over the window.
+  Retail's label line lands 6 pixels above the centre of its frame (as if 12 shorter),
+  for a reason not found; OpenFAKK2 copies the position. Windows do not bring the cursor
+  up; with it up (`+togglemouse`, `ui_showmouse`, a menu) a click raises and activates
+  the window under it, and its title bar drags it. Differences: retail centres and sizes
+  the window in screen pixels (`0xb12868`), OpenFAKK2 in the 640x480 units its menus
+  use, the same at 640x480; retail shows only the first floating window of a run and
+  crashes on quitting with one open, OpenFAKK2 shows them all; a `vid_restart` closes
+  them here.
 - **Pause.** The retail engine registers `paused` read-only (`Com_Init`, `0x42e0b0`) with
   a `pause` command (`0x42e060`) that toggles it, refusing to pause in deathmatch or
   without a local server. Its UI update (`0x40af50`) pauses the game when a menu is up

@@ -1,0 +1,9 @@
+// The retail client's "dialog" command on zoo: a floating window titled "Test dialog",
+// its label showing the dlgtext cvar, Ok and Cancel. Chained client commands. Retail
+// shows only the first floating window a run opens (probe-tlist has ui_testlist), and
+// crashes on quitting with one open.
+probe:
+waitforplayer
+wait 2
+stuffcmd "set dlgtext \"Do you really want to do this?\"; dialog \"Test dialog\" dlgtext \"echo dialog ok\"; wait 30; screenshot; wait 30; quit"
+end
