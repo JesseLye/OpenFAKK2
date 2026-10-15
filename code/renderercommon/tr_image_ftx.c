@@ -4,7 +4,10 @@
 ========================================================================
 
 FTX files are FAKK2's texture format: a twelve byte header followed by
-uncompressed 32 bit RGBA pixels, top row first.
+uncompressed 32 bit RGBA pixels, top row first. The header is ftx_t in
+qfiles.h of Ritual's tools release, and ftxconvert reads the pixels in this
+order. qfiles.h calls the files "pre mipmapped", but none of the 2948 in
+the retail archives holds anything past the full-size image.
 
 ========================================================================
 */

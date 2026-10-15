@@ -1,0 +1,18 @@
+// Ritual font text: a centre print and a location print in facfont-20 (22 pixel
+// glyphs in a 20 pixel font). Shows the glyph advance (the glyph's width, no gap)
+// and the height each glyph is drawn at. Retail ignores a stuffed togglemenu, so
+// the menu's text cannot be shot this way.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-font -Map training -MaskNotify
+probe:
+waitforplayer
+wait 25
+centerprint "WIDE MMMM WWWW narrow iiii llll 1111"
+wait 1.5
+stuffcmd "screenshot"
+wait 4
+locprint 40 200 "Heavy Metal FAKK 2: the quick brown fox"
+wait 1.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

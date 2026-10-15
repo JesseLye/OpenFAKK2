@@ -243,7 +243,10 @@ URC_LoadFont
 
 fonts/<name>.ritualfont: "RitFont", height <h>, aspect <a>, indirections
 { 256 ints }, locations { { x y w h } ... }. The glyph image is
-gfx/fonts/<name>, 256 pixels wide and 256/aspect high.
+gfx/fonts/<name>, 256 pixels wide and 256/aspect high. This is what
+Ritual's fontgen writes and what the retail loader (fakk2.exe 0x481190,
+an undefined function) reads: it keeps a glyph as x/256, y*aspect/256,
+w/256, h*aspect/256 and registers gfx/fonts/<name>.
 =================
 */
 static urcFont_t *URC_LoadFont( const char *name ) {
@@ -331,17 +334,24 @@ static urcFont_t *URC_LoadFont( const char *name ) {
 	return font;
 }
 
+// The advance is the glyph's width; the pixel fontgen leaves between glyphs
+// is padding for filtering, not spacing. A tab is three spaces and a
+// character without a glyph takes no room (the retail string width,
+// fakk2.exe 0x481a40, and the draw, 0x481690).
 static float URC_CharWidth( const urcFont_t *font, int c ) {
 	int		idx;
 
 	if ( !font ) {
 		return 0;
 	}
+	if ( c == '\t' ) {
+		return URC_CharWidth( font, ' ' ) * 3;
+	}
 	idx = font->indirection[c & 0xff];
 	if ( idx < 0 || idx >= font->numGlyphs ) {
-		return c == ' ' ? font->height * 0.3f : 0;
+		return 0;
 	}
-	return font->glyph[idx][2] + 1;		// the glyph list leaves one pixel between glyphs
+	return font->glyph[idx][2];
 }
 
 static float URC_StringWidth( const urcFont_t *font, const char *s ) {
@@ -358,7 +368,9 @@ static float URC_StringWidth( const urcFont_t *font, const char *s ) {
 URC_DrawString
 
 Draws one line (up to a newline) at x, y in 640x480 units, with the
-font's own pixel sizes. Returns the width drawn.
+font's own pixel sizes. Every glyph is drawn as tall as the font's height,
+whatever the height of its rectangle (fakk2.exe 0x481690); facfont-20's
+22 pixel glyphs are squeezed into 20. Returns the width drawn.
 =================
 */
 static float URC_DrawString( const urcFont_t *font, float x, float y, const char *s, const vec4_t color ) {
@@ -386,11 +398,11 @@ static float URC_DrawString( const urcFont_t *font, float x, float y, const char
 		dx = x;
 		dy = y;
 		dw = gw;
-		dh = gh;
+		dh = font->height;
 		SCR_AdjustFrom640( &dx, &dy, &dw, &dh );
 		re.DrawStretchPic( dx, dy, dw, dh, gx / URC_FONT_TEXWIDTH, gy / texH,
 			( gx + gw ) / URC_FONT_TEXWIDTH, ( gy + gh ) / texH, font->shader );
-		x += gw + 1;
+		x += gw;
 	}
 	re.SetColor( NULL );
 	return x - startX;

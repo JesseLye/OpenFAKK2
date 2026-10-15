@@ -107,8 +107,10 @@ Screenshot probes end with `stuffcmd "quit"` instead and are run on both games b
 `retail-capture` skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <p>
 -Map <m>`), which pairs the shots. `probe-crosshair` wields the shotgun in `training` and
 shoots the crosshair on a target and on the floor; `probe-swbranch` cues three cameras on
-`swamp1`; `probe-hud` steps the health and water gauges; `probe-shot-*` shoot the intro at
-fixed times. `probe-load` takes one shot after entry and quits: does a map load.
+`swamp1`; `probe-hud` steps the health and water gauges; `probe-font` puts up a centre
+print and a location print in `facfont-20` (glyph spacing and height); `probe-shot-*`
+shoot the intro at fixed times. `probe-load` takes one shot after entry and quits: does a
+map load.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as
