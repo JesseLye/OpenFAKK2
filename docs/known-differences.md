@@ -134,8 +134,8 @@ Missing from OpenFAKK2, to be done:
   it waits on level of detail itself, below). Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
-- The client game module's imports that are still stubs: `get_camera_offset` (what
-  `+cameralook` turns), `S_SetGlobalAmbientVolumeLevel`, `S_UpdateEntity`'s velocity, and
+- The client game module's imports that are still stubs: `S_SetGlobalAmbientVolumeLevel`,
+  `S_UpdateEntity`'s velocity, and
   `R_AddPolyToScene`'s render flags.
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
@@ -1254,8 +1254,13 @@ What is implemented, and on what basis:
   the keys fired nothing (an unknown command goes to the server as chat). The client
   registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
   `+attackleft` 1, `+sneak` 2, `+run` 3, `+holster` 4, `+use` 5) and `+cameralook`
-  as a client flag that does nothing yet (retail turns the camera about the player
-  with the mouse while it is held). The number keys and the wheel are `warpinv <slot>`,
+  as a client flag. As retail's `CL_MouseMove` does (`0x41e3fc`), the mouse always adds
+  its pitch (`m_pitch`) and yaw (`-m_yaw`) to a camera offset, and while `+cameralook` is
+  held it turns nothing else; the client game module reads the offset, the flag and
+  `centerview`'s reset (`0x41de76`) through `get_camera_offset` (`0x41ff70`) and turns
+  its third person camera about the player by the offset while the key is held or the
+  game allows it (`CF_CAMERA_ANGLES_ALLOWOFFSET`), which the stub had left still. Not
+  compared with a capture: the probes cannot move the mouse. The number keys and the wheel are `warpinv <slot>`,
   `nextinv` and `previnv`, which the retail client handles itself (`0x408dc0`):
   `global/inventory.scr` defines the slots and their items, the bar shows the slot's
   items the player carries (named by the player state's `inventory_name_index`

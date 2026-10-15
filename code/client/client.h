@@ -551,6 +551,11 @@ void CL_ReadPackets (void);
 void CL_WritePacket( void );
 void IN_CenterView (void);
 
+// FAKK2: the camera offset the client game module reads (get_camera_offset)
+extern qboolean	in_cameraLook;
+extern vec3_t	cl_cameraOffset;
+extern qboolean	cl_cameraResetView;
+
 void CL_VerifyCode( void );
 
 float CL_KeyState (kbutton_t *key);

@@ -66,9 +66,16 @@ void IN_MLookDown( void ) {
 	in_mlooking = qtrue;
 }
 
-// FAKK2's +cameralook (TAB): the retail client turns the camera about the
-// player with the mouse while it is held; not done here yet
+// FAKK2's +cameralook (TAB): while it is held the mouse turns only the camera
+// offset below, which the client game module turns its camera by
+// (CL_MouseMove, fakk2.exe 0x41e3fc)
 qboolean	in_cameraLook;
+
+// FAKK2: what the mouse has turned in all, pitch and yaw, read through the
+// client game module's get_camera_offset (0x41ff70), and centerview's word
+// that the camera should take the view's angles again (0x41de76)
+vec3_t		cl_cameraOffset;
+qboolean	cl_cameraResetView;
 
 void IN_CameraLookDown( void ) {
 	in_cameraLook = qtrue;
@@ -280,6 +287,7 @@ void IN_Button15Down(void) {IN_KeyDown(&in_buttons[15]);}
 void IN_Button15Up(void) {IN_KeyUp(&in_buttons[15]);}
 
 void IN_CenterView (void) {
+	cl_cameraResetView = qtrue;
 	cl.viewangles[PITCH] = -SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 }
 
@@ -520,6 +528,14 @@ void CL_MouseMove(usercmd_t *cmd)
 	// ingame FOV
 	mx *= cl.cgameSensitivity;
 	my *= cl.cgameSensitivity;
+
+	// FAKK2 (0x41e3fc): the camera offset always turns with the mouse, and
+	// while +cameralook is held nothing else does
+	cl_cameraOffset[PITCH] += m_pitch->value * my;
+	cl_cameraOffset[YAW] -= m_yaw->value * mx;
+	if ( in_cameraLook ) {
+		return;
+	}
 
 	// add mouse X/Y movement to cmd
 	if(in_strafe.active)
