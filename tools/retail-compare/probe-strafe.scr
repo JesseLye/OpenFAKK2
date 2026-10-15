@@ -1,0 +1,51 @@
+probe:
+waitforplayer
+// The control for probe-fstrafe: the shotgun is out but not fired; 0.1 s after the
+// moment of the shot, hold +moveleft for 0.6 s and read the player every 0.1 s until she
+// has stopped.
+wait 2
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 2.5
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "+moveleft"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+stuffcmd "-moveleft"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 1
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

@@ -1,0 +1,53 @@
+probe:
+waitforplayer
+// Strafe right after a shotgun blast: fire the primary (+attackleft for 0.1 s), then
+// hold +moveleft for 0.6 s. The player is read every 0.1 s from the shot until she has
+// stopped. probe-strafe is the control (the same strafe, no shot).
+wait 2
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 2.5
+stuffcmd "whatis 0"
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+stuffcmd "+moveleft"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+stuffcmd "-moveleft"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 0.1
+stuffcmd "whatis 0"
+wait 1
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

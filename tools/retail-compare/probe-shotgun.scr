@@ -4,8 +4,7 @@
 // For the real client (capture.ps1 runs it on both games): turn a
 // little right and aim a little down, so the blast lands beside Julie rather than
 // behind her, fire the primary and take screenshots of the burst, the puffs and the
-// holes; then fire the alternate (grenade) and catch its explosion. (Not a sidestep:
-// moving while the fire animation plays carries Julie much further on ours.)
+// holes; then fire the alternate (grenade) and catch its explosion.
 // A dual-handed weapon's primary is +attackleft, its alternate +attackright
 // (julie_torso.st, CHECK_ATTACK_LEFT / CHECK_ATTACK_RIGHT).
 probe:
