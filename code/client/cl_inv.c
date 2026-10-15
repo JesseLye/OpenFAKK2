@@ -354,11 +354,17 @@ static qboolean INV_Ammo( const invItem_t *item, int *amount, int *max ) {
 	return qfalse;
 }
 
+// Never under a menu. The retail bar stays drawn over one, across its
+// buttons, until its five seconds run out (probe-menu); this client closes
+// it when a menu comes up (URC_PushMenu) and keeps it shut while one is up.
 static qboolean INV_Open( void ) {
+	if ( URC_HasMenus() ) {
+		return qfalse;
+	}
 	return inv_fullScreen || ( inv_curType >= 0 && cls.realtime - inv_showTime < INV_SHOW_TIME && clc.state == CA_ACTIVE );
 }
 
-static void INV_Close( void ) {
+void INV_Close( void ) {
 	inv_showTime = 0;
 	inv_fullScreen = qfalse;
 }

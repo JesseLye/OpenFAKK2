@@ -1,0 +1,21 @@
+// Wields a weapon, brings up the weapon bar (as a number key does) and then
+// the main menu over the game (as escape does), screenshotting each: the
+// weapon bar, the weapon HUD and anything else of the game's must not show
+// through the menu.
+// The menu pauses the game, so the menu's shots and the quit are chained in
+// one client command line with frame waits.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-menu -Map training
+probe:
+waitforplayer
+wait 25
+stuffcmd "give weapon_shotgun.tik"
+stuffcmd "give weapon_sword.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 3
+stuffcmd "warpinv guns"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "pushmenu main; wait 100; screenshot; wait 3000; screenshot; wait 8000; screenshot; wait 100; quit"
+end
