@@ -217,6 +217,19 @@ static qhandle_t	urc_loadingShader;
 
 #define URC_LOADING_SHADER	"textures/menu/loading"	// 256x256, pulsing (scripts/menu.shader)
 
+// the intro's logos (UI_Init, 0x40e9d0), 256x256 pictures with no shader
+#define URC_RITUAL_SHADER		"textures/menu/ritual"
+#define URC_GATHERING_SHADER	"textures/menu/gathering"
+#define URC_INTRO_SCALE			1.5f
+static qhandle_t	urc_ritualShader, urc_gatheringShader;
+static int			urc_introStep;				// the next step of the intro; 0 when none is running
+static int			urc_introNextTime;			// cls.realtime of the next step
+static qhandle_t	urc_introShader;			// the logo up, or none
+static float		urc_introAlphaFrom, urc_introAlphaTo;
+static int			urc_introFadeTime, urc_introFadeStart;
+static qboolean		urc_introQueued;			// once a run: not again after a vid_restart
+static qboolean		urc_introCommands;			// dointro and _intro outlive a UI restart
+
 // the key bind list (FakkBindList), from its "filename" script
 typedef struct {
 	char		name[64];
@@ -2646,6 +2659,10 @@ qboolean URC_HasMenus( void ) {
 	return urc_initialised && urc_stackDepth > 0;
 }
 
+qboolean URC_IntroActive( void ) {
+	return urc_initialised && urc_introStep != 0;
+}
+
 qboolean URC_IsFullscreen( void ) {
 	return urc_initialised && urc_stackDepth > 0 && urc_menus[urc_stack[urc_stackDepth - 1]].fullscreen;
 }
@@ -2772,6 +2789,156 @@ static void URC_DrawLoading( void ) {
 	re.SetColor( colorWhite );
 	re.DrawStretchPic( ( cls.glconfig.vidWidth - w ) * 0.5f, ( cls.glconfig.vidHeight - h ) * 0.5f,
 		w, h, 0, 0, 1, 1, urc_loadingShader );
+	re.SetColor( NULL );
+}
+
+/*
+=======================================================================
+
+INTRO
+
+=======================================================================
+*/
+
+/*
+=================
+URC_IntroStep
+
+The retail "_intro" command (0x40e0b0) runs the intro one step at a time,
+each step ending in "wait <ms>; _intro" (retail's wait counts milliseconds,
+0x42c590): the title theme and 3 seconds of black, then
+textures/menu/ritual and textures/menu/gathering (256x256, drawn at 1.5
+times that) each fading in over a second, held for 3 and fading out over
+one, and then the main menu (0x40b7c0). Step -1, which the update sets when
+a menu comes up or a map loads, ends it. OpenFAKK2's wait counts frames,
+so the steps are timed here instead of in the command buffer.
+=================
+*/
+static void URC_IntroShow( qhandle_t shader, float alphaFrom, float alphaTo, int fadeTime ) {
+	urc_introShader = shader;
+	urc_introAlphaFrom = alphaFrom;
+	urc_introAlphaTo = alphaTo;
+	urc_introFadeTime = fadeTime;
+	urc_introFadeStart = cls.realtime;
+}
+
+static void URC_IntroStep( void ) {
+	int		delay;
+
+	switch ( urc_introStep ) {
+	case 0:
+		MUSIC_NewSoundtrack( "music/intro" );
+		MUSIC_UpdateMood( 1, 1 );		// mood_normal, as the menu's music
+		delay = 3000;
+		break;
+	case 1:
+		URC_IntroShow( urc_ritualShader, 0, 1, 1000 );
+		delay = 1000;
+		break;
+	case 2:
+		URC_IntroShow( urc_ritualShader, 1, 1, 0 );
+		delay = 3000;
+		break;
+	case 3:
+		URC_IntroShow( urc_ritualShader, 1, 0, 1000 );
+		delay = 1000;
+		break;
+	case 4:
+		URC_IntroShow( urc_gatheringShader, 0, 1, 1000 );
+		delay = 1000;
+		break;
+	case 5:
+		URC_IntroShow( urc_gatheringShader, 1, 1, 0 );
+		delay = 3000;
+		break;
+	case 6:
+		URC_IntroShow( urc_gatheringShader, 1, 0, 1000 );
+		delay = 1000;
+		break;
+	case 7:
+		URC_PushMenu( "main" );
+		// fall through
+	default:
+		urc_introStep = 0;
+		urc_introShader = 0;
+		return;
+	}
+	urc_introStep++;
+	urc_introNextTime = cls.realtime + delay;
+}
+
+static void URC_Intro_f( void ) {
+	if ( urc_initialised ) {
+		URC_IntroStep();
+	}
+}
+
+/*
+=================
+URC_DoIntro_f
+
+"dointro" (0x40e360), which UI_Init (0x40e9d0) puts in the command buffer
+when developer is 0 (it opens the console otherwise): the intro from its
+first step.
+=================
+*/
+static void URC_DoIntro_f( void ) {
+	if ( !urc_initialised ) {
+		return;		// a map load restarting the client; it would end the intro anyway
+	}
+	urc_introStep = 0;
+	urc_introShader = 0;
+	URC_IntroStep();
+}
+
+/*
+=================
+URC_DrawIntro
+
+The retail update (0x40af50), with no menu up, no map loading and the
+client not active: the screen filled black (0x40acd0) and the intro's
+picture (0x40ad90) centred on it, 1.5 times its pixel size, its alpha
+moving from one value to the other over the step's fade time. A menu
+coming up, a map loading or the client becoming active ends the intro.
+=================
+*/
+static void URC_DrawIntro( void ) {
+	float	w, h, frac;
+	vec4_t	color;
+
+	if ( !urc_introStep ) {
+		return;
+	}
+	if ( urc_stackDepth || urc_loading || clc.state >= CA_ACTIVE || CL_Viewer_Active() ) {
+		urc_introStep = 0;
+		urc_introShader = 0;
+		return;
+	}
+	if ( cls.realtime >= urc_introNextTime ) {
+		URC_IntroStep();
+		if ( !urc_introStep ) {
+			return;		// the main menu is up
+		}
+	}
+
+	re.SetColor( colorBlack );
+	re.DrawBox( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight );
+	re.SetColor( NULL );
+	if ( !urc_introShader ) {
+		return;
+	}
+	color[0] = color[1] = color[2] = 1;
+	color[3] = urc_introAlphaTo;
+	if ( urc_introFadeTime ) {
+		frac = ( cls.realtime - urc_introFadeStart ) / (float)urc_introFadeTime;
+		frac = Com_Clamp( 0, 1, frac );
+		color[3] = urc_introAlphaFrom + ( urc_introAlphaTo - urc_introAlphaFrom ) * frac;
+	}
+	w = re.GetShaderWidth( urc_introShader ) * URC_INTRO_SCALE;
+	h = re.GetShaderHeight( urc_introShader ) * URC_INTRO_SCALE;
+	re.SetColor( color );
+	re.DrawStretchPic( ( cls.glconfig.vidWidth - w ) * 0.5f, ( cls.glconfig.vidHeight - h ) * 0.5f,
+		w, h, 0, 0, 1, 1, urc_introShader );
 	re.SetColor( NULL );
 }
 
@@ -3610,7 +3777,8 @@ void URC_Draw( void ) {
 		}
 		urc_lastState = clc.state;
 	}
-	if ( clc.state == CA_DISCONNECTED && !urc_stackDepth && !CL_Viewer_Active() &&
+	URC_DrawIntro();
+	if ( clc.state == CA_DISCONNECTED && !urc_stackDepth && !urc_introStep && !CL_Viewer_Active() &&
 		!( Key_GetCatcher() & KEYCATCH_CONSOLE ) && URC_FindMenu( "main" ) ) {
 		URC_PushMenu( "main" );
 		// the retail client's return to the menu (0x4212f0) puts on
@@ -4382,6 +4550,10 @@ void URC_Init( void ) {
 	Com_Memset( &urc_locprint, 0, sizeof( urc_locprint ) );
 	urc_addFadeShader = re.RegisterShaderNoMip( URC_ADDFADE_SHADER );
 	urc_loadingShader = re.RegisterShaderNoMip( URC_LOADING_SHADER );
+	urc_ritualShader = re.RegisterShaderNoMip( URC_RITUAL_SHADER );
+	urc_gatheringShader = re.RegisterShaderNoMip( URC_GATHERING_SHADER );
+	urc_introStep = 0;
+	urc_introShader = 0;
 	URC_LoadAllMenus();
 	INV_Init();
 
@@ -4401,8 +4573,22 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
 	Cmd_AddCommand( "ui_resetcvars", URC_ResetCvars_f );
 	Cmd_AddCommand( "ui_checkrestart", URC_CheckRestart_f );
+	if ( !urc_introCommands ) {
+		// the "dointro" UI_Init queues runs after the startup commands, by
+		// when a startup map's load has shut this down
+		urc_introCommands = qtrue;
+		Cmd_AddCommand( "dointro", URC_DoIntro_f );
+		Cmd_AddCommand( "_intro", URC_Intro_f );
+	}
 	urc_initialised = qtrue;
 	urc_lastState = -1;
+
+	// retail's UI_Init plays the intro when developer is 0; it runs again
+	// after a vid_restart, which here would take the video menu away
+	if ( !urc_introQueued && !Cvar_VariableIntegerValue( "developer" ) ) {
+		urc_introQueued = qtrue;
+		Cbuf_AddText( "dointro\n" );
+	}
 }
 
 void URC_Shutdown( void ) {
@@ -4431,4 +4617,7 @@ void URC_Shutdown( void ) {
 	urc_initialised = qfalse;
 	urc_numFonts = 0;		// shader handles die with the renderer
 	urc_loadingShader = 0;
+	urc_ritualShader = urc_gatheringShader = 0;
+	urc_introStep = 0;
+	urc_introShader = 0;
 }

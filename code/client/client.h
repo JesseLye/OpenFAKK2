@@ -523,6 +523,7 @@ void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
 qboolean URC_HasMenus( void );
 qboolean URC_HasWindows( void );
+qboolean URC_IntroActive( void );
 qboolean URC_IsFullscreen( void );
 void URC_PushMenu( const char *name );
 void URC_PopMenu( void );

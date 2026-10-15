@@ -1474,10 +1474,11 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 		if ( !uivm ) {
 			// FAKK2's own menus (cl_urc.c): escape closes the one up, or
-			// brings the main menu up over the game, as the retail client does
+			// brings the main menu up over the game or the intro, as the
+			// retail client's binding (togglemenu) does
 			if ( URC_HasMenus() ) {
 				URC_KeyEvent( key, qtrue );
-			} else if ( clc.state == CA_ACTIVE && !clc.demoplaying ) {
+			} else if ( ( clc.state == CA_ACTIVE || clc.state == CA_DISCONNECTED ) && !clc.demoplaying ) {
 				URC_PushMenu( "main" );
 			}
 			return;
