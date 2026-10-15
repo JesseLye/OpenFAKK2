@@ -1220,9 +1220,11 @@ extern	cvar_t	*r_lensflare;					// FAKK2: the sun's and lensflare lights' flares
 extern	cvar_t	*r_lightcoronasize;				// FAKK2: half-size of a lensflare light's corona, as a share of the half screen
 extern	cvar_t	*r_sunflare;					// FAKK2: "x y z" puts the sun there instead of worldspawn's
 extern	cvar_t	*r_sunflare_inportalsky;		// FAKK2: ... in the portal sky
+extern	cvar_t	*r_place_sunflare;				// FAKK2: r_sunflare set to where the view looks
 extern	cvar_t	*r_skyportal;					// FAKK2: the sky portal's camera at r_skyportal_origin
 extern	cvar_t	*r_skyportal_origin;
 extern	cvar_t	*r_drawsprites;					// FAKK2: 0 leaves out the scene's .spr sprites
+extern	cvar_t	*r_showskel;					// FAKK2: skeletal models drawn as their bones
 
 extern	cvar_t	*r_intensity;
 

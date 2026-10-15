@@ -130,7 +130,8 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- Renderer: `r_showskel`, `r_showlod`, `r_place_sunflare`. Shadows of
+- Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
+  it waits on level of detail itself, below). Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
 - TIKI: `tiki`, `tikilist`, `cachealltikis`, `viewspawnlist`.
@@ -1108,7 +1109,10 @@ What is implemented, and on what basis:
   the animation itself), when that lerp is not negative (the same branches of
   `0x4872d0`; only the cross-blend animation and frame are read, not the old frame and
   backlerp the module also fills in). Still assumed: turning normals with the vertex's
-  bones. Level of detail is not applied in the renderer.
+  bones. Level of detail is not applied in the renderer. `r_showskel 1` (cheat) draws a
+  skeletal model's bones in place of its surfaces, once a frame: each bone's axes four
+  units long in red, green and blue and a cyan line from its parent (`0x495db3`,
+  `0x496042`); `probe-skel` gave Julie's skeleton pixel for pixel as retail's.
 - **Ritual fonts** (`fonts/<name>.RitualFont`, the `.urc` interface's and the prints'
   text): `RitFont`, `height`, `aspect`, 256 `indirections` and up to 256 `locations`
   `{ x y w h }` in pixels of a 256-wide image `256/aspect` high, registered as
@@ -1326,7 +1330,12 @@ What is implemented, and on what basis:
   the back end after every draw-surface list, and tests the view against the front
   end's `tr.viewParms`; here every light is drawn once, in the main view). `r_sunflare "x y z"`
   (with `r_sunflare_inportalsky`) places the sun by hand as retail's developer cvar
-  does, which is how the sun flare was compared: with the sun put at `training`'s
+  does: anything but its default "0" is read as the sun's position (`0x48bc92`), so
+  "0 0 0" is the world's origin. `r_place_sunflare 1` writes where the view's centre
+  meets the world (a trace 16384 units out, 0.01 back) into `r_sunflare` every frame and
+  leaves out the sun's full-screen blend (`0x48bb57`, `0x48bf13`); `probe-skel` got the
+  same point on both games to the fifth decimal. The sun flare was compared with the sun
+  put at `training`'s
   player start, ours and retail show the same disc and ring at the same strength. The
   2D "fromClient" colour: a stretched picture's `rgbGen/alphaGen fromClient` stages read
   the entity colour, and read it when their batch is flushed, so `RB_SetColor` copies

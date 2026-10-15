@@ -125,6 +125,7 @@ cvar_t	*r_lensflare;
 cvar_t	*r_lightcoronasize;
 cvar_t	*r_sunflare;
 cvar_t	*r_sunflare_inportalsky;
+cvar_t	*r_place_sunflare;
 cvar_t	*r_mode;
 cvar_t	*r_nobind;
 cvar_t	*r_singleShader;
@@ -156,6 +157,7 @@ cvar_t	*r_customwidth;
 cvar_t	*r_customheight;
 cvar_t	*r_customaspect;		// FAKK2: r_mode -1's window aspect (Quake III's r_customPixelAspect)
 cvar_t	*r_drawsprites;
+cvar_t	*r_showskel;
 cvar_t	*r_skyportal;
 cvar_t	*r_skyportal_origin;
 
@@ -1191,14 +1193,16 @@ void R_Register( void )
 	r_flares = ri.Cvar_Get ("r_flares", "0", CVAR_ARCHIVE );
 	r_lensflare = ri.Cvar_Get ("r_lensflare", "1", CVAR_ARCHIVE );
 	r_lightcoronasize = ri.Cvar_Get ("r_lightcoronasize", ".1", CVAR_ARCHIVE );	// retail 0x4616f7
-	// retail's developer override of the worldspawn's sun: "x y z", "0 0 0" for none
-	r_sunflare = ri.Cvar_Get ("r_sunflare", "0 0 0", CVAR_TEMP );
-	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", CVAR_TEMP );
+	// retail's developer override of the worldspawn's sun: "x y z", "0" for none
+	r_sunflare = ri.Cvar_Get ("r_sunflare", "0", 0 );
+	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", 0 );
+	r_place_sunflare = ri.Cvar_Get( "r_place_sunflare", "0", 0 );	// retail 0x4616d2
 	// FAKK2: the sky portal's camera at a fixed point, turned the viewer's way
 	// (fakk2.exe 0x47bf76), and the scene's sprites (0x4643c0)
 	r_skyportal = ri.Cvar_Get( "r_skyportal", "0", 0 );
 	r_skyportal_origin = ri.Cvar_Get( "r_skyportal_origin", "0 0 0", 0 );
 	r_drawsprites = ri.Cvar_Get( "r_drawsprites", "1", CVAR_CHEAT );
+	r_showskel = ri.Cvar_Get( "r_showskel", "0", CVAR_CHEAT );	// fakk2.exe 0x461492
 	r_znear = ri.Cvar_Get( "r_znear", "4", CVAR_CHEAT );
 	ri.Cvar_CheckRange( r_znear, 0.001f, 200, qfalse );
 	r_zproj = ri.Cvar_Get( "r_zproj", "64", CVAR_ARCHIVE );

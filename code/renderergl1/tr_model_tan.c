@@ -1393,6 +1393,51 @@ static void R_SkelComputeBones( tikiModel_t *tiki, const trRefEntity_t *ent ) {
 
 /*
 ===============
+RB_ShowSkel
+
+r_showskel (fakk2.exe 0x495db3, 0x496042): the entity's skeleton in place
+of its surfaces, once per frame: each bone's axes four units long in red,
+green and blue, and a cyan line to it from its parent.
+===============
+*/
+static void RB_ShowSkel( const tikiModel_t *tiki, const trRefEntity_t *ent, float scale ) {
+	static const trRefEntity_t	*shownEnt;
+	static int					shownFrame = -1;
+	static const float			axisColors[3][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
+	int							b, i;
+
+	if ( ent == shownEnt && tr.frameCount == shownFrame ) {
+		return;
+	}
+	shownEnt = ent;
+	shownFrame = tr.frameCount;
+
+	GL_Bind( tr.whiteImage );
+	qglBegin( GL_LINES );
+	for ( b = 0 ; b < tiki->skel->numBones ; b++ ) {
+		const skelBonePose_t	*pose = &skel_pose[b];
+		int						parent = tiki->skel->parents[b];
+		vec3_t					origin, end;
+
+		VectorScale( pose->origin, scale, origin );
+		for ( i = 0 ; i < 3 ; i++ ) {
+			qglColor3f( axisColors[i][0], axisColors[i][1], axisColors[i][2] );
+			qglVertex3fv( origin );
+			VectorMA( origin, 4, pose->axis[i], end );
+			qglVertex3fv( end );
+		}
+		if ( parent >= 0 ) {
+			qglColor3f( 0, 1, 1 );
+			VectorScale( skel_pose[parent].origin, scale, end );
+			qglVertex3fv( end );
+			qglVertex3fv( origin );
+		}
+	}
+	qglEnd();
+}
+
+/*
+===============
 RB_SurfaceSkel
 
 Skins the surface's vertexes with the entity's bones.
@@ -1411,6 +1456,11 @@ void RB_SurfaceSkel( void *surface ) {
 		return;
 	}
 	R_SkelComputeBones( tiki, ent );
+
+	if ( r_showskel->integer ) {
+		RB_ShowSkel( tiki, ent, tiki->scale * escale );
+		return;
+	}
 
 	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
 
