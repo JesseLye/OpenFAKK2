@@ -157,10 +157,20 @@ static void SV_Map_f( void ) {
 	char		expanded[MAX_QPATH];
 	char		mapname[MAX_QPATH];
 	char		bspname[MAX_QPATH];
+	char		prefixed[MAX_QPATH];
+	const char	*mapdir;
 
 	map = Cmd_Argv(1);
 	if ( !map ) {
 		return;
+	}
+
+	// FAKK2: with developer set, the name is looked for under mapdir, which
+	// the console's cd sets (0x4420f8)
+	mapdir = Cvar_VariableString( "mapdir" );
+	if ( com_developer->integer && mapdir[0] ) {
+		Com_sprintf( prefixed, sizeof( prefixed ), "%s/%s", mapdir, map );
+		map = prefixed;
 	}
 
 	// make sure the level exists before trying to change, so that

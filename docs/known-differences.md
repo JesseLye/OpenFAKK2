@@ -132,8 +132,9 @@ Missing from OpenFAKK2, to be done:
   and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
   `weapgroup<n>` and CTRL+n to `saveweaps <n>`; here those twenty lines fail.
 - Console: `add`, `subtract`, `scale` (cvar arithmetic, which Ritual's TIKI document uses
-  for `r_lodscale`), `alias` and `aliasdump`, `cd`, and the `mapdir` and `com_dropsim`
-  cvars.
+  for `r_lodscale`), `alias` and `aliasdump`, and the `com_dropsim` cvar. `echo` and a
+  cvar's printed value are formatted differently (retail: `"mapdir" is:"" default:""`,
+  and `echo` ends each word with a space).
 - Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
   `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
   `+holster`; no retail file binds either.
@@ -193,6 +194,27 @@ Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`
 `sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
 `testmodel`, `nextframe`, `prevframe`, `nextskin`, `prevskin`), and list `twosided` as a
 TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477510`).
+
+## The console
+
+- **`cd` and `dir`** (`0x431b50`, `0x431cd0`, registered in `FS_Startup` with `path` and
+  `touchFile`) work on the operating system's directories, not the game's file system.
+  `fs_filedir` is where they start, the game directory's `maps` folder at first; `cd
+  <dir>` moves it, relative to it, and `cd` alone prints it. `dir` is a copy of the DOS
+  command: `[drive:][path][filename]`, `/A` with `DRHAS` and `-` (hidden and system files
+  are left out unless asked for), `/O` with `NSEDG` and `-` (up to five keys), any other
+  switch prints its help, and each line is the date (12-hour, `a`/`p`), the size
+  (`<dir>`, `k` or above a megabyte `m`) and the name. A name without wildcards that is a
+  directory lists that directory. OpenFAKK2's `dir` printed the same as retail's on the
+  same folder for the listing, `/OS`, `/O-N /AD`, `*.pk3`, an unknown switch and a name
+  that matches nothing. Ours lists the game's file system with `fdir` (Quake III's), which
+  retail does not have. Retail leaves the process in the listed directory when nothing
+  matches; ours goes back.
+- **`mapdir`**: with `developer` set, `map <name>` loads `maps/<mapdir>/<name>`
+  (`SV_Map_f` `0x4420f8`). `cd` sets `mapdir` to the part of the new directory below the
+  maps folder, but compares it with the folder as `FS_Startup` spells it, with a doubled
+  separator (`...\fakk\\maps\`, as retail's `fs_filedir` reads), which no directory name
+  has; so `cd` always clears `mapdir`, in retail too, and it has to be set by hand.
 
 ## Rules inferred, not read from the binary
 

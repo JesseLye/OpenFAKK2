@@ -1145,6 +1145,26 @@ const char *Sys_Dirname( char *path );
 const char *Sys_Basename( char *path );
 char *Sys_ConsoleInput(void);
 
+// FAKK2's console "cd" and "dir" work on the operating system's directories, as
+// Windows' _chdir and _findfirst see them; the attributes are Windows' _A_* bits
+#define SYS_FIND_READONLY	0x01
+#define SYS_FIND_HIDDEN		0x02
+#define SYS_FIND_SYSTEM		0x04
+#define SYS_FIND_SUBDIR		0x10
+#define SYS_FIND_ARCHIVE	0x20
+
+typedef struct {
+	int				attrib;			// SYS_FIND_*
+	time_t			writeTime;
+	unsigned int	size;
+	char			name[MAX_OSPATH];
+} sysFindFile_t;
+
+qboolean		Sys_ChangeDir( const char *path );		// qfalse with errno set
+// the current directory's entries matching a wildcard pattern ("*.*" is all);
+// Z_Free the list; NULL when nothing matches
+sysFindFile_t	*Sys_FindFiles( const char *pattern, int *numFiles );
+
 char **Sys_ListFiles( const char *directory, const char *extension, char *filter, int *numfiles, qboolean wantsubs );
 void	Sys_FreeFileList( char **list );
 void	Sys_Sleep(int msec);

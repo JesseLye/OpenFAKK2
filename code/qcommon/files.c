@@ -33,6 +33,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "qcommon.h"
 #include "unzip.h"
 
+#include <errno.h>
+
 /*
 =============================================================================
 
@@ -2597,39 +2599,358 @@ int	FS_GetModList( char *listbuf, int bufsize ) {
 //============================================================================
 
 /*
+=============================================================================
+
+FAKK2's console cd and dir (fakk2.exe 0x431b50, 0x431cd0)
+
+They work on the operating system's directories, not the game's file system:
+fs_filedir is the directory they start from, the game directory's maps folder at
+first, and cd moves it. A map name is looked for under mapdir with developer set
+(SV_Map_f); cd sets mapdir to the part of the new directory below the maps
+folder, but compares against the folder's name as FS_BuildOSPath gives it, with
+the doubled separator ("fakk\\maps\"), which no directory name has, so cd always
+clears it, as it does in retail. dir is a copy of the DOS command: /A filters by
+attributes, /O sorts, and the listing's format is retail's.
+
+=============================================================================
+*/
+
+static cvar_t	*fs_filedir;
+
+#define	DIR_MAX_SORT	5
+
+typedef int ( *dirCompare_t )( const sysFindFile_t *a, const sysFindFile_t *b );
+
+static int			fs_dirRequired;			// attributes a file must have (/A)
+static int			fs_dirExcluded;			// and must not have (/A-)
+static int			fs_dirNumSort;
+static dirCompare_t	fs_dirSort[DIR_MAX_SORT];
+static qboolean		fs_dirReverse[DIR_MAX_SORT];
+
+// the game directory's maps folder as retail spells it, the base path, the game
+// directory and "/maps/" joined by separators: "...\fakk\\maps\"
+static const char *FS_MapsFolder( void ) {
+	static char	path[MAX_OSPATH];
+	char		*s;
+
+	Com_sprintf( path, sizeof( path ), "%s%c%s%c/maps/", fs_basepath->string, PATH_SEP, fs_gamedir, PATH_SEP );
+	for ( s = path ; *s ; s++ ) {
+		if ( *s == '/' || *s == '\\' ) {
+			*s = PATH_SEP;		// not FS_ReplaceSeparators, which would merge the pair
+		}
+	}
+	return path;
+}
+
+static int FS_DirCompareName( const sysFindFile_t *a, const sysFindFile_t *b ) {
+	return Q_stricmp( a->name, b->name );
+}
+
+static int FS_DirCompareSize( const sysFindFile_t *a, const sysFindFile_t *b ) {
+	return (int)( a->size - b->size );
+}
+
+static int FS_DirCompareExtension( const sysFindFile_t *a, const sysFindFile_t *b ) {
+	char	ext[MAX_OSPATH];
+
+	Q_strncpyz( ext, COM_GetExtension( a->name ), sizeof( ext ) );
+	return Q_stricmp( ext, COM_GetExtension( b->name ) );
+}
+
+static int FS_DirCompareDate( const sysFindFile_t *a, const sysFindFile_t *b ) {
+	return (int)( a->writeTime - b->writeTime );
+}
+
+// directories first
+static int FS_DirCompareGroup( const sysFindFile_t *a, const sysFindFile_t *b ) {
+	if ( !( ( a->attrib ^ b->attrib ) & SYS_FIND_SUBDIR ) ) {
+		return 0;
+	}
+	return ( b->attrib & SYS_FIND_SUBDIR ) ? 1 : -1;
+}
+
+static int QDECL FS_DirCompare( const void *a, const void *b ) {
+	int		i, r;
+
+	for ( i = 0 ; i < fs_dirNumSort ; i++ ) {
+		r = fs_dirSort[i]( (const sysFindFile_t *)a, (const sysFindFile_t *)b );
+		if ( r ) {
+			return fs_dirReverse[i] ? -r : r;
+		}
+	}
+	return 0;
+}
+
+static int FS_DirAttribute( char c ) {
+	switch ( toupper( c ) ) {
+	case 'D': return SYS_FIND_SUBDIR;
+	case 'R': return SYS_FIND_READONLY;
+	case 'H': return SYS_FIND_HIDDEN;
+	case 'A': return SYS_FIND_ARCHIVE;
+	case 'S': return SYS_FIND_SYSTEM;
+	}
+	return 0;
+}
+
+// /A[:]attributes: each switch starts the filter over; "-" excludes the next one
+static void FS_DirParseAttributes( const char *s ) {
+	qboolean	not = qfalse;
+	int			bit;
+
+	fs_dirRequired = 0;
+	fs_dirExcluded = 0;
+	for ( ; *s ; s++ ) {
+		if ( *s == '-' ) {
+			not = qtrue;
+			continue;
+		}
+		bit = FS_DirAttribute( *s );
+		if ( !bit ) {
+			continue;
+		}
+		if ( not ) {
+			fs_dirExcluded |= bit;
+			fs_dirRequired &= ~bit;
+			not = qfalse;
+		} else {
+			fs_dirRequired |= bit;
+			fs_dirExcluded &= ~bit;
+		}
+	}
+}
+
+// /O[:]sortorder: keys add up across switches; "-" reverses the next one, and a
+// key already given ends the switch
+static void FS_DirParseSort( const char *s ) {
+	qboolean		reverse = qfalse;
+	dirCompare_t	cmp;
+	int				i;
+
+	for ( ; *s ; s++ ) {
+		switch ( toupper( *s ) ) {
+		case '-': reverse = qtrue; continue;
+		case 'N': cmp = FS_DirCompareName; break;
+		case 'S': cmp = FS_DirCompareSize; break;
+		case 'E': cmp = FS_DirCompareExtension; break;
+		case 'D': cmp = FS_DirCompareDate; break;
+		case 'G': cmp = FS_DirCompareGroup; break;
+		default: continue;
+		}
+		for ( i = 0 ; i < fs_dirNumSort ; i++ ) {
+			if ( fs_dirSort[i] == cmp ) {
+				return;
+			}
+		}
+		if ( fs_dirNumSort == DIR_MAX_SORT ) {
+			return;
+		}
+		fs_dirSort[fs_dirNumSort] = cmp;
+		fs_dirReverse[fs_dirNumSort] = reverse;
+		fs_dirNumSort++;
+		reverse = qfalse;
+	}
+}
+
+static void FS_DirUsage( void ) {
+	Com_Printf( "Displays a list of files and subdirectories in a directory.\n\n"
+		"DIR [drive:][path][filename]\n"
+		"  [/A[[:]attributes]]\n"
+		"  [/O[[:]sortorder]]\n\n"
+		"  [drive:][path][filename]\n"
+		"             Specifies drive,\n"
+		"             directory, and/or files\n"
+		"             to list.\n\n"
+		"  /A        Displays files with\n"
+		"            specified attributes.\n"
+		"  attributes D  Directories\n"
+		"             R  Read-only files\n"
+		"             H  Hidden files\n"
+		"             A  Files ready for\n"
+		"                archiving\n"
+		"             S  System files\n"
+		"             -  Prefix meaning not\n"
+		"  /O         List by files in sorted\n"
+		"             order.\n\n"
+		"  sortorder  N By name\n"
+		"             S By size\n"
+		"             E By extension\n"
+		"             D By date & time\n"
+		"             G Group directories\n"
+		"             - Prefix to reverse order\n\n"
+		"Switches may be preset in the DIRCMD environment variable.\n\n" );
+}
+
+static qboolean FS_DirMatches( const sysFindFile_t *f ) {
+	return ( f->attrib & fs_dirRequired ) == fs_dirRequired && !( f->attrib & fs_dirExcluded );
+}
+
+/*
 ================
 FS_Dir_f
 ================
 */
-void FS_Dir_f( void ) {
-	char	*path;
-	char	*extension;
-	char	**dirnames;
-	int		ndirs;
-	int		i;
+static void FS_Dir_f( void ) {
+	char			arg[MAX_OSPATH], dir[MAX_OSPATH], file[MAX_OSPATH], saved[MAX_OSPATH];
+	char			line[128], *name;
+	sysFindFile_t	*list, *f;
+	int				numFound, numFiles, totalSize, i;
+	qboolean		drive;
 
-	if ( Cmd_Argc() < 2 || Cmd_Argc() > 3 ) {
-		Com_Printf( "usage: dir <directory> [extension]\n" );
+	fs_dirNumSort = 0;
+	fs_dirRequired = 0;
+	fs_dirExcluded = SYS_FIND_HIDDEN | SYS_FIND_SYSTEM;
+
+	arg[0] = 0;
+	for ( i = 1 ; i < Cmd_Argc() ; i++ ) {
+		const char	*a = Cmd_Argv( i );
+
+		if ( a[0] == '/' || a[0] == '-' ) {
+			if ( toupper( a[1] ) == 'A' ) {
+				FS_DirParseAttributes( a + 2 );
+			} else if ( toupper( a[1] ) == 'O' ) {
+				FS_DirParseSort( a + 2 );
+			} else {
+				FS_DirUsage();
+				return;
+			}
+		} else {
+			Q_strncpyz( arg, a, sizeof( arg ) );
+		}
+	}
+
+	Q_strncpyz( saved, Sys_Cwd(), sizeof( saved ) );
+
+	// a drive letter goes to that drive's current directory; without one the
+	// listing starts from fs_filedir
+	drive = strlen( arg ) > 1 && arg[1] == ':';
+	if ( drive ) {
+		char	letter[3] = { arg[0], ':', 0 };
+
+		if ( !Sys_ChangeDir( letter ) ) {
+			Com_Printf( "%s : %s\n\n", arg, strerror( errno ) );
+			return;
+		}
+		memmove( arg, arg + 2, strlen( arg + 2 ) + 1 );
+	} else {
+		Sys_ChangeDir( fs_filedir->string );
+	}
+
+	name = (char *)COM_SkipPath( arg );
+	Q_strncpyz( dir, arg, MIN( sizeof( dir ), (size_t)( name - arg ) + 1 ) );
+	Q_strncpyz( file, name, sizeof( file ) );
+	if ( !strcmp( file, ".." ) || !strcmp( file, "." ) ) {
+		Q_strcat( dir, sizeof( dir ), file );
+		Q_strcat( dir, sizeof( dir ), "\\" );
+		Q_strncpyz( file, "*.*", sizeof( file ) );
+	}
+	if ( dir[0] && !Sys_ChangeDir( dir ) ) {
+		Com_Printf( "%s\n\n", strerror( errno ) );
+		Sys_ChangeDir( saved );
+		return;
+	}
+	if ( !file[0] ) {
+		Q_strncpyz( file, "*.*", sizeof( file ) );
+	}
+
+	// a name without wildcards that is a directory lists that directory
+	if ( !strchr( file, '*' ) && !strchr( file, '?' ) ) {
+		list = Sys_FindFiles( file, &numFound );
+		if ( list ) {
+			int		attrib = list[0].attrib;
+
+			Z_Free( list );
+			if ( attrib & SYS_FIND_SUBDIR ) {
+				if ( !Sys_ChangeDir( file ) ) {
+					Com_Printf( "%s\n\n", strerror( errno ) );
+					Sys_ChangeDir( saved );
+					return;
+				}
+				Q_strncpyz( file, "*.*", sizeof( file ) );
+			}
+		}
+	}
+
+	Com_Printf( "\n Directory of %s\n\n", Sys_Cwd() );
+
+	list = Sys_FindFiles( file, &numFound );
+	numFiles = 0;
+	totalSize = 0;
+	for ( i = 0 ; i < numFound ; i++ ) {
+		if ( FS_DirMatches( &list[i] ) ) {
+			list[numFiles++] = list[i];
+			totalSize += list[i].size;
+		}
+	}
+	if ( !numFiles ) {
+		Com_Printf( "No files found\n" );
+		if ( list ) {
+			Z_Free( list );
+		}
+		Sys_ChangeDir( saved );
+		return;
+	}
+	if ( fs_dirNumSort ) {
+		qsort( list, numFiles, sizeof( *list ), FS_DirCompare );
+	}
+
+	for ( i = 0, f = list ; i < numFiles ; i++, f++ ) {
+		struct tm	*t = localtime( &f->writeTime );
+		char		size[16];
+
+		if ( f->attrib & SYS_FIND_SUBDIR ) {
+			Com_sprintf( size, sizeof( size ), "%6s", "<dir>" );
+		} else if ( f->size > 0x100000 ) {
+			Com_sprintf( size, sizeof( size ), "%5.1fm", f->size / 1048576.0 );
+		} else {
+			Com_sprintf( size, sizeof( size ), "%5.1fk", f->size / 1024.0 );
+		}
+		if ( t ) {
+			Com_sprintf( line, sizeof( line ), "%2d/%02d/%04d %2d:%02d%c %s %-14s\n",
+				t->tm_mon + 1, t->tm_mday, t->tm_year + 1900, t->tm_hour % 12, t->tm_min,
+				t->tm_hour < 12 ? 'a' : 'p', size, f->name );
+		} else {
+			Com_sprintf( line, sizeof( line ), "%s %-14s\n", size, f->name );
+		}
+		Com_Printf( "%s", line );
+	}
+	Com_Printf( " %d file(s)   %d bytes\n\n", numFiles, totalSize );
+
+	Z_Free( list );
+	Sys_ChangeDir( saved );
+}
+
+/*
+================
+FS_Cd_f
+================
+*/
+static void FS_Cd_f( void ) {
+	char	saved[MAX_OSPATH], path[MAX_OSPATH];
+	const char	*maps;
+	size_t	len;
+
+	if ( Cmd_Argc() == 1 ) {
+		Com_Printf( "%s\n\n", fs_filedir->string );
+		return;
+	}
+	if ( Cmd_Argc() > 2 ) {
+		Com_Printf( "chdir [directory name] : change to specified directory\n" );
 		return;
 	}
 
-	if ( Cmd_Argc() == 2 ) {
-		path = Cmd_Argv( 1 );
-		extension = "";
+	Q_strncpyz( saved, Sys_Cwd(), sizeof( saved ) );
+	Sys_ChangeDir( fs_filedir->string );
+	Q_strncpyz( path, Cmd_Argv( 1 ), sizeof( path ) );
+	if ( !Sys_ChangeDir( path ) ) {
+		Com_Printf( "\n%s : %s\n\n", path, strerror( errno ) );
 	} else {
-		path = Cmd_Argv( 1 );
-		extension = Cmd_Argv( 2 );
+		Q_strncpyz( path, Sys_Cwd(), sizeof( path ) );
+		maps = FS_MapsFolder();
+		len = strlen( maps );
+		Cvar_Set( "mapdir", Q_stricmpn( path, maps, len ) ? "" : path + len );
+		Cvar_Set( "fs_filedir", path );
 	}
-
-	Com_Printf( "Directory of %s %s\n", path, extension );
-	Com_Printf( "---------------\n" );
-
-	dirnames = FS_ListFiles( path, extension, &ndirs );
-
-	for ( i = 0; i < ndirs; i++ ) {
-		Com_Printf( "%s\n", dirnames[i] );
-	}
-	FS_FreeFileList( dirnames );
+	Sys_ChangeDir( saved );
 }
 
 /*
@@ -3250,6 +3571,7 @@ void FS_Shutdown( qboolean closemfp ) {
 
 	Cmd_RemoveCommand( "path" );
 	Cmd_RemoveCommand( "dir" );
+	Cmd_RemoveCommand( "cd" );
 	Cmd_RemoveCommand( "fdir" );
 	Cmd_RemoveCommand( "touchFile" );
 	Cmd_RemoveCommand( "which" );
@@ -3440,8 +3762,13 @@ static void FS_Startup( const char *gameName )
 #endif
 
 	// add our commands
+	// FAKK2: the console's own directory (fakk2.exe 0x432702); see FS_Cd_f
+	Cvar_Get( "mapdir", "", 0 );
+	fs_filedir = Cvar_Get( "fs_filedir", FS_MapsFolder(), 0 );
+
 	Cmd_AddCommand ("path", FS_Path_f);
 	Cmd_AddCommand ("dir", FS_Dir_f );
+	Cmd_AddCommand ("cd", FS_Cd_f );
 	Cmd_AddCommand ("fdir", FS_NewDir_f );
 	Cmd_AddCommand ("touchFile", FS_TouchFile_f );
 	Cmd_AddCommand ("which", FS_Which_f );
