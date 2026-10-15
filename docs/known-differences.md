@@ -137,7 +137,7 @@ Missing from OpenFAKK2, to be done:
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`), `ui_drawcoords`, `ui_hud`,
-  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `inv_restart`, `vidmode`, `dialog`,
+  `ui_resetcvars`, `ui_checkrestart`, `ui_testlist`, `vidmode`, `dialog`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
@@ -1283,7 +1283,8 @@ What is implemented, and on what basis:
   game allows it (`CF_CAMERA_ANGLES_ALLOWOFFSET`), which the stub had left still. Not
   compared with a capture: the probes cannot move the mouse. The number keys and the wheel are `warpinv <slot>`,
   `nextinv` and `previnv`, which the retail client handles itself (`0x408dc0`):
-  `global/inventory.scr` defines the slots and their items, the bar shows the slot's
+  `global/inventory.scr` (`ui_inventoryfile`; `inv_restart` reads it again, `0x40d670`) defines the
+  slots and their items, the bar shows the slot's
   items the player carries (named by the player state's `inventory_name_index`
   through the item config strings), and while it is up the attack keys equip the
   highlighted item by sending the game `use "<item>" lefthand|righthand|dualhand`

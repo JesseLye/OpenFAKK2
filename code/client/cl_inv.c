@@ -26,7 +26,6 @@ with the script's "hud" settings.
 #include "client.h"
 #include "../tiki/tiki.h"
 
-#define INV_FILE		"global/inventory.scr"
 #define INV_MAX_TYPES	8
 #define INV_MAX_ITEMS	16
 #define INV_SHOW_TIME	5000
@@ -98,6 +97,9 @@ static invType_t	inv_types[INV_MAX_TYPES];
 static int			inv_numTypes;
 static qboolean		inv_loaded;
 
+// FAKK2: the inventory script's name (fakk2.exe 0x40ea1b)
+static cvar_t		*ui_inventoryfile;
+
 static int			inv_curType = -1;
 static int			inv_curItem = -1;
 static int			inv_showTime;
@@ -131,8 +133,8 @@ static void INV_Load( void ) {
 	inv.alignRight = qtrue;
 	inv.cascadeLeft = qtrue;
 
-	if ( FS_ReadFile( INV_FILE, (void **)&buf ) <= 0 ) {
-		Com_Printf( "WARNING: could not load %s\n", INV_FILE );
+	if ( FS_ReadFile( ui_inventoryfile->string, (void **)&buf ) <= 0 ) {
+		Com_Printf( "WARNING: could not load %s\n", ui_inventoryfile->string );
 		return;
 	}
 	p = buf;
@@ -143,7 +145,7 @@ static void INV_Load( void ) {
 		}
 		if ( !Q_stricmp( tok, "typedef" ) ) {
 			if ( inv_numTypes >= INV_MAX_TYPES ) {
-				Com_Printf( "WARNING: %s: too many slots\n", INV_FILE );
+				Com_Printf( "WARNING: %s: too many slots\n", ui_inventoryfile->string );
 				break;
 			}
 			type = &inv_types[inv_numTypes++];
@@ -187,7 +189,7 @@ static void INV_Load( void ) {
 			type->height = atoi( COM_ParseExt( &p, qfalse ) );
 		} else if ( !Q_stricmp( tok, "item" ) ) {
 			if ( type->numItems >= INV_MAX_ITEMS ) {
-				Com_Printf( "WARNING: %s: too many items in %s\n", INV_FILE, type->name );
+				Com_Printf( "WARNING: %s: too many items in %s\n", ui_inventoryfile->string, type->name );
 				SkipRestOfLine( &p );
 				item = NULL;
 				continue;
@@ -927,7 +929,24 @@ INV_Init / INV_Shutdown
 With the UI, on every map.
 =================
 */
+/*
+=================
+INV_Restart_f
+
+inv_restart (fakk2.exe 0x40d670): the inventory read again from
+ui_inventoryfile.
+=================
+*/
+static void INV_Restart_f( void ) {
+	INV_Close();
+	INV_Load();
+	inv_curType = -1;
+	inv_curItem = -1;
+	inv_showTime = 0;
+}
+
 void INV_Init( void ) {
+	ui_inventoryfile = Cvar_Get( "ui_inventoryfile", "global/inventory.scr", 0 );
 	if ( !inv_loaded ) {
 		INV_Load();
 	}
@@ -940,6 +959,7 @@ void INV_Init( void ) {
 	Cmd_AddCommand( "previnv", INV_PrevInv_f );
 	Cmd_AddCommand( "inventory", INV_Inventory_f );
 	Cmd_AddCommand( "saveweaps", INV_SaveWeaps_f );
+	Cmd_AddCommand( "inv_restart", INV_Restart_f );
 }
 
 void INV_Shutdown( void ) {
@@ -948,5 +968,6 @@ void INV_Shutdown( void ) {
 	Cmd_RemoveCommand( "previnv" );
 	Cmd_RemoveCommand( "inventory" );
 	Cmd_RemoveCommand( "saveweaps" );
+	Cmd_RemoveCommand( "inv_restart" );
 	inv_loaded = qfalse;		// its shaders are the map's
 }
