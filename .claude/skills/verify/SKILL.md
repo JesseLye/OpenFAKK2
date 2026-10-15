@@ -65,7 +65,20 @@ with the Read tool.
 - "Skipped: no retail reference" or "made from an older probe" means a reference needs
   `tools\suite\refresh-retail.ps1 -Only <check>` (the game disc, windows on screen). If
   you changed a probe, refresh its reference.
-- A deliberate improvement shows as a check that differs less than before; say so.
+- A deliberate improvement shows as a check that differs less than before ("Better than
+  ours' last good result"); say so.
+- **A check your change moves on purpose** (a fix that is right by the binary but makes a
+  picture or a count differ more from the cached result, a probe you changed) is
+  declared, not waved through: add a trailer to the commit that makes the change,
+  ```
+  Suite-moves: crosshair, shots/*: the crosshair is now drawn at retail's size (0x4b03c0)
+  ```
+  (check names or groups as the report names them, wildcards allowed, then why), and run
+  the suite again. The report lists it under "Moved as declared", it no longer counts as
+  newly failing, and the `merge` skill makes its new result ours' last good one once the
+  branch is on main. Never declare a move you have not looked at in the evidence.
+- Never run `-UpdateBaseline` from a branch: last good results are shared by every
+  worktree and are only changed on main, by the `merge` skill.
 
 For how a probe or a capture works and how to dig into one result, use the
 `retail-probe` (readings) and `retail-capture` (pictures) skills.

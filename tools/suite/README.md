@@ -11,6 +11,7 @@ checks for what it changed, and the project's Stop hook asks for it when code ch
     tools\suite\run-suite.ps1 -Level full                  # everything but sound (-Sound adds it)
     tools\suite\run-suite.ps1 -Only chain, spawn/zoo -NoBuild
     tools\suite\run-suite.ps1 -List -Level standard -Areas rendering
+    tools\suite\run-suite.ps1 -Level quick -Changed -Since HEAD^1 -AcceptMoves   # on main after a merge (the merge skill)
 
 ## What a run does
 
@@ -54,9 +55,28 @@ never committed (they are made from Ritual's data).
 
   It needs the game disc in a drive and puts the retail game's windows on screen.
 - `ours\<check>\`: ours' last good result (`baseline.json` with the numbers, the commit,
-  and the logs and shots, against which a failing shot is also paired). Written only by
-  `run-suite.ps1 -UpdateBaseline`: run it on `main`, on a build whose report you have
-  read. A worktree compares against main's.
+  the retail reference it was measured against and why it was kept, and the logs and
+  shots, against which a failing shot is also paired). A worktree compares against
+  main's. Changed only on main: by the `merge` skill's
+  `run-suite.ps1 -Since HEAD^1 -AcceptMoves` after a merge, which keeps the declared
+  moves, the improvements and the results against remade references; or by
+  `-UpdateBaseline`, which keeps everything, to set the suite up.
+
+## Declared moves
+
+A change that moves a check on purpose (right by the binary, but further from the cached
+result; a changed probe) says so in its commit:
+
+    Suite-moves: crosshair, shots/*: the crosshair is now drawn at retail's size
+
+Check names or groups, wildcards allowed, then why. `run-suite.ps1` reads these
+trailers from the commits since the branch's merge base with main (or `-Since`), and a
+check one names that comes out worse is reported as **moved as declared**, not newly
+failing, so the branch can pass `verify`. After the merge, `-AcceptMoves` makes its
+result the new last good one. A run's statuses: newly failing, could not run, moved as
+declared, known (differs from retail as before), unmatched (no last good result yet),
+pass, skipped; and a check whose numbers dropped is also listed as better than its last
+good result.
 - `noise.json`: how far each check's numbers move between two runs of the same build
   (`run-suite.ps1 -Noise`) and between two retail runs (`refresh-retail.ps1 -Twice`,
   as the game seeds its random numbers from the clock). A tolerance is at least 1.5

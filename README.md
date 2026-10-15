@@ -38,7 +38,9 @@ and on OpenFAKK2 and compares entity state, screenshots or recorded sound; the
 `retail-probe` and `retail-capture` skills in `.claude/skills/` describe how to use it.
 `tools/suite/` runs those checks as a test suite (`run-suite.ps1 -Level quick`),
 against cached retail results and ours' last good ones, and reports what newly broke;
-the `verify` skill picks the checks for a change (see `tools/suite/README.md`).
+the `verify` skill picks the checks for a change, and the `merge` skill merges a branch
+and updates the suite's last good results for what it meant to change (see
+`tools/suite/README.md`).
 
 ## Sources
 
