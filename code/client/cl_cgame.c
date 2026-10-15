@@ -702,7 +702,7 @@ static void CL_CG_R_AddLightToScene( vec3_t origin, float intensity, float r, fl
 }
 
 static void CL_CG_R_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int renderfx ) {
-	re.AddPolyToScene( hShader, numVerts, verts, 1 );
+	re.AddPolyToScene( hShader, numVerts, verts, 1, renderfx );
 }
 
 static void CL_CG_R_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) {

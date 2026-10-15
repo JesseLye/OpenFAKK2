@@ -596,6 +596,7 @@ typedef struct srfPoly_s {
 	int				fogIndex;
 	int				numVerts;
 	polyVert_t		*verts;
+	int				renderfx;		// FAKK2: the client game module's RF_ flags
 } srfPoly_t;
 
 
@@ -1580,7 +1581,8 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
-void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int renderfx );
+qboolean R_ViewLeavesOut( int renderfx );
 void RE_AddRefSpriteToScene( const refEntity_t *ent );
 refEntity_t *RE_GetRenderEntity( int entityNumber );
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int type );

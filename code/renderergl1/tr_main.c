@@ -1385,6 +1385,27 @@ void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 
 /*
 =============
+R_ViewLeavesOut
+
+FAKK2: what the view leaves out of an entity's or a poly's render flags
+(fakk2.exe 0x463fa2 for entities, 0x47b3f8 for polys): a sky entity belongs
+to the sky portal's view and nothing else does, and a mirror or portal's
+view shows only what is flagged for portals or for both, while the main
+view leaves out what is flagged for portals only.
+=============
+*/
+qboolean R_ViewLeavesOut( int renderfx ) {
+	if ( !( renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
+		return qtrue;
+	}
+	if ( tr.viewParms.isPortal ) {
+		return !( renderfx & ( RF_PORTALENTITY | RF_DUALENTITY ) );
+	}
+	return ( renderfx & RF_PORTALENTITY ) != 0;
+}
+
+/*
+=============
 R_AddEntitySurfaces
 =============
 */
@@ -1415,10 +1436,7 @@ void R_AddEntitySurfaces (void) {
 			continue;
 		}
 
-		// FAKK2: sky entities belong to the sky portal's view and nothing
-		// else does. (Taken from the flag's description; the retail
-		// renderer's handling has not been examined.)
-		if ( !( ent->e.renderfx & RF_SKYENTITY ) != !tr.viewParms.isPortalSky ) {
+		if ( R_ViewLeavesOut( ent->e.renderfx ) ) {
 			continue;
 		}
 

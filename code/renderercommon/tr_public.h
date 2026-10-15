@@ -95,7 +95,8 @@ typedef struct {
 	void	(*AddRefEntityToScene)( const refEntity_t *re );
 	// FAKK2: a sprite; the entity's model names the shader and its scale the size
 	void	(*AddRefSpriteToScene)( const refEntity_t *re );
-	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+	// FAKK2: renderfx is the client game module's RF_ flags for the polys
+	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int renderfx );
 	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 	// type is a combination of dlighttype_t bits
 	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b, int type );

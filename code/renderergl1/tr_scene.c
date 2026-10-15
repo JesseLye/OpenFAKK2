@@ -96,6 +96,14 @@ void R_AddPolygonSurfaces( void ) {
 	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
 
 	for ( i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys ; i++, poly++ ) {
+		// FAKK2 (fakk2.exe 0x47b3c0): the client game module's render flags,
+		// a third person poly kept out of the main view as an entity is
+		if ( ( poly->renderfx & RF_THIRD_PERSON ) && !tr.viewParms.isPortal ) {
+			continue;
+		}
+		if ( R_ViewLeavesOut( poly->renderfx ) ) {
+			continue;
+		}
 		sh = R_GetShaderByHandle( poly->hShader );
 		R_AddDrawSurf( ( void * )poly, sh, poly->fogIndex, qfalse );
 	}
@@ -107,7 +115,7 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int renderfx ) {
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -138,6 +146,7 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
 		poly = &backEndData->polys[r_numpolys];
 		poly->surfaceType = SF_POLY;
 		poly->hShader = hShader;
+		poly->renderfx = renderfx;
 		poly->numVerts = numVerts;
 		poly->verts = &backEndData->polyVerts[r_numpolyverts];
 		

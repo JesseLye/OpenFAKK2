@@ -134,9 +134,11 @@ Missing from OpenFAKK2, to be done:
   it waits on level of detail itself, below). Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
-- The client game module's imports that are still stubs: `S_SetGlobalAmbientVolumeLevel`,
-  `S_UpdateEntity`'s velocity, and
-  `R_AddPolyToScene`'s render flags.
+- `S_UpdateEntity`'s velocity, which retail keeps per entity (`0x43ec90`) and hands to its
+  3D sound interface with the position (`0x45cf26`); neither of OpenFAKK2's sound
+  backends moves a sound by it. (`S_SetGlobalAmbientVolumeLevel` stores a level that
+  scales the looping sounds, `0x43ed10` and `0x45c528`, but the client game module never
+  calls it.)
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`), `ui_drawcoords`, `ui_showmouse`, `ui_hidemouse`, `ui_hud`,
@@ -1017,6 +1019,14 @@ What is implemented, and on what basis:
   image, and `frameFromEntity` (`0x476c03`) shows the image the entity's frame names,
   which the game's `shader frame` sets (`R_BindAnimatedImage` `0x47cf5b`). No retail
   script uses these three.
+- **What a view leaves out** (`R_ViewLeavesOut`): an entity's or a poly's render flags
+  decide which views draw it as retail decides (`0x463fa2` for entities, `0x47b3f8` for
+  the client game module's polys, which now keep their flags): `RF_SKYENTITY` only in
+  the sky portal's view, and in a mirror or portal's view only what is flagged
+  `RF_PORTALENTITY` or `RF_DUALENTITY`, which the main view leaves out when it is
+  flagged for portals only; a poly flagged `RF_THIRD_PERSON` is left out of the main
+  view as an entity is. Neither game module sets the portal flags, so retail's mirrors
+  and portals show the world without entities; no shipped map has one.
 - **Sky portals**: when a view has seen a `portalsky` surface and the scene names a sky
   origin, the scene is drawn from there first, turned the way the viewer is looking.
   Entities flagged `RF_SKYENTITY` are drawn only in that view, and others only outside
