@@ -1,0 +1,47 @@
+// The uzi's muzzle sprite and spent casings, for the real client on zoo, where the
+// player starts at (-2352 1568 0) looking down +x: a camera close beside the muzzle
+// shoots a burst while she fires, then a camera over the floor to her right, where
+// the casings land, shoots while she fires and after she stops.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "cammuz" origin "-2296 1512 62" angles "0 102 0"
+spawn Camera targetname "camfloor" origin "-2330 1470 70" angles "40 95 0"
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+wait 3
+cuecamera $cammuz
+wait 1
+stuffcmd "+attackright"
+wait 0.3
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+wait 0.1
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 2.5
+cuecamera $camfloor
+wait 1
+stuffcmd "+attackright"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+stuffcmd "-attackright"
+wait 0.3
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

@@ -86,7 +86,11 @@ skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zo
   `fx\test_muzzle.tik` (the flash sprite and model held still); `probe-muzz2` does the
   chaingun, hand gun, shotgun and rocket launcher through the side camera, and
   `probe-muzz3` the hand gun alone with a shot every server frame. A flash lives 0.05 s,
-  so which shots catch one varies from run to run.
+  so which shots catch one varies from run to run. `probe-muzz4` frames the uzi's muzzle
+  close up, then the floor where its casings land; `probe-muzz5` takes twenty shots of
+  the muzzle 0.1 s apart, to count how often the burst is up, and with
+  `-Extra "+set cg_showemitters 1"` both games log every particle each emitter spawns
+  (19 of each of the uzi's four in that burst, on both).
 - `probe-fx-expl` spawns the flashbang's, gas pod's and soul sucker's explosion models.
   `probe-sprites`, `probe-fx-order` and `probe-muzzle` spawn the test models in `fx\`
   (still sprites, the fade rules, overlapping sprites, muzzle flashes); copy `fx\*.tik`
