@@ -91,7 +91,7 @@ tools\retail-compare\compare-player.ps1 -Map zoo -Probe probe-sling -Secs 120 [-
 
 # the same probe on the unpatched build in the main checkout
 .claude\skills\retail-probe\scripts\probe-client.ps1 -Probe probe-sling-down -Map zoo -Name before `
-    -Bin C:\Users\Chse\Desktop\OpenFAKK2\build\x86-Release\Release
+    -Bin <main checkout>\build\x86-Release\Release
 
 # pull readings out of any log the runners wrote
 .claude\skills\retail-probe\scripts\readings.ps1 -Log build\compare\player-retail-zoo-probe-sling.log -Classname Projectile -Entity 0
