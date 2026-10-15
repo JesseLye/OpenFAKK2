@@ -36,6 +36,9 @@ subsystem by subsystem, what was read (with addresses), what was inferred and wh
 still differs. `tools/retail-compare/` runs the same probe script on the retail game
 and on OpenFAKK2 and compares entity state, screenshots or recorded sound; the
 `retail-probe` and `retail-capture` skills in `.claude/skills/` describe how to use it.
+`tools/suite/` runs those checks as a test suite (`run-suite.ps1 -Level quick`),
+against cached retail results and ours' last good ones, and reports what newly broke;
+the `verify` skill picks the checks for a change (see `tools/suite/README.md`).
 
 ## Sources
 

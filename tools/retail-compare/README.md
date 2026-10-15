@@ -25,6 +25,10 @@ beside the executable. Harness runs take it from beside the executable (the rebu
 set `FAKK2_TEST_MODULES=retail` to run Ritual's `gamex86.dll` and `cgamex86.dll` instead
 and compare engines with the same game code.
 
+The test suite in `tools\suite` (see its README) runs these scripts' checks together
+against cached retail results and reports what newly broke; the `verify` skill runs it
+for a change.
+
 ## How the runners start the games
 
 - **The test home.** OpenFAKK2 runs with the install as `fs_basepath` and
