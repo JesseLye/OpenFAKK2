@@ -133,6 +133,8 @@ both sandboxes' `config.cfg` for them afterwards.
 and prints `r_sunflare`, the point it wrote, to the log.
 `probe-tiki` runs `tiki` and `tikilist` on `zoo` for their log output, between `====`
 markers; compare the two logs' sections.
+`probe-shadows` frames Julie's feet on `zoo` with `cg_shadows 2` (stencil, which retail
+cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

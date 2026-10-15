@@ -1060,6 +1060,21 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		if ( !sh ) {
 			continue;
 		}
+
+		// FAKK2: the shadows of an opaque surface of a model the game flags
+		// for precise shadows (fakk2.exe 0x4896a8, 0x4896ea; 0x486fec for a
+		// skeletal one): cg_shadows 2 a stencil shadow when it casts one, 3 a
+		// projection onto the plane the client game module found under it
+		if ( sh->sort == SS_OPAQUE && ( ent->e.renderfx & RF_SHADOW_PRECISE ) ) {
+			if ( r_shadows->integer == 2 && ( ent->e.renderfx & RF_SHADOW )
+				&& !( ent->e.renderfx & RF_DEPTHHACK ) ) {
+				R_AddDrawSurf( surf, tr.shadowShader, 0, qfalse );
+			}
+			if ( r_shadows->integer == 3 && ( ent->e.renderfx & RF_SHADOW_PLANE ) ) {
+				R_AddDrawSurf( surf, tr.projectionShadowShader, 0, qfalse );
+			}
+		}
+
 		R_AddDrawSurf( surf, sh, 0, qfalse );
 	}
 }

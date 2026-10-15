@@ -128,9 +128,7 @@ generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
 Missing from OpenFAKK2, to be done:
 
 - Renderer: `r_showlod` (each model's level of detail as figures over it, `0x4897f6`;
-  it waits on level of detail itself, below). Shadows of
-  `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
-  `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
+  it waits on level of detail itself, below).
 - `S_UpdateEntity`'s velocity, which retail keeps per entity (`0x43ec90`) and hands to its
   3D sound interface with the position (`0x45cf26`); neither of OpenFAKK2's sound
   backends moves a sound by it. (`S_SetGlobalAmbientVolumeLevel` stores a level that
@@ -1016,6 +1014,16 @@ What is implemented, and on what basis:
   image, and `frameFromEntity` (`0x476c03`) shows the image the entity's frame names,
   which the game's `shader frame` sets (`R_BindAnimatedImage` `0x47cf5b`). No retail
   script uses these three.
+- **Shadows of `cg_shadows 2` and `3`** for the models the game flags for precise
+  shadows (`RF_SHADOW_PRECISE`: the player, the actors): as retail does for a TIKI
+  model's opaque surfaces (`0x4896a8`, `0x4896ea`; `0x486fec` for skeletal ones), 2
+  adds Quake III's stencil shadow volume when the model casts a shadow (`RF_SHADOW`) and
+  is not a depth hack, and 3 Quake III's projection onto the plane the client game
+  module found under it (`RF_SHADOW_PLANE`, the `projectionShadow` shader). The default
+  1 is a mark the client game module draws itself. `probe-shadows` on `zoo` gave
+  Julie's projected shadow as retail draws it; retail got no stencil buffer on the test
+  machine (its `r_colorbits` default is 16), so it drew no stencil shadow to compare,
+  and the volume darkens her legs as well, as Quake III's stencil shadows do.
 - **What a view leaves out** (`R_ViewLeavesOut`): an entity's or a poly's render flags
   decide which views draw it as retail decides (`0x463fa2` for entities, `0x47b3f8` for
   the client game module's polys, which now keep their flags): `RF_SKYENTITY` only in
