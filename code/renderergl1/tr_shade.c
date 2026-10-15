@@ -1216,11 +1216,12 @@ void RB_StageIteratorGeneric( void )
 	//
 	RB_IterateStagesGeneric( input );
 
-	// 
-	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE
-		&& !(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY) ) ) {
+	// now do any dynamic lighting needed: decals too, and the surface flags
+	// aren't read (fakk2.exe 0x47c640 and the other two iterators test only
+	// sort <= 4.0)
+	//
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 
@@ -1307,7 +1308,7 @@ void RB_StageIteratorVertexLitTexture( void )
 	// 
 	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE ) {
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 
@@ -1414,7 +1415,7 @@ void RB_StageIteratorLightmappedMultitexture( void ) {
 	// 
 	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE ) {
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 

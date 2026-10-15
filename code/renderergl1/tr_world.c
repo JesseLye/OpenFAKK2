@@ -367,8 +367,6 @@ R_RecursiveWorldNode
 static void R_RecursiveWorldNode( mnode_t *node, unsigned int planeBits, unsigned int dlightBits ) {
 
 	do {
-		unsigned int newDlights[2];
-
 		// if the node wasn't marked as potentially visible, exit
 		if (node->visframe != tr.visCount) {
 			return;
@@ -440,36 +438,18 @@ static void R_RecursiveWorldNode( mnode_t *node, unsigned int planeBits, unsigne
 		// node is just a decision point, so go down both sides
 		// since we don't care about sort orders, just go positive to negative
 
-		// determine which dlights are needed
-		newDlights[0] = 0;
-		newDlights[1] = 0;
-		if ( dlightBits ) {
-			int	i;
-
-			for ( i = 0 ; i < tr.refdef.num_dlights ; i++ ) {
-				dlight_t	*dl;
-				float		dist;
-
-				if ( dlightBits & ( 1 << i ) ) {
-					dl = &tr.refdef.dlights[i];
-					dist = DotProduct( dl->origin, node->plane->normal ) - node->plane->dist;
-					
-					if ( dist > -dl->radius ) {
-						newDlights[0] |= ( 1 << i );
-					}
-					if ( dist < dl->radius ) {
-						newDlights[1] |= ( 1 << i );
-					}
-				}
-			}
-		}
+		// FAKK2 (fakk2.exe 0x486440): every light goes down both sides, and
+		// each surface is tested against them all on its own. Quake III dropped
+		// a light from the side of a node plane it didn't reach, but a surface
+		// is added once, with the lights of the first leaf that reaches it, so
+		// a face spanning many leaves (zoo's corridor floor is one) went unlit
+		// whenever a leaf away from the light came first
 
 		// recurse down the children, front side first
-		R_RecursiveWorldNode (node->children[0], planeBits, newDlights[0] );
+		R_RecursiveWorldNode (node->children[0], planeBits, dlightBits );
 
 		// tail recurse
 		node = node->children[1];
-		dlightBits = newDlights[1];
 	} while ( 1 );
 
 	{
