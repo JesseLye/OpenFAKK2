@@ -1,0 +1,23 @@
+// Level of detail on the models swamp1.bsp has baked in (triangle soups that keep their
+// model's collapse map), from above the rock by the swamp tree at -4352 -4052, a soup
+// that goes from 197 vertexes down to its minLod of 143. Shot 0 has the default
+// r_lodscale of 5, shot 1 has 0.05, where retail and ours drop the same pieces of the
+// tree's trunk and branches. Over half the retail soups never reduce: their minLod is
+// all their vertexes (the branches and plants by the player's start, for one).
+probe:
+waitforplayer
+wait 25
+spawn Camera targetname lodcam origin "-3765 -4338 1200" angles "5 154 0"
+wait .2
+cuecamera $lodcam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set r_lodscale 0.05"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set r_lodscale 5"
+wait .5
+stuffcmd "quit"
+end

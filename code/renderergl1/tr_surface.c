@@ -324,24 +324,47 @@ RB_SurfaceTriangles
 =============
 */
 static void RB_SurfaceTriangles( srfTriangles_t *srf ) {
+	static int	lodIndexes[SHADER_MAX_INDEXES];
 	int			i;
 	drawVert_t	*dv;
 	float		*xyz, *normal, *texCoords;
 	byte		*color;
 	int			dlightBits;
 	qboolean	needsNormal;
+	int			numVerts = srf->numVerts, numIndexes = srf->numIndexes;
+	const int	*indexes = srf->indexes;
 
 	dlightBits = srf->dlightBits;
 	tess.dlightBits |= dlightBits;
 
-	RB_CHECKOVERFLOW( srf->numVerts, srf->numIndexes );
+	// FAKK2: a map's triangle soup is drawn at its model's level of detail
+	// (tr_lod.c), its radius half as large again (fakk2.exe 0x48fac0). Retail
+	// reckons it with the front end's view, whichever that was last; here it
+	// is the view being drawn.
+	if ( srf->collapse ) {
+		float	lod = R_CalcLod( &backEnd.viewParms, srf->localOrigin, srf->radius * 2 * 1.5f,
+			srf->lodScale, srf->lodBias );
 
-	for ( i = 0 ; i < srf->numIndexes ; i += 3 ) {
-		tess.indexes[ tess.numIndexes + i + 0 ] = tess.numVertexes + srf->indexes[ i + 0 ];
-		tess.indexes[ tess.numIndexes + i + 1 ] = tess.numVertexes + srf->indexes[ i + 1 ];
-		tess.indexes[ tess.numIndexes + i + 2 ] = tess.numVertexes + srf->indexes[ i + 2 ];
+		numVerts = R_LodVertexCount( srf->numVerts, srf->minLod, lod );
+		if ( !numVerts ) {
+			return;
+		}
+		if ( numVerts < srf->numVerts && numIndexes <= ARRAY_LEN( lodIndexes ) ) {
+			numIndexes = R_LodTriangles( srf->collapse, srf->numVerts, numVerts, srf->indexes, numIndexes, lodIndexes );
+			indexes = lodIndexes;
+		} else {
+			numVerts = srf->numVerts;
+		}
 	}
-	tess.numIndexes += srf->numIndexes;
+
+	RB_CHECKOVERFLOW( numVerts, numIndexes );
+
+	for ( i = 0 ; i < numIndexes ; i += 3 ) {
+		tess.indexes[ tess.numIndexes + i + 0 ] = tess.numVertexes + indexes[ i + 0 ];
+		tess.indexes[ tess.numIndexes + i + 1 ] = tess.numVertexes + indexes[ i + 1 ];
+		tess.indexes[ tess.numIndexes + i + 2 ] = tess.numVertexes + indexes[ i + 2 ];
+	}
+	tess.numIndexes += numIndexes;
 
 	dv = srf->verts;
 	xyz = tess.xyz[ tess.numVertexes ];
@@ -350,7 +373,7 @@ static void RB_SurfaceTriangles( srfTriangles_t *srf ) {
 	color = tess.vertexColors[ tess.numVertexes ];
 	needsNormal = tess.shader->needsNormal;
 
-	for ( i = 0 ; i < srf->numVerts ; i++, dv++, xyz += 4, normal += 4, texCoords += 4, color += 4 ) {
+	for ( i = 0 ; i < numVerts ; i++, dv++, xyz += 4, normal += 4, texCoords += 4, color += 4 ) {
 		xyz[0] = dv->xyz[0];
 		xyz[1] = dv->xyz[1];
 		xyz[2] = dv->xyz[2];
@@ -370,11 +393,11 @@ static void RB_SurfaceTriangles( srfTriangles_t *srf ) {
 		*(int *)color = *(int *)dv->color;
 	}
 
-	for ( i = 0 ; i < srf->numVerts ; i++ ) {
+	for ( i = 0 ; i < numVerts ; i++ ) {
 		tess.vertexDlightBits[ tess.numVertexes + i] = dlightBits;
 	}
 
-	tess.numVertexes += srf->numVerts;
+	tess.numVertexes += numVerts;
 }
 
 

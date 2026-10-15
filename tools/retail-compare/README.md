@@ -144,6 +144,10 @@ sandboxes' `config.cfg` afterwards. `probe-llines` frames Julie (lit from a ligh
 both sandboxes' `config.cfg` for them afterwards.
 `probe-skel` draws Julie's skeleton on `zoo` (`r_showskel 1`), then sets `r_place_sunflare 1`
 and prints `r_sunflare`, the point it wrote, to the log.
+`probe-lod` frames Julie and a spawned statue on `zoo` with `r_showlod 1` (each model's
+kept and total triangles as figures over it) at `r_lodscale` 5 and 0.5, then the meshes
+at 0.1; `probe-lodsoup` shoots a swamp tree baked into `swamp1` at `r_lodscale` 5 and
+0.05, where retail and ours drop the same pieces of it.
 `probe-tiki` runs `tiki` and `tikilist` on `zoo` for their log output, between `====`
 markers; compare the two logs' sections.
 `probe-shadows` frames Julie's feet on `zoo` with `cg_shadows 2` (stencil, which retail

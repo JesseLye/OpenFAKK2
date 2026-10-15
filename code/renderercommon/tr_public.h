@@ -41,6 +41,8 @@ typedef struct {
 	const char	*skelFile;		// the .skb file of a skeletal model
 	vec3_t		mins, maxs;		// the definition's bounds, as the game sees them
 	float		radius;
+	float		lodScale;		// "lod_scale" over 5: multiplies r_lodscale
+	float		lodBias;		// "lod_bias": added to r_lodbias
 
 	int			numAnims;
 	const char	**animFiles;	// one per animation

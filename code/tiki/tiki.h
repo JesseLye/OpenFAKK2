@@ -48,6 +48,8 @@ qboolean	TIKI_IsSkeletal( const tiki_t *tiki );
 const char	*TIKI_SkelFile( const tiki_t *tiki );	// the .skb file, "" when not skeletal
 const char	*TIKI_Path( const tiki_t *tiki );
 float		TIKI_Scale( const tiki_t *tiki );
+float		TIKI_LodScale( const tiki_t *tiki );	// "lod_scale" over 5, so 1 by default
+float		TIKI_LodBias( const tiki_t *tiki );
 void		TIKI_Origin( const tiki_t *tiki, vec3_t origin );
 void		TIKI_LightOffset( const tiki_t *tiki, vec3_t offset );	// the setup's "lightoffset"
 const char	*TIKI_Anim_File( const tiki_t *tiki, int animnum );

@@ -1241,6 +1241,14 @@ float TIKI_Scale( const tiki_t *tiki ) {
 	return tiki ? tiki->loadScale : 1.0f;
 }
 
+float TIKI_LodScale( const tiki_t *tiki ) {
+	return tiki ? tiki->lodScale : 1.0f;
+}
+
+float TIKI_LodBias( const tiki_t *tiki ) {
+	return tiki ? tiki->lodBias : 0.0f;
+}
+
 void TIKI_Origin( const tiki_t *tiki, vec3_t origin ) {
 	if ( tiki ) {
 		VectorCopy( tiki->loadOrigin, origin );

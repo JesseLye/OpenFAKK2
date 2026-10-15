@@ -22,7 +22,8 @@ scaled by the definition's scale at the end. The retail renderer's own
 skinning has not been read: normals are turned with the vertex's bones and
 frames are interpolated by normalised quaternion lerp, which are assumptions.
 
-Level of detail, tags, cross-blending and torso animations are not handled.
+Both kinds of surface are drawn at the entity's level of detail (tr_lod.c):
+the files' collapse maps drop vertexes as the model gets smaller on screen.
 ===========================================================================
 */
 
@@ -87,6 +88,8 @@ typedef struct {
 	int				*indexes;		// numTris * 3
 	float			*st;			// numVerts * 2
 	unsigned short	*xyz;			// numFrames * numVerts * 4: packed x, y, z and the normal
+	int				minLod;			// the fewest vertexes a level of detail keeps
+	int				*collapse;		// numVerts: the earlier vertex each collapses into; NULL draws them all
 } tanSurface_t;
 
 struct tanAnim_s {
@@ -119,6 +122,8 @@ typedef struct {
 	skelVert_t		*verts;
 	skelWeight_t	*weights;
 	int				*indexes;
+	int				minLod;
+	int				*collapse;		// as a tanSurface_t's; NULL for a surface cut into pieces
 } skelSurface_t;
 
 typedef struct {
@@ -145,6 +150,8 @@ struct tikiModel_s {
 	qboolean	skeletal;
 	vec3_t		mins, maxs;
 	float		radius;
+	float		lodScale;		// the definition's "lod_scale" over 5
+	float		lodBias;
 
 	int			numAnims;
 	char		**animFiles;
@@ -178,6 +185,38 @@ static short TAN_Short( const byte *p ) {
 
 static qboolean TAN_InFile( int length, int offset, int size ) {
 	return offset >= 0 && size >= 0 && offset <= length && size <= length - offset;
+}
+
+/*
+===============
+R_TikiCollapseMap
+
+Reads a surface's collapse map (tr_lod.c), or returns NULL when it is not
+in the file or a vertex does not collapse into an earlier one, which every
+retail .tan and .skb surface does (vertex 0 into itself); such a surface is
+always drawn whole.
+===============
+*/
+static int *R_TikiCollapseMap( const byte *surf, int surfLength, int ofsCollapse, int numVerts ) {
+	int		*collapse;
+	int		i;
+
+	if ( numVerts < 1 || numVerts > LOD_MAX_VERTS || !TAN_InFile( surfLength, ofsCollapse, numVerts * 4 ) ) {
+		return NULL;
+	}
+	for ( i = 1 ; i < numVerts ; i++ ) {
+		int		c = TAN_Int( surf + ofsCollapse + i * 4 );
+
+		if ( c < 0 || c >= i ) {
+			return NULL;
+		}
+	}
+	collapse = ri.Hunk_Alloc( numVerts * sizeof( int ), h_low );
+	collapse[0] = 0;
+	for ( i = 1 ; i < numVerts ; i++ ) {
+		collapse[i] = TAN_Int( surf + ofsCollapse + i * 4 );
+	}
+	return collapse;
 }
 
 // FAKK2: the entity's scale (refEntity_t.scale, from the entity state) multiplies
@@ -316,11 +355,11 @@ static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
 	surf = data + ofsSurfaces;
 	for ( i = 0 ; i < numSurfaces ; i++ ) {
 		const char	*surfName;
-		int			numTris, numVerts, ofsTris, ofsVerts, ofsEnd;
+		int			numTris, numVerts, minLod, ofsTris, ofsVerts, ofsCollapse, ofsEnd;
 		int			surfLength = length - (int)( surf - data );
 		int			numWeights = 0, surfaceNum, firstTri;
 		const byte	*p;
-		qboolean	bad = qfalse;
+		qboolean	bad = qfalse, whole;
 
 		if ( surfLength < SKB_SURFACE_HEADER_SIZE ) {
 			break;
@@ -328,8 +367,10 @@ static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
 		surfName = (const char *)surf + 4;
 		numTris = TAN_Int( surf + 68 );
 		numVerts = TAN_Int( surf + 72 );
+		minLod = TAN_Int( surf + 76 );
 		ofsTris = TAN_Int( surf + 80 );
 		ofsVerts = TAN_Int( surf + 84 );
+		ofsCollapse = TAN_Int( surf + 88 );
 		ofsEnd = TAN_Int( surf + 92 );
 
 		if ( numVerts < 0 || numVerts > SKEL_MAX_VERTS || numTris < 0 || numTris > SKEL_MAX_TRIANGLES
@@ -391,14 +432,20 @@ static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
 
 		surfaceNum = R_TikiSurfaceNum( tiki, surfName );
 
-		// hand the triangles over in pieces small enough to draw
+		// hand the triangles over in pieces small enough to draw; a surface
+		// that fits (every retail one) keeps all its vertexes in the file's
+		// order, which its collapse map needs
+		whole = numVerts <= PIECE_VERTS && numTris * 3 <= PIECE_INDEXES;
 		firstTri = 0;
 		while ( firstTri < numTris && numPieces < ARRAY_LEN( pieces ) ) {
 			skelSurface_t	*piece = &pieces[numPieces];
 			int				count = 0, used = 0, pieceWeights = 0;
 
-			Com_Memset( seen, 0, numVerts );
-			while ( firstTri + count < numTris && ( count + 1 ) * 3 <= PIECE_INDEXES ) {
+			Com_Memset( seen, whole, numVerts );
+			if ( whole ) {
+				count = numTris;
+			}
+			while ( !whole && firstTri + count < numTris && ( count + 1 ) * 3 <= PIECE_INDEXES ) {
 				int		fresh = 0;
 
 				for ( j = 0 ; j < 3 ; j++ ) {
@@ -450,6 +497,10 @@ static skelModel_t *R_SkelLoad( tikiModel_t *tiki, const char *skbFile ) {
 			}
 			for ( j = 0 ; j < count * 3 ; j++ ) {
 				piece->indexes[j] = remap[tris[( firstTri ) * 3 + j]];
+			}
+			piece->minLod = minLod;
+			if ( whole ) {
+				piece->collapse = R_TikiCollapseMap( surf, surfLength, ofsCollapse, numVerts );
 			}
 			numPieces++;
 			firstTri += count;
@@ -511,6 +562,8 @@ qhandle_t RE_RegisterTiki( const tikiModelDesc_t *desc ) {
 	VectorCopy( desc->mins, tiki->mins );
 	VectorCopy( desc->maxs, tiki->maxs );
 	tiki->radius = desc->radius;
+	tiki->lodScale = desc->lodScale;
+	tiki->lodBias = desc->lodBias;
 
 	tiki->numAnims = desc->numAnims;
 	if ( desc->numAnims ) {
@@ -619,7 +672,7 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 	for ( i = 0 ; i < numSurfaces ; i++ ) {
 		tanSurface_t	*out = &anim->surfaces[anim->numSurfaces];
 		const char		*surfName;
-		int				surfFrames, numVerts, numTris, ofsTris, ofsSt, ofsXyz, ofsEnd;
+		int				surfFrames, numVerts, minLod, numTris, ofsTris, ofsCollapse, ofsSt, ofsXyz, ofsEnd;
 		int				surfLength = length - (int)( surf - data );
 		qboolean		bad = qfalse;
 
@@ -629,8 +682,10 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		surfName = (const char *)surf + 4;
 		surfFrames = TAN_Int( surf + 68 );
 		numVerts = TAN_Int( surf + 72 );
+		minLod = TAN_Int( surf + 76 );
 		numTris = TAN_Int( surf + 80 );
 		ofsTris = TAN_Int( surf + 84 );
+		ofsCollapse = TAN_Int( surf + 88 );
 		ofsSt = TAN_Int( surf + 92 );
 		ofsXyz = TAN_Int( surf + 96 );
 		ofsEnd = TAN_Int( surf + 100 );
@@ -651,6 +706,8 @@ static tanAnim_t *R_TanLoad( const tikiModel_t *tiki, const char *tanFile ) {
 		out->surfaceNum = R_TikiSurfaceNum( tiki, surfName );
 		out->numVerts = numVerts;
 		out->numTris = numTris;
+		out->minLod = minLod;
+		out->collapse = R_TikiCollapseMap( surf, surfLength, ofsCollapse, numVerts );
 		out->indexes = ri.Hunk_Alloc( numTris * 3 * sizeof( int ), h_low );
 		out->st = ri.Hunk_Alloc( numVerts * 2 * sizeof( float ), h_low );
 		out->xyz = ri.Hunk_Alloc( numFrames * numVerts * 4 * sizeof( unsigned short ), h_low );
@@ -941,12 +998,163 @@ static shader_t *R_TikiSurfaceShader( const tikiModel_t *tiki, const trRefEntity
 
 /*
 ===============
+R_TikiShowLod
+
+r_showlod (fakk2.exe 0x4897f6 for a skeletal model and the end of 0x489b40
+for a .tan one): the triangles the model's surfaces keep at its level of
+detail and how many they have, written "kept.all" (512 of 1024 is
+"512.1024") in yellow figures of debug lines, 100 units above its origin,
+facing the view and as much larger as the detail is lower. The triangles are
+counted as the back end draws them (0x48a500), all of them for a surface
+without a collapse map, and the figures are the seven segments of 0x4808c0's
+tables (0x4fa51c, 0x4fa69c). They go into the game module's debug lines,
+so they show only with a local game running. A level of detail of 0, which
+retail scales infinitely, draws nothing.
+===============
+*/
+static const int lodGlyphs[12][8] = {		// '0' to '9', '.', '-'
+	{ 1, 3, 4, 5, 6, 7 },
+	{ 4, 5 },
+	{ 1, 4, 2, 7, 3 },
+	{ 1, 4, 2, 5, 3 },
+	{ 6, 4, 2, 5 },
+	{ 1, 6, 2, 5, 3 },
+	{ 1, 6, 2, 5, 7, 3 },
+	{ 1, 8 },
+	{ 1, 2, 3, 4, 5, 6, 7 },
+	{ 1, 6, 4, 2, 5, 3 },
+	{ 9, 10, 11, 12 },
+	{ 2 },
+};
+
+static const float lodSegments[13][4] = {	// right and up of each end
+	{ 0, 0, 0, 0 },
+	{ -4, 8, 4, 8 },
+	{ -4, 4, 4, 4 },
+	{ -4, 0, 4, 0 },
+	{ 4, 8, 4, 4 },
+	{ 4, 4, 4, 0 },
+	{ -4, 8, -4, 4 },
+	{ -4, 4, -4, 0 },
+	{ 4, 8, -4, 0 },
+	{ -1, 2, 1, 2 },
+	{ 1, 2, 1, 0 },
+	{ -1, 0, 1, 0 },
+	{ -1, 0, -1, 2 },
+};
+
+static void R_TikiShowLod( tikiModel_t *tiki, const trRefEntity_t *ent ) {
+	static int	lodIndexes[SKEL_MAX_TRIANGLES * 3];
+	tanAnim_t	*anim = NULL;
+	int			numSurfaces, drawn = 0, total = 0, digits, len, i, j;
+	double		fraction;
+	float		value;
+	char		text[32];
+	vec3_t		right, up, pos;
+
+	if ( tiki->skeletal ) {
+		numSurfaces = tiki->skel->numSurfaces;
+	} else {
+		anim = R_TikiAnim( tiki, ent->e.anim );
+		numSurfaces = anim->numSurfaces;
+	}
+	for ( i = 0 ; i < numSurfaces ; i++ ) {
+		const int	*collapse, *indexes;
+		int			numVerts, numTris, minLod;
+
+		if ( tiki->skeletal ) {
+			const skelSurface_t	*surf = &tiki->skel->surfaces[i];
+
+			collapse = surf->collapse;
+			indexes = surf->indexes;
+			numVerts = surf->numVerts;
+			numTris = surf->numTris;
+			minLod = surf->minLod;
+		} else {
+			const tanSurface_t	*surf = &anim->surfaces[i];
+
+			collapse = surf->collapse;
+			indexes = surf->indexes;
+			numVerts = surf->numVerts;
+			numTris = surf->numTris;
+			minLod = surf->minLod;
+		}
+		total += numTris;
+		if ( !collapse ) {
+			drawn += numTris;
+			continue;
+		}
+		drawn += R_LodTriangles( collapse, numVerts, R_LodVertexCount( numVerts, minLod, ent->lod ),
+			indexes, numTris * 3, lodIndexes ) / 3;
+	}
+
+	if ( ent->lod <= 0 ) {
+		return;
+	}
+
+	// the count of all as decimals, as many as it has figures (at most 4)
+	if ( total < 10 ) {
+		digits = 1;
+		fraction = 0.1;
+	} else if ( total < 100 ) {
+		digits = 2;
+		fraction = 0.01;
+	} else if ( total < 1000 ) {
+		digits = 3;
+		fraction = 0.001;
+	} else {
+		digits = 4;
+		fraction = 0.0001;
+	}
+	value = (float)( total * fraction + drawn );
+	Com_sprintf( text, sizeof( text ), "%.*f", digits, value );
+	len = strlen( text );
+
+	VectorScale( tr.viewParms.or.axis[1], -1, right );
+	VectorCopy( tr.viewParms.or.axis[2], up );
+	VectorNormalize( right );
+	VectorNormalize( up );
+	VectorScale( right, 1.0f / ent->lod, right );
+	VectorScale( up, 1.0f / ent->lod, up );
+
+	// ten units a figure, centred on the point above the origin
+	VectorCopy( ent->e.origin, pos );
+	pos[2] += 100;
+	VectorMA( pos, 5 - 5 * len, right, pos );
+	for ( i = 0 ; i < len ; i++, VectorMA( pos, 10, right, pos ) ) {
+		const int	*glyph;
+
+		if ( text[i] == '.' ) {
+			glyph = lodGlyphs[10];
+		} else if ( text[i] == '-' ) {
+			glyph = lodGlyphs[11];
+		} else if ( text[i] >= '0' && text[i] <= '9' ) {
+			glyph = lodGlyphs[text[i] - '0'];
+		} else {
+			continue;
+		}
+		for ( j = 0 ; j < 8 && glyph[j] ; j++ ) {
+			const float	*seg = lodSegments[glyph[j]];
+			vec3_t		start, end;
+
+			VectorMA( pos, seg[0], right, start );
+			VectorMA( start, seg[1], up, start );
+			VectorMA( pos, seg[2], right, end );
+			VectorMA( end, seg[3], up, end );
+			RE_DebugLine( start, end, 1, 1, 0, 1 );
+		}
+	}
+}
+
+/*
+===============
 R_AddTikiSurfaces
 ===============
 */
 void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 	tikiModel_t		*tiki = tr.currentModel->modelData;
 	const tikiFrame_t	*frames;
+	const tikiFrame_t	*lodFrame = NULL;
 	int				numFrames, numSurfaces, i;
 
 	// don't add third_person objects if not in a portal
@@ -1003,11 +1211,36 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 				ent->e.torso_frame = 0;
 				ent->e.torso_oldframe = 0;
 			}
+			// with no legs animation the torso's frame sizes the model (0x4872d0)
+			if ( !ent->e.uselegs ) {
+				lodFrame = &torso->frames[ent->e.torso_frame];
+			}
 		}
 	}
 
 	if ( R_TikiCull( &frames[ent->e.frame], &frames[ent->e.oldframe], ent ) == CULL_OUT ) {
 		return;
+	}
+
+	// the level of detail (tr_lod.c): the frame's radius as the file has it,
+	// around the definition's origin scaled but not turned with the model
+	// (0x4872d0, 0x489b40); a view through a portal keeps its own, so that
+	// the main view's is still there when the back end draws it
+	{
+		float	escale = R_TikiEntityScale( &ent->e );
+		vec3_t	lodOrigin;
+		float	lod;
+
+		if ( !lodFrame ) {
+			lodFrame = &frames[ent->e.frame];
+		}
+		VectorMA( ent->e.origin, tiki->scale * escale, tiki->origin, lodOrigin );
+		lod = R_CalcLod( &tr.viewParms, lodOrigin, lodFrame->lightRadius * escale, tiki->lodScale, tiki->lodBias );
+		if ( tr.viewParms.isPortal ) {
+			ent->portalLod = lod;
+		} else {
+			ent->lod = lod;
+		}
 	}
 
 	// FAKK2 lights a TIKI model from the centre of its frame's bounds, not
@@ -1077,6 +1310,44 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 
 		R_AddDrawSurf( surf, sh, 0, qfalse );
 	}
+
+	if ( r_showlod->integer ) {
+		R_TikiShowLod( tiki, ent );
+	}
+}
+
+/*
+===============
+RB_TikiLod
+
+The level of detail the back end draws the current entity at.
+===============
+*/
+static float RB_TikiLod( void ) {
+	return backEnd.viewParms.isPortal ? backEnd.currentEntity->portalLod : backEnd.currentEntity->lod;
+}
+
+/*
+===============
+RB_TikiIndexes
+
+Adds a surface's triangles to the tesselator, all of them when it keeps
+every vertex, else those its collapse map leaves (tr_lod.c).
+===============
+*/
+static void RB_TikiIndexes( const int *collapse, int numVerts, int renderCount, const int *indexes, int numIndexes ) {
+	static int	lodIndexes[SKEL_MAX_TRIANGLES * 3];
+	int			baseVertex = tess.numVertexes;
+	int			i;
+
+	if ( renderCount < numVerts ) {
+		numIndexes = R_LodTriangles( collapse, numVerts, renderCount, indexes, numIndexes, lodIndexes );
+		indexes = lodIndexes;
+	}
+	for ( i = 0 ; i < numIndexes ; i++ ) {
+		tess.indexes[tess.numIndexes + i] = baseVertex + indexes[i];
+	}
+	tess.numIndexes += numIndexes;
 }
 
 /*
@@ -1095,20 +1366,23 @@ void RB_SurfaceTan( void *surface ) {
 	const unsigned short	*newXyz, *oldXyz;
 	float					*outXyz, *outNormal;
 	float					backlerp, frontlerp, escale = R_TikiEntityScale( e );
-	int						i, j, numVerts, numIndexes, baseVertex, baseIndex;
+	int						i, j, numVerts, baseVertex;
 
 	backlerp = e->oldframe == e->frame ? 0 : e->backlerp;
 	frontlerp = 1.0f - backlerp;
 
-	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
+	// only the vertexes the level of detail keeps (0x495b1c)
+	numVerts = surf->collapse ? R_LodVertexCount( surf->numVerts, surf->minLod, RB_TikiLod() ) : surf->numVerts;
+	if ( !numVerts ) {
+		return;
+	}
 
-	numVerts = surf->numVerts;
-	numIndexes = surf->numTris * 3;
+	RB_CHECKOVERFLOW( numVerts, surf->numTris * 3 );
+
 	baseVertex = tess.numVertexes;
-	baseIndex = tess.numIndexes;
 
-	newXyz = surf->xyz + e->frame * numVerts * 4;
-	oldXyz = surf->xyz + e->oldframe * numVerts * 4;
+	newXyz = surf->xyz + e->frame * surf->numVerts * 4;
+	oldXyz = surf->xyz + e->oldframe * surf->numVerts * 4;
 	outXyz = tess.xyz[baseVertex];
 	outNormal = tess.normal[baseVertex];
 
@@ -1146,16 +1420,13 @@ void RB_SurfaceTan( void *surface ) {
 		VectorNormalizeFast( outNormal );
 	}
 
-	for ( i = 0 ; i < numIndexes ; i++ ) {
-		tess.indexes[baseIndex + i] = baseVertex + surf->indexes[i];
-	}
+	RB_TikiIndexes( surf->collapse, surf->numVerts, numVerts, surf->indexes, surf->numTris * 3 );
 	for ( i = 0 ; i < numVerts ; i++ ) {
 		tess.texCoords[baseVertex + i][0][0] = surf->st[i * 2];
 		tess.texCoords[baseVertex + i][0][1] = surf->st[i * 2 + 1];
 	}
 
 	tess.numVertexes += numVerts;
-	tess.numIndexes += numIndexes;
 }
 
 /*
@@ -1463,13 +1734,21 @@ void RB_SurfaceSkel( void *surface ) {
 	const trRefEntity_t	*ent = backEnd.currentEntity;
 	tikiModel_t			*tiki = surf->model;
 	float				*outXyz, *outNormal;
-	int					i, j, numVerts, numIndexes, baseVertex, baseIndex;
+	int					i, j, numVerts, baseVertex;
 
 	float				escale = R_TikiEntityScale( &ent->e );
 
 	if ( !R_TikiSkelAnim( tiki, ent->e.anim ) ) {
 		return;
 	}
+
+	// only the vertexes the level of detail keeps (0x495d3e); none leaves
+	// even the skeleton out
+	numVerts = surf->collapse ? R_LodVertexCount( surf->numVerts, surf->minLod, RB_TikiLod() ) : surf->numVerts;
+	if ( !numVerts ) {
+		return;
+	}
+
 	R_SkelComputeBones( tiki, ent );
 
 	if ( r_showskel->integer ) {
@@ -1477,12 +1756,9 @@ void RB_SurfaceSkel( void *surface ) {
 		return;
 	}
 
-	RB_CHECKOVERFLOW( surf->numVerts, surf->numTris * 3 );
+	RB_CHECKOVERFLOW( numVerts, surf->numTris * 3 );
 
-	numVerts = surf->numVerts;
-	numIndexes = surf->numTris * 3;
 	baseVertex = tess.numVertexes;
-	baseIndex = tess.numIndexes;
 	outXyz = tess.xyz[baseVertex];
 	outNormal = tess.normal[baseVertex];
 
@@ -1510,10 +1786,7 @@ void RB_SurfaceSkel( void *surface ) {
 		tess.texCoords[baseVertex + i][0][1] = v->st[1];
 	}
 
-	for ( i = 0 ; i < numIndexes ; i++ ) {
-		tess.indexes[baseIndex + i] = baseVertex + surf->indexes[i];
-	}
+	RB_TikiIndexes( surf->collapse, surf->numVerts, numVerts, surf->indexes, surf->numTris * 3 );
 
 	tess.numVertexes += numVerts;
-	tess.numIndexes += numIndexes;
 }

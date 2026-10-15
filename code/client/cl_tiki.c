@@ -65,6 +65,8 @@ qhandle_t CL_RegisterTikiModel( const char *name, tiki_t **tikiOut ) {
 	desc.skelFile = TIKI_SkelFile( tiki );
 	TIKI_CalculateBounds( tiki, 1.0f, desc.mins, desc.maxs );
 	desc.radius = TIKI_Radius( tiki );
+	desc.lodScale = TIKI_LodScale( tiki );
+	desc.lodBias = TIKI_LodBias( tiki );
 
 	desc.numAnims = TIKI_NumAnims( tiki );
 	if ( desc.numAnims > ARRAY_LEN( animFiles ) ) {

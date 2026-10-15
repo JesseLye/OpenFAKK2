@@ -490,6 +490,37 @@ static void ParseTriSurf( dsurface_t *ds, drawVert_t *verts, msurface_t *surf, i
 			ri.Error( ERR_DROP, "Bad index in triangle surface" );
 		}
 	}
+
+	// FAKK2: a soup's vertexes keep its model's level of detail where a
+	// lightmap's coordinates would be (qfiles.h drawSoupVert_t): the vertex
+	// it collapses into, and in the first three vertexes the model's minimum,
+	// scale and bias (fakk2.exe 0x48540c). Every soup in the retail maps has
+	// a collapse map; one that does not lead each vertex to an earlier one
+	// is drawn whole. The level of detail is reckoned from the middle of the
+	// bounds, with their full diagonal for a radius (0x4854da).
+	VectorAdd( tri->bounds[0], tri->bounds[1], tri->localOrigin );
+	VectorScale( tri->localOrigin, 0.5f, tri->localOrigin );
+	tri->radius = Distance( tri->bounds[0], tri->bounds[1] ) * 0.5f;
+	tri->collapse = NULL;
+	if ( numVerts >= 3 && numVerts <= LOD_MAX_VERTS ) {
+		int			*collapse = ri.Hunk_Alloc( numVerts * sizeof( int ), h_low );
+		floatint_t	fi;
+
+		for ( i = 0 ; i < numVerts ; i++ ) {
+			Com_Memcpy( &fi, &verts[i].lightmap[0], sizeof( fi ) );
+			collapse[i] = LittleLong( fi.i );
+			if ( i > 0 ? ( collapse[i] < 0 || collapse[i] >= i ) : collapse[i] > 0 ) {
+				break;
+			}
+		}
+		if ( i == numVerts ) {
+			collapse[0] = 0;
+			tri->collapse = collapse;
+			tri->minLod = LittleFloat( verts[0].lightmap[1] );
+			tri->lodScale = LittleFloat( verts[1].lightmap[1] );
+			tri->lodBias = LittleFloat( verts[2].lightmap[1] );
+		}
+	}
 }
 
 /*

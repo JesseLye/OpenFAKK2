@@ -84,6 +84,13 @@ typedef struct {
 	vec3_t		lightOrigin;		// where the model is lit from, in the world
 	vec3_t		lightLocalOrigin;	// the same in the model's axes
 	float		lightRadius;
+
+	// FAKK2: a TIKI model's level of detail, 0 to 1, as R_AddTikiSurfaces
+	// found it for the main view and for a view through a portal; the back
+	// end reads the one for the view it draws (fakk2.exe keeps them at
+	// refentity +0x1a0 and +0x1a4)
+	float		lod;
+	float		portalLod;
 } trRefEntity_t;
 
 
@@ -693,6 +700,13 @@ typedef struct {
 
 	int				numVerts;
 	drawVert_t		*verts;
+
+	// FAKK2: a map's triangle soup (a misc_model the map compiler baked in)
+	// keeps its model's level of detail: each vertex's collapse, and the
+	// minimum, scale and bias the first three vertexes carry (qfiles.h
+	// drawSoupVert_t); NULL for a surface without one
+	int				*collapse;
+	float			minLod, lodScale, lodBias;
 } srfTriangles_t;
 
 typedef struct {
@@ -1226,6 +1240,7 @@ extern	cvar_t	*r_skyportal;					// FAKK2: the sky portal's camera at r_skyportal
 extern	cvar_t	*r_skyportal_origin;
 extern	cvar_t	*r_drawsprites;					// FAKK2: 0 leaves out the scene's .spr sprites
 extern	cvar_t	*r_showskel;					// FAKK2: skeletal models drawn as their bones
+extern	cvar_t	*r_showlod;						// FAKK2: each TIKI model's level of detail as figures over it
 
 extern	cvar_t	*r_intensity;
 
@@ -1844,6 +1859,16 @@ void R_TikiBounds( const model_t *mod, vec3_t mins, vec3_t maxs );
 float R_TikiRadius( const model_t *mod );
 void RB_SurfaceTan( void *surface );
 void RB_SurfaceSkel( void *surface );
+
+//
+// tr_lod.c
+//
+#define	LOD_MAX_VERTS	4096	// the most vertexes a surface drawn at a level of detail may have
+
+float R_ProjectRadius( const viewParms_t *view, float r, const vec3_t location );
+float R_CalcLod( const viewParms_t *view, const vec3_t origin, float radius, float lodScale, float lodBias );
+int R_LodVertexCount( int numVerts, float minLod, float lod );
+int R_LodTriangles( const int *collapse, int numVerts, int renderCount, const int *indexes, int numIndexes, int *out );
 void VectorArrayNormalize( vec4_t *normals, unsigned int count );
 
 #ifdef idppc_altivec

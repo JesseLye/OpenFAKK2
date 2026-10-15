@@ -1,0 +1,31 @@
+// Level of detail and r_showlod on zoo, from the script camera behind and above Julie
+// that probe-skel uses, with a statue (obj_statue.tik, a .tan model) spawned ahead of
+// her: a skeletal and a vertex-animated model. Shot 0 has r_showlod 1 at the default
+// r_lodscale of 5: each TIKI model's triangles kept and all, "kept.all", in yellow
+// figures 100 units above it. Shot 1 lowers r_lodscale to 0.5, so the models keep
+// fewer triangles and the figures grow as the detail drops. Shot 2 has r_lodscale 0.1
+// without the figures, the meshes at their coarsest. The figures are debug lines in
+// the game's own list, as retail draws them.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname lodcam origin "-2400 1568 160" angles "20 0 0"
+spawn obj_statue.tik origin "-2050 1630 0" targetname "lodstatue"
+wait .2
+cuecamera $lodcam
+stuffcmd "set r_showlod 1"
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set r_lodscale 0.5"
+wait .5
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set r_showlod 0; set r_lodscale 0.1"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set r_lodscale 5"
+wait .5
+stuffcmd "quit"
+end
