@@ -146,6 +146,7 @@ after `ui_resetcvars`; compare the logs (it takes no screenshot).
 `probe-restart` and `probe-rsnd` latch `r_picmip` and `s_loadas8bit` under their menus and run
 `ui_checkrestart`; compare the logs from the `==== check` marker (retail's script stops after
 the restart, so pass `-Secs 60`), then remove both cvars from both sandboxes' `config.cfg`.
+`probe-popmenu` prints `cg_cameradist` after `popmenu 1` and `popmenu 0` under GameCamera.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

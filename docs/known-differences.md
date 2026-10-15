@@ -633,6 +633,12 @@ Not read, done another way:
   sound and video here, where only the sound system's restart applies it. Retail first
   brings its console window and mini console up or down by `ui_console` and
   `ui_minicon` (both registered now, archived, `0`); those windows are still missing.
+  Not followed yet: retail's `popmenu` takes `restore_cvars` (the shipped menus pass 0 or
+  1; without it retail prints its usage and pops anyway, `0x40bbd0`), and with 1 its pop
+  (`0x4a3420`) sets the linked cvars back to that same snapshot (`0x4a3c40`). Yet
+  `probe-popmenu` (set 321, push GameCamera, set 99, `popmenu 1`) leaves 99 on retail;
+  its `pushmenu` (`0x40bf90`) also pops in some states (`0x40c01d`), not worked out.
+  OpenFAKK2's `popmenu` ignores the argument.
 
   `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
   `ui/bind.scr` header pictures in the title colours) over a label per `binditem`
