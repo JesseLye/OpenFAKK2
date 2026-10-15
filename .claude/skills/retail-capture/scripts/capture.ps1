@@ -103,8 +103,10 @@ if ($Side -ne 'retail') {
     $arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$homeDir`" +set com_abnormalExitDialog 0 " +
         "+set r_fullscreen 0 +set r_mode $Mode +set in_nograb 1 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra $OursExtra +map $Map +script thread $probeName.scr::probe"
-    Invoke-Side $Name $exe $Bin $homeDir $arguments 'Normal'
-    Clear-HarnessMouse
+    # in a finally: a caller that stops the pipeline early (| Select-Object -First 1)
+    # or a Ctrl+C would otherwise skip it and leave the player's next game with no mouse
+    try { Invoke-Side $Name $exe $Bin $homeDir $arguments 'Normal' }
+    finally { Clear-HarnessMouse }
 }
 
 $i = 0

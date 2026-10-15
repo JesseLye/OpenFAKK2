@@ -78,17 +78,24 @@ $p = Start-Process -FilePath $exe -WorkingDirectory $workDir -ArgumentList $argu
 $marker = 'pending events as of'
 $deadline = (Get-Date).AddSeconds($Secs)
 $done = $false
-while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $done) {
-    Start-Sleep -Seconds 1
-    if (Test-Path $console) {
-        $fs = [IO.File]::Open($console, 'Open', 'Read', 'ReadWrite'); $sr = New-Object IO.StreamReader($fs)
-        $text = $sr.ReadToEnd(); $sr.Dispose()
-        if ($text -match $marker) { $done = $true; Start-Sleep -Seconds 1 }
+$exited = $false
+# in a try/finally: a Ctrl+C during the wait would otherwise leave the game running, to
+# write in_mouse 0 into the player's config whenever it is closed
+try {
+    while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $done) {
+        Start-Sleep -Seconds 1
+        if (Test-Path $console) {
+            $fs = [IO.File]::Open($console, 'Open', 'Read', 'ReadWrite'); $sr = New-Object IO.StreamReader($fs)
+            $text = $sr.ReadToEnd(); $sr.Dispose()
+            if ($text -match $marker) { $done = $true; Start-Sleep -Seconds 1 }
+        }
     }
+    $exited = $p.HasExited
 }
-$exited = $p.HasExited
-if (-not $exited) { $p.Kill(); $p.WaitForExit() }
-if (-not $Retail) { Clear-HarnessMouse }
+finally {
+    if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
+    if (-not $Retail) { Clear-HarnessMouse }
+}
 
 if (Test-Path $console) { Copy-Item $console $log -Force } else { "no console log was written (did the client start?)"; return }
 $status = if ($done) { 'probe finished' } elseif ($exited) { "client exited early (code $($p.ExitCode))" } else { "probe did not finish within ${Secs}s" }
