@@ -1937,6 +1937,26 @@ void CL_ResetPureClientAtServer( void ) {
 
 /*
 =================
+CL_VidMode_f
+
+vidmode <modenum> (fakk2.exe 0x4223d0): retail switches the window to the
+mode in place (the renderer's 0xc987f8, then the client game and the
+interface lay themselves out again, 0x4223a0) and sets r_mode when that
+worked. The renderer here has no switch in place, so it sets r_mode and
+restarts the video.
+=================
+*/
+static void CL_VidMode_f( void ) {
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf( "Usage: vidmode [modenum]\n" );
+		return;
+	}
+	Cvar_Set( "r_mode", va( "%d", atoi( Cmd_Argv( 1 ) ) ) );
+	Cbuf_AddText( "vid_restart\n" );
+}
+
+/*
+=================
 CL_Vid_Restart_f
 
 Restart the video subsystem
@@ -3771,6 +3791,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("cachealltikis", TIKI_CacheAll_f);
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
+	Cmd_AddCommand ("vidmode", CL_VidMode_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
@@ -3854,6 +3875,7 @@ void CL_Shutdown(char *finalmsg, qboolean disconnect, qboolean quit)
 	Cmd_RemoveCommand ("cachealltikis");
 	Cmd_RemoveCommand ("snd_restart");
 	Cmd_RemoveCommand ("vid_restart");
+	Cmd_RemoveCommand ("vidmode");
 	Cmd_RemoveCommand ("disconnect");
 	Cmd_RemoveCommand ("record");
 	Cmd_RemoveCommand ("demo");

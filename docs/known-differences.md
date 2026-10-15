@@ -137,7 +137,7 @@ Missing from OpenFAKK2, to be done:
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_consoleposition`, `ui_saveconsolepos`,
   `ui_loadconsolepos`),
-  `ui_resetcvars`, `ui_checkrestart`, `vidmode`,
+  `ui_resetcvars`, `ui_checkrestart`,
   and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
@@ -614,7 +614,11 @@ Not read, done another way:
   entry under the cursor is drawn white under black, `0x4bda90`, so it looks the
   same). Labels with a `linkcvar` show the value through their `linkstring` names;
   `ui_newvidmode`, which the resolution box shows, is set to `r_mode` when a menu comes
-  up and to -1 when the last goes (`0x40ab60`).
+  up and to -1 when the last goes (`0x40ab60`). `vidmode <n>` (`0x4223d0`) switches the
+  window to mode n in place (the renderer's `0xc987f8`, then the client game and the
+  interface lay themselves out again, `0x4223a0`) and sets `r_mode` when that worked;
+  OpenFAKK2's renderer has no switch in place, so it sets `r_mode` and runs
+  `vid_restart` (`probe-vidmode`: both end at 800x600 with `r_mode` 4).
 
   `UIFakkBindList` (`0x4c0390`, `0x4c1360`) is a header row of labels (the
   `ui/bind.scr` header pictures in the title colours) over a label per `binditem`
@@ -643,8 +647,9 @@ Not read, done another way:
   as retail's does (`0x460790`): the `gfxinfo` text with each extension on its own
   `GL_EXTENSIONS:` line, cut at 4096 bytes. The font scripts say `rgbGen identity`, but
   retail draws its text in the menus' colours, so the renderer gives `gfx/fonts/*`
-  stages the caller's colour. Not checked: how retail places the menus at other
-  resolutions (they are scaled to the window here). Not done: keyboard in menus beyond
+  stages the caller's colour. At other resolutions retail keeps the HUD at its size in
+  screen pixels (`probe-vidmode` at 800x600: the gauges stay as small as at 640x480);
+  OpenFAKK2 scales the HUD and the menus to the window. Not followed yet. Not done: keyboard in menus beyond
   Escape, the arrows in the load list
   and a waiting bind cell; Field and List editing; pulled-down lists' sounds; a pressed
   button's border; `ordernumber`. On purpose: the main menu's "Back to Game" button
