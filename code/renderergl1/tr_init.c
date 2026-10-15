@@ -1082,7 +1082,7 @@ void R_Register( void )
 	r_lodbias = ri.Cvar_Get( "r_lodbias", "0", CVAR_ARCHIVE );
 	r_flares = ri.Cvar_Get ("r_flares", "0", CVAR_ARCHIVE );
 	r_lensflare = ri.Cvar_Get ("r_lensflare", "1", CVAR_ARCHIVE );
-	r_lightcoronasize = ri.Cvar_Get ("r_lightcoronasize", ".1", 0 );	// retail 0x4616f7
+	r_lightcoronasize = ri.Cvar_Get ("r_lightcoronasize", ".1", CVAR_ARCHIVE );	// retail 0x4616f7
 	// retail's developer override of the worldspawn's sun: "x y z", "0 0 0" for none
 	r_sunflare = ri.Cvar_Get ("r_sunflare", "0 0 0", CVAR_TEMP );
 	r_sunflare_inportalsky = ri.Cvar_Get ("r_sunflare_inportalsky", "0", CVAR_TEMP );

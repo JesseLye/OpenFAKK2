@@ -1,0 +1,32 @@
+// Looks at training.bsp's four shooting-range targets from a fixed camera,
+// first without and then with "rendereffects +lensflare", for a like-for-like
+// capture of the entity lens flare: two screenshots.
+// Retail: run-retail-client.ps1 -Map training -Secs 60 -After "+script thread probe-lensflare.scr::probe"
+// Ours (after a +wait that lets the map load) drop the waitforplayer, which
+// only returns when the player spawns after the thread starts.
+probe:
+waitforplayer
+wait 25
+spawn Camera targetname probecam origin "-16 2620 200" angles "8 270 0"
+$target1 show
+$target2 show
+$target3 show
+$target4 show
+$target1 rendereffects -lensflare
+$target2 rendereffects -lensflare
+$target3 rendereffects -lensflare
+$target4 rendereffects -lensflare
+wait .2
+cuecamera $probecam
+wait 1
+stuffcmd "screenshot"
+wait 1
+$target1 rendereffects +lensflare
+$target2 rendereffects +lensflare
+$target3 rendereffects +lensflare
+$target4 rendereffects +lensflare
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
