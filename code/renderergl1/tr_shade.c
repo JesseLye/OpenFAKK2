@@ -1219,7 +1219,7 @@ void RB_StageIteratorGeneric( void )
 	//
 	// now do any dynamic lighting needed: decals too, and the surface flags
 	// aren't read (fakk2.exe 0x47c640 and the other two iterators test only
-	// sort <= 4.0)
+	// sort <= 4.0, and a tess field that R_Init clears and nothing sets)
 	//
 	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();

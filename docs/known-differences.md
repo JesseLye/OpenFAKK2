@@ -1646,7 +1646,14 @@ What is implemented, and on what basis:
   shader sorts at 4 (`decal`) or below: its three stage iterators (`0x47c640` and the
   undefined ones holding `0x47dede` and `0x47e1ce`) all test `dlightBits`, a `tess`
   field at `0xcdaccc` and `shader->sort <= 4.0` (`0x4d5718`), with `opaque` 3, `decal`
-  4 and `seeThrough` 5 (`0x4758b0`). Quake III stopped at opaque, and the generic
+  4 and `seeThrough` 5 (`0x4758b0`). The `tess` field (between `dlightBits` and
+  `numIndexes`, a field Ritual added) is always zero, so that test never skips the pass:
+  `R_Init` (`0x461958`) clears the whole of `tess` (`rep stosd` of `0x6984` dwords from
+  `0xcc06e0`, to `0xcdacf0`), and nothing writes it afterwards. The three reads are the
+  only references to its address in the image, no instruction takes an address in the
+  end of `tess` as a pointer or reaches it through a register and displacement, and
+  the arrays before it, filled per vertex, end at `0xcdacc0`. Ours has no such field or
+  test. Quake III stopped at opaque, and the generic
   iterator also skipped `nodlight` and sky surfaces; retail reads neither surface flag
   there, and does not test them in the world walk or `R_AddDrawSurf` (`0x463da0`)
   either. Both are followed. With the fix, `probe-fx-guns` shots 0 and 1 differ from
@@ -1655,9 +1662,8 @@ What is implemented, and on what basis:
   `shots.py delta --grid 4x3`) matches: 34.5 and 45.9 in red in the two floor cells on
   retail, 33.8 and 46.9 on ours (0.2 and 3.0 before). `probe-dlzoo` holds the
   hand gun's test light over the same floor: ours drew no light at all (4.5 in red
-  against 3.3 without the light) and now differs by 2.2 and 1.9. Still open: the
-  `tess` field at `0xcdaccc` has no direct writer and has not been identified (ours
-  has no such test), `nodlight` is honoured nowhere, as in retail, and the GL2
+  against 3.3 without the light) and now differs by 2.2 and 1.9. Still open:
+  `nodlight` is honoured nowhere, as in retail, and the GL2
   renderer keeps Quake III's tests. Of FAKK2's light types `additive` is honoured and
   the lens flare bits give the light a lens flare (next); retail picks a different
   blend for an additive light (`0x47d32b`), which has not been read or followed.
