@@ -1073,7 +1073,9 @@ the model's 7.63. At `sv_fps 40` ours stops at -1954.26 and through the real cli
 -1957.14, both inside retail's spread. The real client first *ran* this probe at 345 u/s
 because our `cl_run` defaulted to 1; retail's default is 0 (see "Cvar differences"), and
 ours now matches. A sandbox `config.cfg` written by an older build still carries
-`seta cl_run "1"`, since the cvar is archived; delete that line or the client keeps running.
+`seta cl_run "1"`, since the cvar is archived, and so did one first written from the
+install's `config.cfg` (see "Strafing after a shot" under "Weapon effects"); delete that
+line or the client keeps running.
 
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
@@ -1211,11 +1213,27 @@ explosion, soot, beams and swipes now appear as in retail. What it took:
   at its second. A swipe no longer handed over is drawn again with `thistime` aged by
   the time since it was last drawn, so a finished swing fades out.
 
-Still different:
-
-- **Moving while a weapon's fire animation plays** carried Julie much further on ours: a
-  0.6-second `+moveleft` right after a shotgun blast moved her to the corridor wall on
-  ours and a few units in retail. Seen in passing; not looked into.
+**Strafing after a shot** seemed to carry Julie much further on ours: a 0.6-second
+`+moveleft` right after a shotgun blast took her to the corridor wall on ours and a few
+units in retail. Neither the weapon nor the engine caused it. `probe-fstrafe` (the shot,
+then the strafe) and `probe-strafe` (the same strafe, no shot) read the player every
+0.1 s, and on our client both *ran* (`run_strafe_left`, 291 u/s, 166 units in all) where
+retail walked (`combat_walk_strafe_left`, 40 units), with or without the shot. The
+headless test player walked like retail. The client had `cl_run 1` from the player's own
+`config.cfg` in the install. Ours runs with the install as `fs_basepath` and
+`build\sandbox\home` as `fs_homepath`; a fresh home has no `config.cfg`, so
+`Com_ExecuteCfg` found the install's on the search path, and the client wrote all of it
+back into the home on exit. Retail has no home path (its file system start-up,
+`0x4325c0` called from `0x432550`, registers only `fs_cdpath` and `fs_basepath`), so a
+real install reads its own folder's `config.cfg` as well: the engines agree, and the
+difference was the harness's. Retail's sandbox is a clean copy with no `config.cfg`
+(`run-retail.ps1`), and ours searched the install. The dedicated server reads
+`config_server.cfg`, which the install does not have, so the headless runs were clean.
+`common.ps1` now keeps an empty `config.cfg` in a new home, as it already did
+`autoexec.cfg`, and warns when a home's `config.cfg` has `cl_run 1`. Final positions
+after the fix, real clients on `zoo`: retail 1608.23 to 1608.85 in y over six runs, ours
+1608.52 to 1609.27 over four, from 1568, firing or not. Both clients time a held key by
+rendered frames, at different rates, so a fraction of a unit either way is expected.
 
 ## Saved games
 

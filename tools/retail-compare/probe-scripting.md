@@ -188,7 +188,9 @@ wait 1                 // settle
 - Walking: 91 u/s; jump (`@hold moveup 0.2`): 400 u/s up with 160 u/s forward, gravity
   800, about a second in the air. `+forward` alone walks on both engines (`cl_run`
   defaults to 0, as in retail). If the real client runs at 345 u/s, an old
-  `seta cl_run "1"` is sitting in `build\sandbox\home\fakk\config.cfg`. Delete the line.
+  `seta cl_run "1"` is sitting in `build\sandbox\home\fakk\config.cfg` (from an older
+  build, or taken from the install's `config.cfg` before `common.ps1` shadowed it; it
+  warns). Delete the line.
 - To fire while moving, press the movement key before the attack and release it after:
   `stuffcmd "+forward"`, `wait 1`, `@hold attackright 1.5`, `wait 0.3`,
   `stuffcmd "-forward"`. Moving adds the player's velocity to a projectile

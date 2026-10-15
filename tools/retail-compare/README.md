@@ -70,6 +70,12 @@ retail game again. Choose the probe with `-Probe`:
   0.1 s through each slow-down. On the headless test player the final position reads 4 to
   6 units short of retail (see `docs/known-differences.md`, "With scripted input");
   `-Extra "+set sv_fps 40"` closes it.
+- `probe-fstrafe` readies the shotgun, fires its primary (`+attackleft`) and holds
+  `+moveleft` for 0.6 s, reading the player every 0.1 s until she stops; `probe-strafe`
+  is its control, the same strafe without the shot. Run them through both real clients
+  (`probe-client.ps1 -Probe probe-fstrafe -Map zoo -Fields Animname,Origin`, and with
+  `-Retail`) as well as here. Julie walks about 40 units on both; if ours runs
+  (`run_strafe_left`, about 166 units), the home's `config.cfg` has `cl_run 1`.
 - `probe-rope` runs on `training`: it teleports the player beside the long rope over the
   pool (a `trigger_teleport` and a `script_origin` spawned by the script, since
   `$player origin` does not move her), climbs her to the bottom with `+movedown`, sweeps
@@ -229,9 +235,11 @@ save menu, copy the install's `save\*.ssv` and `*.tga` into
 
 OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
 `fs_homepath`; the retail runs use a clean copy of the install. So that ours does not
-read the player's own `autoexec.cfg` from the install, `common.ps1` keeps an empty one in
-the sandbox home. Archived cvars persist in the sandbox's `config.cfg` between runs: if
-a client-side default changes (as `cl_run` did), delete the old `seta` line there.
+read the player's own `autoexec.cfg` or `config.cfg` from the install (the player's
+`config.cfg` set `cl_run 1`, so the client ran where retail walks), `common.ps1` puts an
+empty one of each in a new sandbox home, and warns when the home's `config.cfg` has
+`cl_run 1`. Archived cvars persist in the sandbox's `config.cfg` between runs: if a
+client-side default changes (as `cl_run` did), delete the old `seta` line there.
 
 ## Sound
 

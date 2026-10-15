@@ -28,6 +28,17 @@ $homeAutoexec = Join-Path $homeFakk 'autoexec.cfg'
 if (-not (Test-Path $homeAutoexec)) {
     Set-Content -Path $homeAutoexec -Value "// empty on purpose: shadows the install's autoexec.cfg so harness runs use engine defaults" -Encoding ascii
 }
+# The same for config.cfg, which the client execs and writes back (the dedicated server's
+# config_server.cfg is not in the install). Without it a fresh home's first client run
+# read the player's config.cfg from the install, ran with its cl_run 1 (retail's sandbox
+# walks), and archived every setting in it here. Once written, the client keeps this file.
+$homeConfig = Join-Path $homeFakk 'config.cfg'
+if (-not (Test-Path $homeConfig)) {
+    Set-Content -Path $homeConfig -Value "// empty on purpose: shadows the install's config.cfg so harness runs use engine defaults" -Encoding ascii
+}
+elseif (Select-String -Path $homeConfig -Pattern '^\s*seta\s+cl_run\s+"?1' -Quiet) {
+    Write-Warning "$homeConfig has cl_run 1: the client runs where retail's sandbox walks. Delete that line for movement probes."
+}
 
 # Ritual's example maps (fakk\maps\example in the tools release: one small map per feature)
 # as test levels, named example/<map> on the command line. Copies the compiled maps, their
