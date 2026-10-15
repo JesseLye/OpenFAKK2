@@ -12,6 +12,19 @@ picture: one level script (a *probe*) waits for the player, sets the scene, take
 pairs the shots as `retail | ours | difference`. For where things are and what state
 they hold (positions, velocities, `whatis`), use the `retail-probe` skill instead.
 
+## Where to look first
+
+Before reading the binary for what a shader keyword, a `.urc` widget command, a cvar or
+a particle or TIKI command is meant to draw, search Ritual's design documents
+(`shader_manual_new`, `GUI Documentation`, `Ghost Particle System`, `TIKI Model System`,
+`CVAR DOCUMENTATION`, ...). `tools\ritual-docs.ps1` converts them into
+`build\ritual-docs` (run it once per worktree; it needs the clone `$RitualTools` names in
+`tools\retail-compare\common.ps1`), one paragraph per line, so a `grep -i` hit shows the
+whole paragraph. They say what Ritual intended, not what `fakk2.exe` does: the shader
+manual gives `spriteGen`'s four modes a line each, but the quad layout came from the
+binary. Treat a hit as a lead and confirm it with a capture or the binary. Never commit
+anything from them.
+
 ## Run it
 
 ```powershell
