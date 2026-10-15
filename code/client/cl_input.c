@@ -523,7 +523,14 @@ void CL_MouseMove(usercmd_t *cmd)
 
 	// add mouse X/Y movement to cmd
 	if(in_strafe.active)
+	{
 		cmd->rightmove = ClampChar(cmd->rightmove + m_side->value * mx);
+		// FAKK2 (CL_MouseMove 0x41e43b): with strafe, the mouse's y moves
+		// forward here and up by m_up, and forward once more below, as retail
+		// does it
+		cmd->forwardmove = ClampChar(cmd->forwardmove - m_forward->value * my);
+		cmd->upmove = ClampChar(cmd->upmove - m_up->value * my);
+	}
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mx;
 
@@ -1003,8 +1010,8 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-sneak", IN_Button2Up);
 	Cmd_AddCommand ("+run", IN_Button3Down);
 	Cmd_AddCommand ("-run", IN_Button3Up);
-	Cmd_AddCommand ("+holsterweapon", IN_Button4Down);
-	Cmd_AddCommand ("-holsterweapon", IN_Button4Up);
+	Cmd_AddCommand ("+holster", IN_Button4Down);
+	Cmd_AddCommand ("-holster", IN_Button4Up);
 	Cmd_AddCommand ("+use", IN_Button5Down);
 	Cmd_AddCommand ("-use", IN_Button5Up);
 	// the retail client's camera look (TAB): the mouse turns the camera about
@@ -1096,8 +1103,8 @@ void CL_ShutdownInput(void)
 	Cmd_RemoveCommand("-sneak");
 	Cmd_RemoveCommand("+run");
 	Cmd_RemoveCommand("-run");
-	Cmd_RemoveCommand("+holsterweapon");
-	Cmd_RemoveCommand("-holsterweapon");
+	Cmd_RemoveCommand("+holster");
+	Cmd_RemoveCommand("-holster");
 	Cmd_RemoveCommand("+use");
 	Cmd_RemoveCommand("-use");
 	Cmd_RemoveCommand("+cameralook");

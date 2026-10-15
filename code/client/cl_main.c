@@ -92,6 +92,7 @@ cvar_t	*m_pitch;
 cvar_t	*m_yaw;
 cvar_t	*m_forward;
 cvar_t	*m_side;
+cvar_t	*m_up;
 cvar_t	*m_filter;
 
 cvar_t	*j_pitch;
@@ -3620,7 +3621,7 @@ void CL_Init( void ) {
 	cl_run = Cvar_Get ("cl_run", "0", CVAR_ARCHIVE);
 	cl_sensitivity = Cvar_Get ("sensitivity", "5", CVAR_ARCHIVE);
 	cl_mouseAccel = Cvar_Get ("cl_mouseAccel", "0", CVAR_ARCHIVE);
-	cl_freelook = Cvar_Get( "cl_freelook", "1", CVAR_ARCHIVE );
+	cl_freelook = Cvar_Get( "freelook", "1", CVAR_ARCHIVE );	// FAKK2's name (fakk2.exe 0x42263c)
 
 	// 0: legacy mouse acceleration
 	// 1: new implementation
@@ -3652,6 +3653,7 @@ void CL_Init( void ) {
 	m_yaw = Cvar_Get ("m_yaw", "0.022", CVAR_ARCHIVE);
 	m_forward = Cvar_Get ("m_forward", "0.25", CVAR_ARCHIVE);
 	m_side = Cvar_Get ("m_side", "0.25", CVAR_ARCHIVE);
+	m_up = Cvar_Get ("m_up", "0", CVAR_ARCHIVE);		// FAKK2 (0x422705)
 #ifdef __APPLE__
 	// Input is jittery on OS X w/o this
 	m_filter = Cvar_Get ("m_filter", "1", CVAR_ARCHIVE);
@@ -3689,6 +3691,10 @@ void CL_Init( void ) {
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
 
 	// userinfo
+	// FAKK2 (CL_Init 0x422780): the controls menu's invert check box shows
+	// whether m_pitch is negative; the box sets m_pitch itself
+	Cvar_Set( "m_invert_pitch", m_pitch->value < 0 ? "1" : "0" );
+
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE );
 	cl_rate = Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("snaps", "20", CVAR_USERINFO | CVAR_ARCHIVE );

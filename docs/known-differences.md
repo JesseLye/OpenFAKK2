@@ -127,9 +127,9 @@ generic path does, and with `r_ignoreFastPath 0` Julie was drawn black
 
 Missing from OpenFAKK2, to be done:
 
-- Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
-  `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
-  `+holster`; no retail file binds either.
+- Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
+  game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
+  its buttons go to the interface, not their bindings, `0x41fad1`).
 - Sound: `s_loadas8bit` (advanced options' "Force 8-bit Sound"), `s_separation`.
 - The `fps` counter: frame rate and triangle counts at the bottom left, and a warning
   below 18 frames a second.
@@ -221,6 +221,13 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   sword as group 3, holsters and runs `weapgroup3`: both games list the same alias and
   bindings and the sword comes back. Pressing ALT or CTRL itself has not been tried in a
   run (the harness cannot hold them); that path follows `0x41f9c0`.
+- **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
+  `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
+  the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`
+  (archived, 0). `m_invert_pitch` is no setting of its own: the client sets it from
+  `m_pitch`'s sign at startup (`0x422780`), and the controls menu's check box shows it and
+  sets `m_pitch` to -0.022 or 0.022. The holster button is `+holster` (button 4), as in
+  retail; OpenFAKK2 had called it `+holsterweapon`.
 - **`add`, `subtract` and `scale`** (`0x42f650`, `0x42f700`, `0x42f7b0`) change a cvar
   by an amount, as `set` would set it (read-only and cheat cvars refuse), writing a
   whole result as an integer.
@@ -1154,7 +1161,7 @@ What is implemented, and on what basis:
   `+attackright`, `+use` and `+cameralook`, which Quake III's client does not know, so
   the keys fired nothing (an unknown command goes to the server as chat). The client
   registers FAKK2's buttons by their bit in `usercmd_t.buttons` (`+attackright` 0,
-  `+attackleft` 1, `+sneak` 2, `+run` 3, `+holsterweapon` 4, `+use` 5) and `+cameralook`
+  `+attackleft` 1, `+sneak` 2, `+run` 3, `+holster` 4, `+use` 5) and `+cameralook`
   as a client flag that does nothing yet (retail turns the camera about the player
   with the mouse while it is held). The number keys and the wheel are `warpinv <slot>`,
   `nextinv` and `previnv`, which the retail client handles itself (`0x408dc0`):
