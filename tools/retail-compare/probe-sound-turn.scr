@@ -1,0 +1,19 @@
+// The probes' 1 kHz tone (sound/test/tone.wav, written by sound_tone.py; sound-record.ps1
+// puts it in the game directory) 48 units ahead of the player at zoo's start; 4 s in, the
+// player turns left for 0.6 s (to a yaw of about 84), which puts the tone on her right.
+// Shows whether the listener's yaw is the right way round.
+probe:
+waitforplayer
+wait 2
+spawn script_origin targetname turn origin "-2304 1568 80"
+wait 0.2
+$turn loopsound sound/test/tone.wav 1 64
+wait 4
+stuffcmd "+left"
+wait 0.6
+stuffcmd "-left"
+wait 4
+stuffcmd "whatis 0"
+$turn remove
+stuffcmd "pendingevents"
+end

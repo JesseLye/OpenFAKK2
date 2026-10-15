@@ -1,0 +1,80 @@
+// The probes' 1 kHz tone (sound/test/tone.wav, written by sound_tone.py; sound-record.ps1
+// puts it in the game directory) 48 units from the player at zoo's start, inside its
+// 64-unit minimum distance so only the panning changes: 3 s each at 0, 15, 30, 45, 60, 75,
+// 80, 85, 90, 95, 100, 105, 135 and 180 degrees to the right of straight ahead, level with
+// the player's origin plus 80. The player starts at -2352 1568 0 facing +x.
+probe:
+waitforplayer
+wait 2
+spawn script_origin targetname a0 origin "-2304.00 1568.00 80"
+wait 0.2
+$a0 loopsound sound/test/tone.wav 1 64
+wait 3
+$a0 remove
+spawn script_origin targetname a15 origin "-2305.64 1555.58 80"
+wait 0.2
+$a15 loopsound sound/test/tone.wav 1 64
+wait 3
+$a15 remove
+spawn script_origin targetname a30 origin "-2310.43 1544.00 80"
+wait 0.2
+$a30 loopsound sound/test/tone.wav 1 64
+wait 3
+$a30 remove
+spawn script_origin targetname a45 origin "-2318.06 1534.06 80"
+wait 0.2
+$a45 loopsound sound/test/tone.wav 1 64
+wait 3
+$a45 remove
+spawn script_origin targetname a60 origin "-2328.00 1526.43 80"
+wait 0.2
+$a60 loopsound sound/test/tone.wav 1 64
+wait 3
+$a60 remove
+spawn script_origin targetname a75 origin "-2339.58 1521.64 80"
+wait 0.2
+$a75 loopsound sound/test/tone.wav 1 64
+wait 3
+$a75 remove
+spawn script_origin targetname a80 origin "-2343.66 1520.73 80"
+wait 0.2
+$a80 loopsound sound/test/tone.wav 1 64
+wait 3
+$a80 remove
+spawn script_origin targetname a85 origin "-2347.82 1520.18 80"
+wait 0.2
+$a85 loopsound sound/test/tone.wav 1 64
+wait 3
+$a85 remove
+spawn script_origin targetname a90 origin "-2352.00 1520.00 80"
+wait 0.2
+$a90 loopsound sound/test/tone.wav 1 64
+wait 3
+$a90 remove
+spawn script_origin targetname a95 origin "-2356.18 1520.18 80"
+wait 0.2
+$a95 loopsound sound/test/tone.wav 1 64
+wait 3
+$a95 remove
+spawn script_origin targetname a100 origin "-2360.34 1520.73 80"
+wait 0.2
+$a100 loopsound sound/test/tone.wav 1 64
+wait 3
+$a100 remove
+spawn script_origin targetname a105 origin "-2364.42 1521.64 80"
+wait 0.2
+$a105 loopsound sound/test/tone.wav 1 64
+wait 3
+$a105 remove
+spawn script_origin targetname a135 origin "-2385.94 1534.06 80"
+wait 0.2
+$a135 loopsound sound/test/tone.wav 1 64
+wait 3
+$a135 remove
+spawn script_origin targetname a180 origin "-2400.00 1568.00 80"
+wait 0.2
+$a180 loopsound sound/test/tone.wav 1 64
+wait 3
+$a180 remove
+stuffcmd "pendingevents"
+end

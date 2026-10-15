@@ -1,0 +1,52 @@
+// The probes' 1 kHz tone (sound/test/tone.wav, written by sound_tone.py; sound-record.ps1
+// puts it in the game directory) ahead of the player at zoo's start, so a loopback
+// recording shows the attenuation curve. Minimum distance 64 units; 4 s at each of 32, 64,
+// 128, 256, 512 and 1024 units straight ahead, then 64 units to the right and 64 to the
+// left. Moving a looping entity stops its sound on both engines, so each position gets
+// an emitter of its own. The player starts at -2352 1568 0 facing +x; the tone is at
+// eye height.
+probe:
+waitforplayer
+wait 2
+spawn script_origin targetname t1 origin "-2320 1568 80"
+wait 0.2
+$t1 loopsound sound/test/tone.wav 1 64
+wait 4
+$t1 remove
+spawn script_origin targetname t2 origin "-2288 1568 80"
+wait 0.2
+$t2 loopsound sound/test/tone.wav 1 64
+wait 4
+$t2 remove
+spawn script_origin targetname t3 origin "-2224 1568 80"
+wait 0.2
+$t3 loopsound sound/test/tone.wav 1 64
+wait 4
+$t3 remove
+spawn script_origin targetname t4 origin "-2096 1568 80"
+wait 0.2
+$t4 loopsound sound/test/tone.wav 1 64
+wait 4
+$t4 remove
+spawn script_origin targetname t5 origin "-1840 1568 80"
+wait 0.2
+$t5 loopsound sound/test/tone.wav 1 64
+wait 4
+$t5 remove
+spawn script_origin targetname t6 origin "-1328 1568 80"
+wait 0.2
+$t6 loopsound sound/test/tone.wav 1 64
+wait 4
+$t6 remove
+spawn script_origin targetname t7 origin "-2352 1504 80"
+wait 0.2
+$t7 loopsound sound/test/tone.wav 1 64
+wait 4
+$t7 remove
+spawn script_origin targetname t8 origin "-2352 1632 80"
+wait 0.2
+$t8 loopsound sound/test/tone.wav 1 64
+wait 4
+$t8 remove
+stuffcmd "pendingevents"
+end

@@ -606,6 +606,8 @@ typedef struct src_s
 	float		volume;			// FAKK2: the sound's volume, 0 to 1
 	float		minDist;		// FAKK2: full volume within this distance
 	qboolean	isPaused;		// FAKK2: held while the game is paused
+	vec3_t		origin;			// FAKK2: where a world source is (S_AL_SrcPlace)
+	float		panGain;		// FAKK2: times curGain, for the Miles panning
 } src_t;
 
 #ifdef __APPLE__
@@ -619,6 +621,13 @@ static int srcActiveCnt = 0;
 static qboolean alSourcesInitialised = qfalse;
 static int lastListenerNumber = -1;
 static vec3_t lastListenerOrigin = { 0.0f, 0.0f, 0.0f };
+static vec3_t lastListenerAxis[3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };	// FAKK2
+static qboolean alMilesPan;		// FAKK2: OpenAL Soft's plain stereo panning, steered (S_AL_SrcPlace)
+
+#ifndef ALC_OUTPUT_MODE_SOFT
+#define ALC_OUTPUT_MODE_SOFT	0x19AC
+#define ALC_STEREO_BASIC_SOFT	0x19AE
+#endif
 
 typedef struct sentity_s
 {
@@ -678,19 +687,77 @@ distances the clamp holds the gain at SOUND_MIN_GAIN, as Miles did for the
 retail engine. Quake III muted a source out there so that a far loop could
 be paused and its source reused; that is not done, so a far loop plays on
 at 1/64 like the retail one. The gain is zero only when the sound's own
-volume is.
+volume is. The panning's share (S_AL_SrcPlace) is on top.
 =================
 */
 
 static void S_AL_ScaleGain(src_t *chksrc, vec3_t origin)
 {
-	float scaleFactor = chksrc->curGain;
+	float scaleFactor = chksrc->curGain * chksrc->panGain;
 
 	if(chksrc->scaleGain != scaleFactor)
 	{
 		chksrc->scaleGain = scaleFactor;
 		S_AL_Gain(chksrc->alSource, chksrc->scaleGain);
 	}
+}
+
+/*
+=================
+S_AL_SrcPlace
+
+FAKK2: OpenAL Soft's plain stereo output pans with constant power, so a
+sound straight ahead, or one played at the listener, is 4.5 dB down in both
+ears, where the retail engine's Miles provider left the nearer ear at full
+volume and only turned the other down (S_SoundPan). A world source is put at
+the bearing ahead, at its own distance, where OpenAL's panning splits it
+between the ears as Miles did, and its gain makes up the difference in the
+nearer ear. The tables are OpenAL Soft 1.24.3's own, read off its loopback
+device (a tone at each bearing inside the reference distance). Other output
+(HRTF, surround, UHJ, another OpenAL) is left to pan as it does.
+=================
+*/
+
+static const float alPanBearing[] = { 0, 5, 10, 15, 20, 25, 30, 35, 40, 45 };
+static const float alPanNear[] = { -4.50f, -3.61f, -2.83f, -2.16f, -1.59f, -1.11f, -0.71f, -0.40f, -0.17f, -0.01f };	// dB
+static const float alPanSplit[] = { 0, 1.91f, 3.86f, 5.86f, 7.97f, 10.21f, 12.68f, 15.43f, 18.63f, 22.53f };	// near over far, dB
+
+static float S_AL_PanNear( float bearing )
+{
+	return powf( 10, S_SoundInterp( alPanBearing, alPanNear, ARRAY_LEN( alPanBearing ), bearing ) / 20 );
+}
+
+static void S_AL_SrcPlace(src_t *src, const vec3_t origin)
+{
+	vec3_t	dir, pos;
+	float	dist, right, leftGain, rightGain, nearGain, farGain, bearing;
+
+	VectorCopy(origin, src->origin);
+	VectorCopy(origin, pos);
+	src->panGain = 1.0f;
+
+	if(alMilesPan)
+	{
+		VectorSubtract(origin, lastListenerOrigin, dir);
+		dist = VectorNormalize(dir);
+		right = -DotProduct(dir, lastListenerAxis[1]);
+		S_SoundPan(right, DotProduct(dir, lastListenerAxis[0]), &leftGain, &rightGain);
+		nearGain = MAX(leftGain, rightGain);
+		farGain = MIN(leftGain, rightGain);
+
+		bearing = S_SoundInterp(alPanSplit, alPanBearing, ARRAY_LEN(alPanSplit), 20 * log10f(nearGain / farGain));
+		if(dist > 0)
+		{
+			float	a = DEG2RAD(bearing);
+
+			VectorMA(lastListenerOrigin, dist * cosf(a), lastListenerAxis[0], pos);
+			VectorMA(pos, (right > 0 ? -dist : dist) * sinf(a), lastListenerAxis[1], pos);
+		}
+		src->panGain = nearGain / S_AL_PanNear(bearing);
+	}
+
+	qalSourcefv(src->alSource, AL_POSITION, pos);
+	S_AL_ScaleGain(src, pos);
 }
 
 /*
@@ -965,8 +1032,11 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 	curSource->volume = volume;
 	curSource->minDist = minDist;
 	curSource->curGain = s_alGain->value * s_volume->value * volume;
-	curSource->scaleGain = curSource->curGain;
+	// FAKK2: a local source is OpenAL's straight ahead, a world one is placed later
+	curSource->panGain = ( local && alMilesPan ) ? 1.0f / S_AL_PanNear( 0 ) : 1.0f;
+	curSource->scaleGain = curSource->curGain * curSource->panGain;
 	curSource->local = local;
+	VectorClear(curSource->origin);
 
 	// Set up OpenAL source
 	if(sfx >= 0)
@@ -977,7 +1047,9 @@ static void S_AL_SrcSetup(srcHandle_t src, sfxHandle_t sfx, alSrcPriority_t prio
 	}
 
 	qalSourcef(curSource->alSource, AL_PITCH, 1.0f);
-	S_AL_Gain(curSource->alSource, curSource->curGain);
+	// FAKK2: the panning's gain may take a source past 1 (S_AL_SrcPlace)
+	qalSourcef(curSource->alSource, AL_MAX_GAIN, alMilesPan ? 2.0f : 1.0f);
+	S_AL_Gain(curSource->alSource, curSource->scaleGain);
 	qalSourcefv(curSource->alSource, AL_POSITION, vec3_origin);
 	qalSourcefv(curSource->alSource, AL_VELOCITY, vec3_origin);
 	qalSourcei(curSource->alSource, AL_LOOPING, AL_FALSE);
@@ -1477,8 +1549,7 @@ static void S_AL_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandl
 	if(!origin)
 		curSource->isTracking = qtrue;
 
-	qalSourcefv(curSource->alSource, AL_POSITION, sorigin );
-	S_AL_ScaleGain(curSource, sorigin);
+	S_AL_SrcPlace(curSource, sorigin);
 
 	// Start it playing
 	curSource->isPlaying = qtrue;
@@ -1692,6 +1763,7 @@ static void S_AL_SrcLoop( alSrcPriority_t priority, sfxHandle_t sfx,
 	if( info->localSound || S_AL_HearingThroughEntity( entityNum ) )
 	{
 		curSource->local = qtrue;
+		curSource->panGain = alMilesPan ? 1.0f / S_AL_PanNear( 0 ) : 1.0f;
 		S_AL_SrcSend(curSource->alSource, qfalse);
 
 		VectorClear(sorigin);
@@ -1721,7 +1793,7 @@ static void S_AL_SrcLoop( alSrcPriority_t priority, sfxHandle_t sfx,
 		else
 			VectorClear(svelocity);
 
-		qalSourcefv(curSource->alSource, AL_POSITION, (ALfloat *) sorigin);
+		S_AL_SrcPlace(curSource, sorigin);
 		qalSourcefv(curSource->alSource, AL_VELOCITY, (ALfloat *) svelocity);
 	}
 }
@@ -1826,7 +1898,11 @@ void S_AL_SrcUpdate( void )
 				
 				curSfx = &knownSfx[curSource->sfx];
 
-				S_AL_ScaleGain(curSource, curSource->loopSpeakerPos);
+				// FAKK2: placed again, as the setup above puts it at the origin
+				if(curSource->local)
+					S_AL_ScaleGain(curSource, curSource->loopSpeakerPos);
+				else
+					S_AL_SrcPlace(curSource, curSource->loopSpeakerPos);
 				if(!curSource->scaleGain)
 				{
 					if(curSource->isPlaying)
@@ -1950,12 +2026,12 @@ void S_AL_SrcUpdate( void )
 		// Query relativity of source, don't move if it's true
 		qalGetSourcei(curSource->alSource, AL_SOURCE_RELATIVE, &state);
 
-		// See if it needs to be moved
+		// See if it needs to be moved; FAKK2: a placed source moves with the
+		// listener too (S_AL_SrcPlace)
 		if(curSource->isTracking && !state)
-		{
-			qalSourcefv(curSource->alSource, AL_POSITION, entityList[entityNum].origin);
- 			S_AL_ScaleGain(curSource, entityList[entityNum].origin);
-		}
+			S_AL_SrcPlace(curSource, entityList[entityNum].origin);
+		else if(alMilesPan && !state)
+			S_AL_SrcPlace(curSource, curSource->origin);
 	}
 }
 
@@ -2585,6 +2661,7 @@ void S_AL_Respatialize( int entityNum, const vec3_t origin, vec3_t axis[3], int 
 
 	lastListenerNumber = entityNum;
 	VectorCopy( sorigin, lastListenerOrigin );
+	AxisCopy( axis, lastListenerAxis );	// FAKK2
 
 	// Set OpenAL listener paramaters
 	qalListenerfv(AL_POSITION, (ALfloat *)sorigin);
@@ -3025,6 +3102,17 @@ qboolean S_AL_Init( soundInterface_t *si )
 		return qfalse;
 	}
 	qalcMakeContextCurrent( alContext );
+
+	// FAKK2: plain stereo panning can be steered into Miles' (S_AL_SrcPlace)
+	alMilesPan = qfalse;
+	if( qalcIsExtensionPresent( alDevice, "ALC_SOFT_output_mode" ) )
+	{
+		ALCint mode = 0;
+
+		qalcGetIntegerv( alDevice, ALC_OUTPUT_MODE_SOFT, 1, &mode );
+		alMilesPan = ( mode == ALC_STEREO_BASIC_SOFT );
+		Com_Printf( "OpenAL output mode 0x%x%s\n", mode, alMilesPan ? ", panned as Miles did" : "" );
+	}
 
 	// Initialize sources, buffers, music
 	S_AL_BufferInit( );

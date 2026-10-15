@@ -578,8 +578,22 @@ static void CL_CG_S_AddLoopingSound( const vec3_t origin, const vec3_t velocity,
 	S_AddLoopingSound( cl_loopingSoundNum++, origin, velocity, sfx, volume, min_dist );
 }
 
+/*
+FAKK2's module builds the listener's axis from its view angles with the yaw negated
+("because of the miles sound system", cg_view.c): the retail engine hands Miles its
+positions as ( -x, z, -y ) (0x45bf00), and the negated yaw is what makes that come out
+the right way round. Quake III's backends take the world as it is, so the axis is
+mirrored back here (forward and up across the x-z plane, left the other way, which
+leaves the roll negated); with the module's axis as it came, a player who had turned
+heard the world mirrored, left for right and front for back.
+*/
 static void CL_CG_S_Respatialize( int entityNum, vec3_t origin, vec3_t axis[3] ) {
-	S_Respatialize( entityNum, origin, axis, 0 );
+	vec3_t	listenerAxis[3];
+
+	VectorSet( listenerAxis[0], axis[0][0], -axis[0][1], axis[0][2] );
+	VectorSet( listenerAxis[1], -axis[1][0], axis[1][1], -axis[1][2] );
+	VectorSet( listenerAxis[2], axis[2][0], -axis[2][1], axis[2][2] );
+	S_Respatialize( entityNum, origin, listenerAxis, 0 );
 }
 
 static sfxHandle_t CL_CG_S_RegisterSound( const char *sample ) {

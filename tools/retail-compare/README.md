@@ -74,6 +74,31 @@ read the player's own `autoexec.cfg` from the install, `common.ps1` keeps an emp
 the sandbox home. Archived cvars persist in the sandbox's `config.cfg` between runs: if
 a client-side default changes (as `cl_run` did), delete the old `seta` line there.
 
+## Sound
+
+    tools\retail-compare\sound-record.ps1 -Engine retail -Probe probe-sound-pan
+    tools\retail-compare\sound-record.ps1 -Engine openal -Probe probe-sound-pan
+    python tools\retail-compare\sound_levels.py tone build\compare\sound-retail-probe-sound-pan.npy build\compare\sound-openal-probe-sound-pan.npy
+
+runs a sound probe on the retail game (`-Engine retail`) or on OpenFAKK2's OpenAL or
+software-mixer backend (`openal`, `dma`) while recording what the speakers play, and
+`sound_levels.py` prints the levels side by side (`tone` for the probes' 1 kHz tone, one
+row per position; `rms <from> <to>` for music or a whole scene). The recorder needs
+`pip install pyaudiowpatch numpy` (`-Python` names another interpreter). The sound plays
+out loud and anything else playing is recorded with it. The retail game runs from
+`build\sandbox\retail-snd`, which keeps the install's Miles drivers but no DirectSound
+wrapper, so it opens Miles' "Fast 2D Positional Audio" provider; its window has to be in
+front. `-Volume` (0.25) is kept low because the Windows output path can compress loud
+sound; play a tone of known level through it first if in doubt. The probes put
+`sound/test/tone.wav` (from `sound_tone.py`) in the game directory:
+
+- `probe-sound-pan`: the tone 48 units away at 14 bearings from ahead to behind.
+- `probe-sound-distance`: the tone ahead at 32 to 1024 units (minimum distance 64), then
+  64 to either side.
+- `probe-sound-turn`: the tone ahead, then the player turns left about 84 degrees; it
+  should end up in the right ear.
+- `probe-music`: swamp1's soundtrack on `zoo`, which is otherwise silent (`-Music 0.6`).
+
 ## The client and the map viewer
 
     tools\retail-compare\run-client.ps1 -Run "+viewmap zoo +wait 30 +screenshotJPEG +wait 5 +quit"

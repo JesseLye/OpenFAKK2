@@ -206,7 +206,8 @@ Not read, done another way:
   64 times it, both in metres at 1/52.49 per unit, the volume times `s_volume` on a 0 to
   127 scale, a `localsound` not placed in the world; the curve between them, full within
   the minimum distance, the inverse of the distance beyond and no quieter than 1/64, is
-  Miles' documented model and has not been read. `S_StartLocalSound` (`0x43ed80`)
+  Miles' documented model, and recordings of the retail game agree (see "Panning and
+  loudness" below). `S_StartLocalSound` (`0x43ed80`)
   resolves an alias, registers the name and plays it on the listener's entity on
   `CHAN_MENU`; the channel numbers are FAKK2's. Not followed: `maxnumber` and
   `maxfactor` (Quake III's limit of 4 or 8 like sounds per entity stays), loop blocks,
@@ -231,6 +232,35 @@ Not read, done another way:
   refuses a new line while the actor's last one plays, so with the stop working an
   actor says one line at a time. Checked on `training` with logging on both backends
   (the stop ends the old line before the next starts); not by ear.
+- **Panning and loudness**, measured rather than read: the retail game and OpenFAKK2 were
+  recorded from the speakers (WASAPI loopback, `tools/retail-compare/sound-record.ps1`)
+  playing a looping 1 kHz tone a probe places around the player on `zoo`
+  (`probe-sound-pan`, `probe-sound-distance`, `probe-sound-turn`) and swamp1's music on its
+  own (`probe-music`), at `s_volume 0.25` (this machine's output path compresses anything
+  louder than about -20 dBFS). Without an EAX card the retail engine opens Miles' "Fast 2D
+  Positional Audio" provider, which pans like a balance control: the ear nearer the sound
+  keeps all of it and the far one loses 1.5 dB at 15 degrees off ahead, 3.5 at 30, 5.8 at
+  45, 8.9 at 60, 13.3 at 75 and 17.1 at 90, by the bearing level with the listener (a tone
+  10 units above the ear pans fully), front and back mirrored, with both ears 3 dB down
+  for a sound behind; no delay between the ears. A sound straight ahead or at the listener
+  is at full volume in both. The distance curve is the inverse one above, the same in
+  minimum distances whether the minimum is 32 or 64. Both backends now pan that way
+  (`S_SoundPan`): the software mixer directly, at a full scale of 255 where Quake III's
+  was 127 (half the music's), and the OpenAL one by putting each world source at the
+  bearing where OpenAL Soft's plain stereo panning (constant power: 4.5 dB down in both
+  ears straight ahead or at the listener) splits it as Miles did, with its gain making up
+  the nearer ear; with HRTF, surround or another OpenAL, OpenAL pans as it does. Before,
+  a sound ahead was 4.4 dB quieter than retail on the OpenAL backend and 11.9 dB on the
+  software mixer, with the music at retail's level on both (within 0.3 dB), so the world
+  sounded quiet under the music. After, every bearing is within 0.5 dB of retail's on
+  both. The listener's axis was also mirrored: FAKK2's client game module negates the yaw
+  for Miles (`cg_view.c`), whose positions the retail engine gives as ( -x, z, -y )
+  (`0x45bf00`), and the engine took it as it came, so a player facing anything but yaw 0
+  heard left for right and front for back; `CL_CG_S_Respatialize` mirrors it back (the
+  roll comes out negated). Not followed: Miles' volumes are whole numbers from 0 to 127,
+  and the truncation takes a further 2 dB off a sound at eight times its minimum distance
+  at `s_volume 0.25` (6 dB at sixteen), less at full volume; the pan is a whole number
+  too.
 - **Reverb.** The game's `trigger_reverb` entities (placed by the level's `maps/<map>.snd`
   sound-manager file; 28 levels have them, `swamp1` and `training` do not) put an EAX
   environment number (`eax_generic` 0 to `eax_psychotic` 25) and a level in the player
@@ -280,7 +310,8 @@ Not read, done another way:
   its fade-down of the game's volume starts from 1 rather than the current value. The
   retail console commands `loadsoundtrack <name>` and `playsong <mood> [fallback]`
   exist, plus `music_info`. Checked by trace on `swamp1` and from the console on both
-  sound backends; not by ear.
+  sound backends, and its level by recording (`probe-music`: within 0.3 dB of retail's on
+  both).
 - **Sound backends.** The build ships OpenAL Soft 1.24.3 (`OpenAL32.dll`, LGPL 2.1,
   `code/thirdparty/libs/`) beside the executable and `s_useOpenAL` defaults to 1, so the
   OpenAL backend is what plays; `s_useOpenAL 0` selects Quake III's software mixer, which

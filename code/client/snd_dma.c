@@ -427,12 +427,12 @@ void S_memoryLoad(sfx_t	*sfx) {
 =================
 S_SpatializeOrigin
 
-Used for spatializing s_channels
+Used for spatializing s_channels. FAKK2: master_vol is 0 to 255, all of
+which reaches the ear nearer the sound, as the music's full volume does.
 =================
 */
 void S_SpatializeOrigin (vec3_t origin, int master_vol, float minDist, int *left_vol, int *right_vol)
 {
-    vec_t		dot;
     vec_t		dist;
     vec_t		lscale, rscale, scale;
     vec3_t		source_vec;
@@ -440,15 +440,14 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, float minDist, int *left
 
 	// calculate stereo separation and distance attenuation.
 	// FAKK2: the Miles rolloff, full within the sound's minimum distance
-	// and the inverse of the distance beyond it (see snd_info.c)
+	// and the inverse of the distance beyond it, and the Miles panning
+	// (see snd_info.c)
 	VectorSubtract(origin, listener_origin, source_vec);
 
 	dist = VectorNormalize(source_vec);
 	dist = 1.0f - S_SoundGain( minDist, dist );
 
 	VectorRotate( source_vec, listener_axis, vec );
-
-	dot = -vec[1];
 
 	if (dma.channels == 1)
 	{ // no attenuation = no spatialization
@@ -457,14 +456,7 @@ void S_SpatializeOrigin (vec3_t origin, int master_vol, float minDist, int *left
 	}
 	else
 	{
-		rscale = 0.5 * (1.0 + dot);
-		lscale = 0.5 * (1.0 - dot);
-		if ( rscale < 0 ) {
-			rscale = 0;
-		}
-		if ( lscale < 0 ) {
-			lscale = 0;
-		}
+		S_SoundPan( -vec[1], vec[0], &lscale, &rscale );
 	}
 
 	// add in distance effect
@@ -654,7 +646,7 @@ static void S_Base_StartSoundEx( vec3_t origin, int entityNum, int entchannel, s
 		ch->fixed_origin = qfalse;
 	}
 
-	ch->master_vol = 127 * volume;
+	ch->master_vol = 255 * volume;	// FAKK2: a sound at full volume as loud as the music
 	ch->minDist = minDist;
 	ch->entnum = entityNum;
 	ch->thesfx = sfx;
@@ -968,7 +960,7 @@ void S_AddLoopSounds (void) {
 		}
 
 		if (loop->kill) {
-			S_SpatializeOrigin( loop->origin, 127 * loop->volume, loop->minDist, &left_total, &right_total);			// 3d
+			S_SpatializeOrigin( loop->origin, 255 * loop->volume, loop->minDist, &left_total, &right_total);			// 3d
 		} else {
 			S_SpatializeOrigin( loop->origin, 90 * loop->volume, loop->minDist, &left_total, &right_total);			// sphere
 		}
@@ -983,7 +975,7 @@ void S_AddLoopSounds (void) {
 			loop2->mergeFrame = loopFrame;
 
 			if (loop2->kill) {
-				S_SpatializeOrigin( loop2->origin, 127 * loop2->volume, loop2->minDist, &left, &right);				// 3d
+				S_SpatializeOrigin( loop2->origin, 255 * loop2->volume, loop2->minDist, &left, &right);				// 3d
 			} else {
 				S_SpatializeOrigin( loop2->origin, 90 * loop2->volume, loop2->minDist, &left, &right);				// sphere
 			}
@@ -1006,7 +998,7 @@ void S_AddLoopSounds (void) {
 			right_total = 255;
 		}
 		
-		ch->master_vol = 127;
+		ch->master_vol = 255;
 		ch->leftvol = left_total;
 		ch->rightvol = right_total;
 		ch->thesfx = loop->sfx;

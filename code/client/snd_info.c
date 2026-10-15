@@ -320,3 +320,52 @@ float S_SoundGain( float minDist, float dist ) {
 	}
 	return minDist / dist;
 }
+
+/*
+=================
+S_SoundInterp
+
+Linear interpolation in a table of n points with rising x.
+=================
+*/
+float S_SoundInterp( const float *x, const float *y, int n, float v ) {
+	int		i;
+
+	if ( v <= x[0] ) {
+		return y[0];
+	}
+	for ( i = 1 ; i < n ; i++ ) {
+		if ( v <= x[i] ) {
+			return y[i - 1] + ( y[i] - y[i - 1] ) * ( v - x[i - 1] ) / ( x[i] - x[i - 1] );
+		}
+	}
+	return y[n - 1];
+}
+
+/*
+=================
+S_SoundPan
+
+How the retail engine's sounds are spread over the two ears. With no EAX card
+Miles opens its "Fast 2D Positional Audio" provider, and recordings of it
+(a tone 48 units from the listener, tools/retail-compare/probe-sound-pan*.scr)
+show a balance control rather than a constant-power pan: the ear towards the
+sound keeps all of it, the other loses more the further the sound is to the
+side, 17 dB at most, and a sound behind the listener is 3 dB down in both.
+Front and back mirror each other. The share is a function of the bearing
+off the line ahead, level with the listener (the tone a little above or below
+the ear panned as far as one level with it): right and forward are the
+direction's parts in listener space. The gains are 0 to 1.
+=================
+*/
+void S_SoundPan( float right, float forward, float *leftGain, float *rightGain ) {
+	static const float	sideAngle[] = { 0, 15, 30, 45, 60, 75, 80, 85, 90 };
+	static const float	farLoss[] = { 0, -1.5f, -3.5f, -5.8f, -8.9f, -13.3f, -15.3f, -16.1f, -17.1f };	// dB
+	float	angle, near, far;
+
+	angle = ( right || forward ) ? RAD2DEG( atan2( fabs( right ), fabs( forward ) ) ) : 0;
+	near = forward < 0 ? 0.70710678f : 1.0f;
+	far = near * powf( 10, S_SoundInterp( sideAngle, farLoss, ARRAY_LEN( sideAngle ), angle ) / 20 );
+	*leftGain = right > 0 ? far : near;
+	*rightGain = right > 0 ? near : far;
+}

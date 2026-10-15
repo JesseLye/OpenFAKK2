@@ -524,6 +524,12 @@ void S_PaintChannels( int endtime ) {
 		snd_vol = 0;
 	else
 		snd_vol = s_volume->value*255;
+	// FAKK2: no louder than full, as Miles' 0 to 127; a channel's volume goes
+	// to 255, and the two times a sample have to fit an int
+	if(snd_vol > 255)
+		snd_vol = 255;
+	else if(snd_vol < 0)
+		snd_vol = 0;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);
 	while ( s_paintedtime < endtime ) {

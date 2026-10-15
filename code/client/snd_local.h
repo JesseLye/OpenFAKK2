@@ -69,6 +69,8 @@ void				S_LoadSoundInfo( void );
 void				S_SoundInfo_f( void );
 const soundInfo_t	*S_SoundInfoForName( const char *name );
 float				S_SoundGain( float minDist, float dist );
+float				S_SoundInterp( const float *x, const float *y, int n, float v );
+void				S_SoundPan( float right, float forward, float *leftGain, float *rightGain );
 
 // FAKK2's reverb for the software mixer (snd_reverb.c)
 void		S_ReverbInit( int rate );
