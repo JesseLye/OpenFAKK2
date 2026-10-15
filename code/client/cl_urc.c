@@ -287,6 +287,7 @@ static void URC_DrawPopup( void );
 static urcMenu_t	*urc_healthhud, *urc_weaphud, *urc_dualweaphud, *urc_bosshud;
 
 static qboolean		urc_hudOn = qtrue;		// "ui_hud", a command in retail (0x40e010) setting 0x4df7b8
+static cvar_t		*ui_drawcoords;			// UI_Init (0x40e9df)
 static cvar_t		*ui_urcdebug;
 static qhandle_t	urc_addFadeShader;
 
@@ -3088,6 +3089,15 @@ void URC_Draw( void ) {
 		URC_DrawPrint( &urc_centerprint );
 		URC_DrawPrint( &urc_locprint );
 	}
+
+	// ui_drawcoords (fakk2.exe 0x4982a3): with the cursor up, its place as
+	// "x:y" ten units right of it and ten above, in the interface's font
+	if ( ui_drawcoords->integer && ( urc_stackDepth || cl_mouseShown ) ) {
+		static const vec4_t	white = { 1, 1, 1, 1 };
+
+		URC_DrawString( URC_LoadFont( URC_DEFAULT_FONT ), urc_cursorX + 10, urc_cursorY - 10,
+			va( "%d:%d", (int)urc_cursorX, (int)urc_cursorY ), white );
+	}
 	URC_DrawFps();
 }
 
@@ -3687,6 +3697,7 @@ static void URC_Hud_f( void ) {
 }
 
 void URC_Init( void ) {
+	ui_drawcoords = Cvar_Get( "ui_drawcoords", "0", 0 );
 	ui_urcdebug = Cvar_Get( "ui_urcdebug", "0", CVAR_TEMP );
 	Cvar_Get( "shortversion", "1.02", CVAR_ROM );	// the main menu's version label; the game data's version
 	Cvar_Get( "ui_newvidmode", "-1", 0 );			// UI_Init (0x40ea46); see URC_UpdateCatcher
