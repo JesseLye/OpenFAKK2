@@ -17,7 +17,8 @@ param(
 # reference. The client joins a local game on $Map and the probe is started with
 # "+script thread" before the player spawns, so its waitforplayer returns on both engines.
 # The mouse is off (in_mouse 0): with it on, input reaching the window turned the player
-# mid-probe. The run ends when the probe prints "pending events as of" (so a probe must end
+# mid-probe. The engine archives in_mouse, so the run takes it out of the home's
+# config.cfg afterwards (Clear-HarnessMouse), or the next game played there has no mouse. The run ends when the probe prints "pending events as of" (so a probe must end
 # with pendingevents), when the client exits, or after $Secs seconds. The console log is
 # copied to build\compare\client-<Name>-<Map>-<Probe>.log and the selected readings are
 # printed.
@@ -87,6 +88,7 @@ while ((Get-Date) -lt $deadline -and -not $p.HasExited -and -not $done) {
 }
 $exited = $p.HasExited
 if (-not $exited) { $p.Kill(); $p.WaitForExit() }
+if (-not $Retail) { Clear-HarnessMouse }
 
 if (Test-Path $console) { Copy-Item $console $log -Force } else { "no console log was written (did the client start?)"; return }
 $status = if ($done) { 'probe finished' } elseif ($exited) { "client exited early (code $($p.ExitCode))" } else { "probe did not finish within ${Secs}s" }

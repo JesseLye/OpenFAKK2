@@ -102,6 +102,7 @@ if ($Side -ne 'retail') {
         "+set r_fullscreen 0 +set r_mode $Mode +set in_nograb 1 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra $OursExtra +map $Map +script thread $probeName.scr::probe"
     Invoke-Side $Name $exe $Bin $homeDir $arguments 'Normal'
+    Clear-HarnessMouse
 }
 
 $i = 0

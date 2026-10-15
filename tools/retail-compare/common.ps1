@@ -19,3 +19,16 @@ $homeAutoexec = Join-Path $homeFakk 'autoexec.cfg'
 if (-not (Test-Path $homeAutoexec)) {
     Set-Content -Path $homeAutoexec -Value "// empty on purpose: shadows the install's autoexec.cfg so harness runs use engine defaults" -Encoding ascii
 }
+
+# The probe runners start ours with "+set in_mouse 0" so that a stray mouse cannot turn
+# the player mid-probe. The engine registers in_mouse as archived, so a run that quits
+# writes "seta in_mouse 0" into this home's config.cfg, and the next game played from
+# here starts with no mouse. Call this after such a run to take the line out again.
+function Clear-HarnessMouse {
+    $config = Join-Path $homeFakk 'config.cfg'
+    if (Test-Path $config) {
+        $lines = Get-Content $config
+        $kept = $lines | Where-Object { $_ -notmatch '^\s*seta\s+in_mouse\s' }
+        if ($kept.Count -ne $lines.Count) { Set-Content -Path $config -Value $kept -Encoding ascii }
+    }
+}
