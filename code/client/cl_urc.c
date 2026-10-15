@@ -150,6 +150,7 @@ typedef struct {
 	int			lineTop;			// a multi-line text's first line shown
 	int			lastStat;
 	int			statChangeTime;
+	qboolean	disabled;			// UIWidget's "disable" (0x49e670): hidden, out of the cursor's reach
 } urcWidget_t;
 
 typedef struct {
@@ -2160,6 +2161,9 @@ static int URC_WidgetUnderCursor( void ) {
 	for ( i = menu->numWidgets - 1 ; i >= 0 ; i-- ) {
 		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
 
+		if ( w->disabled ) {
+			continue;
+		}
 		if ( w->cls != WC_BUTTON && w->cls != WC_CHECKBOX && w->cls != WC_SLIDER &&
 			w->cls != WC_PULLDOWN && w->cls != WC_BINDLIST && w->cls != WC_LOADGAME && w->cls != WC_MULTILINE ) {
 			continue;
@@ -2398,6 +2402,9 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 	qboolean	hovered;
 	vec4_t		color;
 
+	if ( w->disabled ) {
+		return;
+	}
 	URC_LoadWidgetShaders( w );
 	URC_WidgetRect( w, menu, ox, oy, menuElapsed, rect );
 	alpha = menuAlpha * URC_FadeAlpha( w->fadein, menuElapsed );
@@ -2639,11 +2646,19 @@ void URC_PushMenu( const char *name ) {
 	URC_ShowMenu( menu );
 	URC_UpdateCatcher();
 
-	// the load and save menu reads the saved games as it comes up
 	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
-		if ( urc_widgets[menu->firstWidget + i].cls == WC_LOADGAME ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+
+		// the load and save menu reads the saved games as it comes up
+		if ( w->cls == WC_LOADGAME ) {
 			urc_saveWidget = menu->firstWidget + i;
 			URC_LoadSaves();
+		}
+		// the main menu's "backtogame" button only shows while a game is
+		// active; retail's pushmenu (0x40c044) sends it "disable" then and
+		// "enable" otherwise, but retail's captures show it without a map
+		if ( !strcmp( menu->name, "main" ) && !strcmp( w->name, "backtogame" ) ) {
+			w->disabled = clc.state < CA_ACTIVE;
 		}
 	}
 }

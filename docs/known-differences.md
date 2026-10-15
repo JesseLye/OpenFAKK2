@@ -462,7 +462,11 @@ Not read, done another way:
   resolutions (they are scaled to the window here). Not done: keyboard in menus beyond
   Escape, the arrows in the load list
   and a waiting bind cell; Field and List editing; pulled-down lists' sounds; a pressed
-  button's border; `ordernumber`. The menu shaders use `rgbGen global` /
+  button's border; `ordernumber`. On purpose: the main menu's "Back to Game" button
+  (`backtogame`) is hidden and cannot be clicked until a level is active. Retail's
+  pushmenu (`0x40c044`) sends it `disable` while the client is not active (`disable`,
+  `0x49e670`, hides it), yet retail's captures show it at startup and after a
+  `popmenu`/`pushmenu main`. The menu shaders use `rgbGen global` /
   `alphaGen global`, the colour the widget sets (its `fgcolor`): the renderer maps them
   to the vertex colour. A stage written with `nextbundle` is now one multitexture
   stage (`CollapseNextBundles`); it was two passes, the second darkening the frame.
