@@ -151,6 +151,15 @@ python -I .claude\skills\retail-capture\scripts\shots.py delta "$cap\ours-0.tga"
 and compare the two games' sums per cell; that is how swapped flare sets showed up as light
 added to the wrong cells.
 
+## Menus
+
+The `.urc` menus need no map or probe: `tools\retail-compare\capture-menus.ps1 -Menus
+loadsave,controls` pushes each menu on both games and pairs the shots in
+`build\compare\captures\menus`. A matching menu differs only in the animated clouds and
+in values that come from each game's own config (a slider's place, a check box, a cvar
+shown in a label). The script's header says why it clears retail's `developer` and why
+its waits are long.
+
 ## Traps
 
 - **Retail keeps archived cvars.** Retail saves its archived cvars in
