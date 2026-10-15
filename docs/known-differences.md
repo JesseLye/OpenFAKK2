@@ -130,8 +130,6 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- `cl_avidemo <n>`: a screenshot every frame at 1/n of a second a frame (Ritual's
-  "Dumping Demo AVI").
 - Debug lines: the game's (`G_DebugLine`, which `cam show` and the AI's node display use)
   and the client game module's are accepted and never drawn; with them
   `r_debuglines_depthmask`, `r_stipplelines` and the server's `g_numdebuglines`.
@@ -242,6 +240,9 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   (`probe-fps.scr`) both games print `wt 431 wv 730 cl0` and `Mtex 0.37`; the totals are
   549 and 954 here against 547 and 950 (the 2D layer), and the lines fall on the same
   pixels.
+- **`cl_avidemo <n>`** (Ritual's "Dumping Demo AVI"; `CL_Frame` `0x421f45`, Quake III
+  1.32's): while a game runs, `screenshot silent` every frame, and every frame counts as
+  1/n of a second however long it took. ioquake3's `video` command is there as well.
 - **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
   `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
   the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`

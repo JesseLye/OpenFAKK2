@@ -77,6 +77,7 @@ cvar_t	*cl_timedemo;
 cvar_t	*cl_timedemoLog;
 cvar_t	*cl_autoRecordDemo;
 cvar_t	*cl_aviFrameRate;
+cvar_t	*cl_avidemo;		// FAKK2: a screenshot every frame
 cvar_t	*cl_aviMotionJpeg;
 cvar_t	*cl_forceavidemo;
 
@@ -3029,6 +3030,15 @@ void CL_Frame ( int msec ) {
 		VM_Call( uivm, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
 	}
 
+	// FAKK2's cl_avidemo (CL_Frame, fakk2.exe 0x421f45), Quake III 1.32's: a
+	// screenshot every frame of a game, each frame 1/n of a second long
+	if ( cl_avidemo->integer > 0 ) {
+		if ( clc.state == CA_ACTIVE ) {
+			Cbuf_ExecuteText( EXEC_NOW, "screenshot silent\n" );
+		}
+		msec = 1000 / cl_avidemo->integer;
+	}
+
 	// if recording an avi, lock to a fixed fps
 	if ( CL_VideoRecording( ) && cl_aviFrameRate->integer && msec) {
 		// save the current screen
@@ -3603,6 +3613,7 @@ void CL_Init( void ) {
 	cl_timedemoLog = Cvar_Get ("cl_timedemoLog", "", CVAR_ARCHIVE);
 	cl_autoRecordDemo = Cvar_Get ("cl_autoRecordDemo", "0", CVAR_ARCHIVE);
 	cl_aviFrameRate = Cvar_Get ("cl_aviFrameRate", "25", CVAR_ARCHIVE);
+	cl_avidemo = Cvar_Get ("cl_avidemo", "0", 0);	// FAKK2 (0x42258f)
 	cl_aviMotionJpeg = Cvar_Get ("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
 	cl_forceavidemo = Cvar_Get ("cl_forceavidemo", "0", 0);
 
