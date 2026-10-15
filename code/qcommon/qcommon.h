@@ -881,6 +881,8 @@ extern	cvar_t	*com_standalone;
 extern	cvar_t	*com_basegame;
 extern	cvar_t	*com_homepath;
 extern	cvar_t	*com_dropsim;
+extern	cvar_t	*com_fps;
+extern	float	com_fpsValue;		// frames a second over the last 16, while com_fps is on
 
 // both client and server must agree to pause
 extern	cvar_t	*cl_paused;		// FAKK2: the cvar is called paused

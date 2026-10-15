@@ -130,8 +130,6 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- The `fps` counter: frame rate and triangle counts at the bottom left, and a warning
-  below 18 frames a second.
 - `cl_avidemo <n>`: a screenshot every frame at 1/n of a second a frame (Ritual's
   "Dumping Demo AVI").
 - Debug lines: the game's (`G_DebugLine`, which `cam show` and the AI's node display use)
@@ -230,6 +228,20 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   provider, which places the sounds itself, it changes nothing: `probe-sound-pan`
   recorded on retail with 0.5 and with 0 gave the same levels at all fourteen bearings.
   OpenFAKK2 registers it and leaves the panning alone.
+- **The `fps` counter** (archived, 0). `Com_Frame` (`0x42ea73`) takes the frame rate as 16
+  over the last 16 frames' times in seconds; the interface's root window draws, over
+  everything (`0x419160`), "FPS %4.1f" (white above 23.94, yellow above 18, red below),
+  "wt%5d wv%5d cl%d" and "t%5d v%5d Mtex%5.2f" in `facfont-20`, one font height in from
+  the left, the last line ending at the bottom. The numbers come from the renderer
+  (`0x47a710`, through a client import, `0x4220c0`): the frame's triangles (indexes over
+  3) and vertexes, those of its 3D view (copied when the root has drawn the scene,
+  `0x47a6f0`; here when the frame first turns to 2D), the map lights offered to light cubes
+  (`0x48e20f`), and the texels the frame bound, in millions. With `fps 1` and a game
+  running, a frame rate under 18 plays `sound/misc/lowframerate.wav` at once and every 4
+  seconds until it is back above 19.8 (`0x4241f3`). On `zoo` before a script camera
+  (`probe-fps.scr`) both games print `wt 431 wv 730 cl0` and `Mtex 0.37`; the totals are
+  549 and 954 here against 547 and 950 (the 2D layer), and the lines fall on the same
+  pixels.
 - **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
   `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
   the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`

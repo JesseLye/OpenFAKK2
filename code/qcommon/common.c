@@ -71,6 +71,8 @@ cvar_t	*com_logfile;		// 1 = buffer log, 2 = flush after each print
 cvar_t	*com_pipefile;
 cvar_t	*com_showtrace;
 cvar_t	*com_dropsim;			// FAKK2: the share of network packets dropped
+cvar_t	*com_fps;				// FAKK2: the fps counter
+float	com_fpsValue;
 cvar_t	*com_version;
 cvar_t	*com_blood;
 cvar_t	*com_buildScript;	// for automated data building scripts
@@ -2826,6 +2828,7 @@ void Com_Init( char *commandLine ) {
 	com_fixedtime = Cvar_Get ("fixedtime", "0", CVAR_CHEAT);
 	com_showtrace = Cvar_Get ("com_showtrace", "0", CVAR_CHEAT);
 	com_dropsim = Cvar_Get ("com_dropsim", "0", CVAR_CHEAT);	// FAKK2 (fakk2.exe 0x42e3ce)
+	com_fps = Cvar_Get ("fps", "0", CVAR_ARCHIVE);		// FAKK2 (0x42e35b)
 	com_speeds = Cvar_Get ("com_speeds", "0", 0);
 	com_timedemo = Cvar_Get ("timedemo", "0", CVAR_CHEAT);
 	com_cameraMode = Cvar_Get ("com_cameraMode", "0", CVAR_CHEAT);
@@ -3328,7 +3331,22 @@ void Com_Frame( void ) {
 
 		Com_Printf ("frame:%i all:%3i sv:%3i ev:%3i cl:%3i gm:%3i rf:%3i bk:%3i\n", 
 					 com_frameNumber, all, sv, ev, cl, time_game, time_frontend, time_backend );
-	}	
+	}
+
+	// FAKK2's fps counter (Com_Frame, fakk2.exe 0x42ea73): 16 over the last 16
+	// frames' times in seconds
+	if ( com_fps->integer ) {
+		static double	frameTimes[16], sum, last;
+		static int		index;
+		double			now = Sys_Milliseconds() * 0.001, dt;
+
+		index = ( index + 1 ) & 15;
+		dt = now - last;
+		sum += dt - frameTimes[index];
+		frameTimes[index] = dt;
+		last = now;
+		com_fpsValue = sum > 0 ? (float)( 16.0 / sum ) : 0;
+	}
 
 	//
 	// trace optimization tracking

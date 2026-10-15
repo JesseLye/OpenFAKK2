@@ -117,6 +117,9 @@ typedef struct {
 	void	(*SwipeBegin)( float thistime, float life, qhandle_t shader );
 	void	(*SwipePoint)( const vec3_t p1, const vec3_t p2, float time );
 	void	(*SwipeEnd)( void );
+	// FAKK2's fps counter: the last frame's triangles, vertexes, texels in use,
+	// triangles and vertexes of its 3D view, and map lights in light cubes
+	void	(*GetFrameStats)( int stats[6] );
 
 	// Draw images for cinematic rendering, pass as 32 bit rgba
 	void	(*DrawStretchRaw) (int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);

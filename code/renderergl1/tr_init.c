@@ -88,6 +88,7 @@ cvar_t	*r_farplane_nofog;
 cvar_t	*r_useglfog;
 cvar_t	*r_drawworld;
 cvar_t	*r_speeds;
+cvar_t	*r_fps;		// FAKK2: the engine's "fps", which the renderer reads too
 cvar_t	*r_fullbright;
 cvar_t	*r_novis;
 cvar_t	*r_nocull;
@@ -1253,6 +1254,7 @@ void R_Register( void )
 	r_novis = ri.Cvar_Get ("r_novis", "0", CVAR_CHEAT);
 	r_showcluster = ri.Cvar_Get ("r_showcluster", "0", CVAR_CHEAT);
 	r_speeds = ri.Cvar_Get ("r_speeds", "0", CVAR_CHEAT);
+	r_fps = ri.Cvar_Get( "fps", "0", CVAR_ARCHIVE );	// FAKK2 (0x46172c)
 	r_verbose = ri.Cvar_Get( "r_verbose", "0", CVAR_CHEAT );
 	r_logFile = ri.Cvar_Get( "r_logFile", "0", CVAR_CHEAT );
 	r_debugSurface = ri.Cvar_Get ("r_debugSurface", "0", CVAR_CHEAT);
@@ -1519,6 +1521,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.SwipeBegin = RE_SwipeBegin;
 	re.SwipePoint = RE_SwipePoint;
 	re.SwipeEnd = RE_SwipeEnd;
+	re.GetFrameStats = RE_GetFrameStats;
 	re.RenderScene = RE_RenderScene;
 
 	re.SetColor = RE_SetColor;

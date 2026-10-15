@@ -954,6 +954,8 @@ typedef struct {
 	int		c_leafs;
 	int		c_dlightSurfaces;
 	int		c_dlightSurfacesCulled;
+
+	int		c_charLights;		// FAKK2: map lights offered to light cubes
 } frontEndCounters_t;
 
 #define	FOG_TABLE_SIZE		256
@@ -1002,6 +1004,11 @@ typedef struct {
 	byte		color2D[4];
 	qboolean	vertexes2D;		// shader needs to be finished
 	trRefEntity_t	entity2D;	// currentEntity will point at this when doing 2D rendering
+
+	// FAKK2's fps counter: the counters as the frame first turned to 2D
+	backEndCounters_t	worldPc;
+	qboolean	worldPcTaken;
+	int			texelsUsed;		// by the last frame, from RB_SwapBuffers
 } backEndState_t;
 
 /*
@@ -1111,6 +1118,8 @@ typedef struct {
 	vec3_t					sunDir;				// towards the sun
 	vec3_t					entAmbient;			// "ambientlight"
 	int						entLightVisit;
+
+	int						frameStats[6];		// FAKK2: RE_GetFrameStats
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
@@ -1164,6 +1173,7 @@ extern	cvar_t	*r_farplane_nofog;		// FAKK2: don't fog towards the far plane
 extern	cvar_t	*r_useglfog;			// FAKK2: shaders of one lightingDiffuse stage (models) take OpenGL's fog rather than the far plane pass
 extern	cvar_t	*r_drawworld;			// disable/enable world rendering
 extern	cvar_t	*r_speeds;				// various levels of information display
+extern	cvar_t	*r_fps;
 extern  cvar_t	*r_detailTextures;		// enables/disables detail texturing stages
 extern	cvar_t	*r_novis;				// disable/enable usage of PVS
 extern	cvar_t	*r_nocull;
@@ -1556,6 +1566,7 @@ void RE_DebugLine( const vec3_t start, const vec3_t end, float r, float g, float
 void RE_SwipeBegin( float thistime, float life, qhandle_t shader );
 void RE_SwipePoint( const vec3_t p1, const vec3_t p2, float time );
 void RE_SwipeEnd( void );
+void RE_GetFrameStats( int stats[6] );
 void R_AddSwipeSurfaces( void );
 void RE_DrawBox( float x, float y, float w, float h );
 int RE_GetShaderWidth( qhandle_t hShader );

@@ -321,6 +321,8 @@ R_EntLightAdd
 static void R_EntLightAdd( trRefEntity_t *ent, const entLight_t *light ) {
 	qboolean	invisible = ( ent->e.renderfx & RF_INVISIBLE ) != 0;
 
+	tr.pc.c_charLights++;		// the fps counter's "cl" (0x48e20f counts them as gathered)
+
 	// a light of negative intensity lights only invisible models, one of
 	// positive intensity everything else
 	if ( ( light->intensity > 0 && invisible ) || ( light->intensity < 0 && !invisible ) ) {

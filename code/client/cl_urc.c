@@ -2942,6 +2942,61 @@ static void URC_DrawFade( void ) {
 
 /*
 =================
+URC_DrawFps
+
+FAKK2's fps counter, drawn by the interface's root window over everything
+else (fakk2.exe 0x419160) while "fps" is on: three lines in facfont-20, one font
+height in from the left and ending at the bottom, the frame rate white above
+23.94, yellow above 18 and red below, then the 3D view's triangles and vertexes
+with the map lights in light cubes, then the whole frame's with the texels in
+use in millions. With "fps 1" and a game running, a frame rate under 18 plays
+sound/misc/lowframerate.wav at once and every four seconds until it is back
+above 19.8 (0x4241f3).
+=================
+*/
+static void URC_DrawFps( void ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	yellow = { 1, 1, 0, 1 };
+	static const vec4_t	red = { 1, 0, 0, 1 };
+	static qboolean		warned;
+	static int			nextWarning;
+	const urcFont_t		*font;
+	int					stats[6];
+	float				h;
+
+	if ( !com_fps->integer ) {
+		return;
+	}
+
+	if ( com_fps->integer == 1 && clc.state == CA_ACTIVE ) {
+		if ( com_fpsValue > 19.8f ) {
+			warned = qfalse;
+		} else {
+			if ( !warned && com_fpsValue < 18.0f ) {
+				nextWarning = 10000;
+				warned = qtrue;
+			}
+			if ( warned && cls.realtime > nextWarning ) {
+				nextWarning = cls.realtime + 4000;
+				S_StartLocalSound( S_RegisterSound( "sound/misc/lowframerate.wav", qfalse ), CHAN_MENU );
+			}
+		}
+	}
+
+	Com_Memset( stats, 0, sizeof( stats ) );
+	if ( re.GetFrameStats ) {
+		re.GetFrameStats( stats );
+	}
+	font = URC_LoadFont( "facfont-20" );		// the root window's (a retail capture's lines are 20 apart)
+	h = URC_FontHeight( font );
+	URC_DrawString( font, h, 480 - 3 * h, va( "FPS %4.1f", com_fpsValue ),
+		com_fpsValue > 23.94f ? white : com_fpsValue > 18.0f ? yellow : red );
+	URC_DrawString( font, h, 480 - 2 * h, va( "wt%5d wv%5d cl%d", stats[3], stats[4], stats[5] ), white );
+	URC_DrawString( font, h, 480 - h, va( "t%5d v%5d Mtex%5.2f", stats[0], stats[1], stats[2] * 1e-6f ), white );
+}
+
+/*
+=================
 URC_Draw
 
 After the game's scene and the map viewer, before the console.
@@ -3033,6 +3088,7 @@ void URC_Draw( void ) {
 		URC_DrawPrint( &urc_centerprint );
 		URC_DrawPrint( &urc_locprint );
 	}
+	URC_DrawFps();
 }
 
 /*

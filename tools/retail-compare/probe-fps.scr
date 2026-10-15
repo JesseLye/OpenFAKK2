@@ -1,0 +1,14 @@
+// The fps counter (run with -Extra "+set fps 1"): the frame rate and the frame's triangle,
+// vertex and texture counts the client prints at the bottom left, on zoo before a script
+// camera, so both games draw the same scene.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname fpscam origin "-2310 1568 56" angles "8 0 0"
+wait .2
+cuecamera $fpscam
+wait 2
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

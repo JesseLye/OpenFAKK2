@@ -115,7 +115,9 @@ that it does not end with `stuffcmd "quit"` is expected); `probe-shot-*` shoot t
 at fixed times. `probe-load` takes one shot after entry and quits: does a map load.
 `probe-ambient` spawns a box and a statue on `zoo`, lit from the light grid, before a
 script camera (`r_ambientScale`). `probe-wgroup` saves the green sword as weapon group 3
-on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`).
+on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`). `probe-fps`
+frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`
+and remove the archived `fps` from both sandboxes' `config.cfg` afterwards.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as
