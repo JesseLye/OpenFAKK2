@@ -1701,6 +1701,7 @@ void R_RenderView (viewParms_t *parms) {
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
 
 	R_DrawDebugLines();
+	R_DrawLightLines();
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();

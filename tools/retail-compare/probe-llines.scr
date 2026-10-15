@@ -1,0 +1,25 @@
+// The light cube's debugging lines: on zoo, a script camera behind and above Julie
+// (a sentient, flagged betterlighting, so lit from a light cube, not the grid), with
+// a plain statue ahead lit from the grid. Shot 0 has r_light_lines 1 (a line and a
+// star for each light that reaches her cube) and r_light_sun_line 1 (her trace
+// towards the sun); shot 1 has r_light_nolight 1 (her cube full white). The three
+// cvars are archived: check both sandboxes' config.cfg afterwards.
+probe:
+waitforplayer
+wait 2
+spawn obj_statue.tik origin "-2150 1568 0" targetname "llstatue"
+spawn Camera targetname llcam origin "-2400 1568 160" angles "20 0 0"
+wait .2
+cuecamera $llcam
+stuffcmd "set r_light_lines 1; set r_light_sun_line 1"
+wait 1
+stuffcmd "screenshot"
+wait 1.5
+stuffcmd "set r_light_lines 0; set r_light_sun_line 0; set r_light_nolight 1"
+wait .5
+stuffcmd "screenshot"
+wait 1
+stuffcmd "set r_light_nolight 0"
+wait .5
+stuffcmd "quit"
+end

@@ -1496,10 +1496,15 @@ void R_LoadEntLights( world_t *w, const byte *fileBase, lump_t *l );
 void R_LoadEntLightsVis( world_t *w, const byte *fileBase, lump_t *l );
 void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3_t localOrigin, float radius );
 void RB_CalcLightCubeColors( unsigned char *colors );
+void R_DrawLightLines( void );
 mnode_t *R_PointInLeaf( const vec3_t p );
 extern cvar_t	*r_light_emphasize;
 extern cvar_t	*r_light_emphasizePercent;
 extern cvar_t	*r_entityLights;
+extern cvar_t	*r_light_lines;
+extern cvar_t	*r_light_sun_line;
+extern cvar_t	*r_light_nolight;
+extern cvar_t	*r_light_int_scale;
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
 

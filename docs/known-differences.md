@@ -130,8 +130,7 @@ Missing from OpenFAKK2, to be done:
 - Input: `+togglemouse`, with `ui_showmouse` and `ui_hidemouse` below: a cursor in the
   game (`0x41d960`; while it is up the mouse moves it instead of the view, `0x41e100`, and
   its buttons go to the interface, not their bindings, `0x41fad1`).
-- Renderer: `r_showskel`, `r_showlod`, `r_light_lines`, `r_light_sun_line`,
-  `r_light_nolight`, `r_light_int_scale`, `r_place_sunflare`, `r_skyportal`,
+- Renderer: `r_showskel`, `r_showlod`, `r_place_sunflare`, `r_skyportal`,
   `r_skyportal_origin`, `r_drawsprites`, `r_customaspect`. Shadows of
   `cg_shadows 2` (stencil) and `3` (projected) for models the game flags
   `RF_SHADOW_PRECISE`; the default 1 is a mark the client game module draws itself.
@@ -1196,6 +1195,18 @@ What is implemented, and on what basis:
   retail's cvars do (both 0); `r_entityLights 0` turns the lights off. Julie seen from
   the same camera matches the retail capture within a unit or two on every patch
   measured; `r_debugLight 3` prints each model's cube and the lights that went into it.
+  Retail's three aids for the cubes (archived, 0 by default) are drawn as it draws them,
+  at the nearest depth so over everything: `r_light_lines <n>` joins each light that
+  reaches a cube at least `n` strongly to the cube's centre and marks it with six arms as
+  long as the cube's radius, in its colour times its strength over 255, brought back to
+  unit length when brighter than white (`0x48d810`, from the point and spot lights);
+  `r_light_sun_line 1` draws the trace towards the sun, yellow at the model when it
+  reached the sky and black when not, white at its far end (`0x48cdc6`); `r_light_nolight
+  1` lights every cube full white (`0x48e1c3`). The retail renderer draws the lines as it
+  lights each model; the cubes are built in the front end here, so the lines are kept in
+  world space and drawn after the view's surfaces are sorted. `r_light_int_scale` ("0.05")
+  is registered and never read, as in retail. `probe-llines` frames Julie on `zoo`: her
+  lines and stars and her full white cube matched retail's shots.
 - **Dynamic lights** are Quake III's; of FAKK2's light types `additive` is honoured
   and the lens flare bits give the light a lens flare (next). On the world they are much
   dimmer than retail's: a muzzle flash that lights the floor yellow around Julie in

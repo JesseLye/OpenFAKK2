@@ -1226,6 +1226,11 @@ void R_Register( void )
 	r_light_emphasize = ri.Cvar_Get( "r_light_emphasize", "0", 0 );
 	r_light_emphasizePercent = ri.Cvar_Get( "r_light_emphasizePercent", "0", 0 );
 	r_entityLights = ri.Cvar_Get( "r_entityLights", "1", CVAR_CHEAT );
+	// FAKK2: the light cubes' debugging aids (fakk2.exe 0x46156e on)
+	r_light_lines = ri.Cvar_Get( "r_light_lines", "0", CVAR_ARCHIVE );
+	r_light_sun_line = ri.Cvar_Get( "r_light_sun_line", "0", CVAR_ARCHIVE );
+	r_light_int_scale = ri.Cvar_Get( "r_light_int_scale", "0.05", CVAR_ARCHIVE );
+	r_light_nolight = ri.Cvar_Get( "r_light_nolight", "0", CVAR_ARCHIVE );
 	r_debugSort = ri.Cvar_Get( "r_debugSort", "0", CVAR_CHEAT );
 	r_printShaders = ri.Cvar_Get( "r_printShaders", "0", 0 );
 	r_saveFontData = ri.Cvar_Get( "r_saveFontData", "0", 0 );

@@ -126,7 +126,9 @@ on `zoo`; copy that tik into both sandboxes' `fakk\models` first.
 after `nextBundle`).
 `probe-dlines` draws the `csys_draw` axes (game debug lines) from inside a box on `zoo`,
 depth tested and then with `r_debuglines_depthmask 1`; remove that archived cvar from both
-sandboxes' `config.cfg` afterwards.
+sandboxes' `config.cfg` afterwards. `probe-llines` frames Julie (lit from a light cube) on
+`zoo` with `r_light_lines 1` and `r_light_sun_line 1`, then `r_light_nolight 1`; check
+both sandboxes' `config.cfg` for them afterwards.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
 and more) install into both sandboxes with `install-example-maps.ps1` and run as

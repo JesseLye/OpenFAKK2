@@ -47,7 +47,25 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 cvar_t	*r_light_emphasize;
 cvar_t	*r_light_emphasizePercent;
 cvar_t	*r_entityLights;
+cvar_t	*r_light_lines;			// lines from the lights that reach a cube at least this strongly
+cvar_t	*r_light_sun_line;		// a line along each cube's trace towards the sun
+cvar_t	*r_light_nolight;		// cubes lit full white
+cvar_t	*r_light_int_scale;		// registered by the retail renderer and never read
 extern cvar_t	*r_debugLight;
+
+// FAKK2: r_light_lines and r_light_sun_line. The retail renderer draws them
+// in the model's own axes as it lights the model (0x48d810, 0x48cdc6), at
+// the nearest depth; the cubes are built in the front end here, so the lines
+// are kept in world space and drawn when the view is (R_DrawLightLines).
+#define MAX_LIGHT_LINES			2048
+
+typedef struct {
+	vec3_t	start, end;
+	vec3_t	startColor, endColor;
+} lightLine_t;
+
+static lightLine_t	lightLines[MAX_LIGHT_LINES];
+static int			numLightLines;
 
 // the faces of the cube, in the order the retail renderer keeps them
 static const vec3_t cubeDirs[6] = {
@@ -206,6 +224,100 @@ static qboolean R_EntLightTraceClear( const vec3_t from, const vec3_t to, qboole
 
 /*
 =================
+R_AddLightLine
+=================
+*/
+static void R_AddLightLine( const vec3_t start, const vec3_t end, const vec3_t startColor, const vec3_t endColor ) {
+	lightLine_t	*line;
+
+	if ( numLightLines >= MAX_LIGHT_LINES ) {
+		return;
+	}
+	line = &lightLines[numLightLines++];
+	VectorCopy( start, line->start );
+	VectorCopy( end, line->end );
+	VectorCopy( startColor, line->startColor );
+	VectorCopy( endColor, line->endColor );
+}
+
+static void R_LightLocalToWorld( const trRefEntity_t *ent, const vec3_t local, vec3_t out ) {
+	VectorCopy( ent->e.origin, out );
+	VectorMA( out, local[0], ent->e.axis[0], out );
+	VectorMA( out, local[1], ent->e.axis[1], out );
+	VectorMA( out, local[2], ent->e.axis[2], out );
+}
+
+/*
+=================
+R_EntLightLines
+
+r_light_lines (0x48d810): a light that reaches the cube at least as strongly
+as the cvar's value is joined to the cube's centre and marked with six arms
+as long as the cube's radius, in its colour times its strength over 255,
+brought back to unit length when that is brighter than white. local is the
+light in the model's axes.
+=================
+*/
+static void R_EntLightLines( const trRefEntity_t *ent, const entLight_t *light, float power, const vec3_t local ) {
+	vec3_t	color, from, to, arm;
+	int		i;
+
+	if ( !r_light_lines->integer || power < r_light_lines->value ) {
+		return;
+	}
+	VectorScale( light->color, power * ( 1.0f / 255 ), color );
+	if ( color[0] > 1 || color[1] > 1 || color[2] > 1 ) {
+		VectorNormalize( color );
+	}
+
+	R_LightLocalToWorld( ent, local, from );
+	R_LightLocalToWorld( ent, ent->lightLocalOrigin, to );
+	R_AddLightLine( from, to, color, color );
+	for ( i = 0 ; i < 6 ; i++ ) {
+		VectorMA( local, ent->lightRadius, cubeDirs[i], arm );
+		R_LightLocalToWorld( ent, arm, to );
+		R_AddLightLine( from, to, color, color );
+	}
+}
+
+/*
+=================
+R_DrawLightLines
+
+Draws the lines the view's light cubes left, over everything, and clears
+them; the sky portal's view leaves them to the view it is drawn for.
+=================
+*/
+void R_DrawLightLines( void ) {
+	int		i;
+
+	if ( !numLightLines || tr.viewParms.isPortalSky ) {
+		return;
+	}
+
+	R_IssuePendingRenderCommands();
+
+	GL_Bind( tr.whiteImage );
+	GL_State( GLS_DEPTHMASK_TRUE );
+	qglDepthRange( 0, 0 );
+	qglDisableClientState( GL_COLOR_ARRAY );
+	qglDisableClientState( GL_TEXTURE_COORD_ARRAY );
+
+	qglBegin( GL_LINES );
+	for ( i = 0 ; i < numLightLines ; i++ ) {
+		qglColor3f( lightLines[i].startColor[0], lightLines[i].startColor[1], lightLines[i].startColor[2] );
+		qglVertex3fv( lightLines[i].start );
+		qglColor3f( lightLines[i].endColor[0], lightLines[i].endColor[1], lightLines[i].endColor[2] );
+		qglVertex3fv( lightLines[i].end );
+	}
+	qglEnd();
+
+	qglDepthRange( 0, 1 );
+	numLightLines = 0;
+}
+
+/*
+=================
 R_EntLightAddPoint
 
 A point light's share of the cube's faces (0x48dd80).
@@ -227,6 +339,7 @@ static void R_EntLightAddPoint( trRefEntity_t *ent, const entLight_t *light ) {
 	if ( power < 1.0f ) {
 		return;
 	}
+	R_EntLightLines( ent, light, power, local );
 
 	for ( i = 0 ; i < 6 ; i++ ) {
 		VectorMA( d, ent->lightRadius, cubeDirs[i], v );
@@ -311,6 +424,7 @@ static void R_EntLightAddSpot( trRefEntity_t *ent, const entLight_t *light ) {
 			VectorMA( ent->lightCube[i], f, light->color, ent->lightCube[i] );
 		}
 	}
+	R_EntLightLines( ent, light, power, local );
 }
 
 /*
@@ -367,12 +481,13 @@ void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3
 
 	VectorCopy( origin, ent->lightOrigin );
 	VectorCopy( localOrigin, ent->lightLocalOrigin );
-	ent->lightRadius = radius;
-	ent->lightCubeSet = qtrue;
+	ent->lightRadius = radius;	ent->lightCubeSet = qtrue;
 	ent->lightCubeDlights = qfalse;
 	VectorCopy( tr.sunDirection, ent->lightDir );
 
-	if ( ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) || ( ent->e.renderfx & RF_FULLBRIGHT ) || !w ) {
+	// r_light_nolight lights every cube as a fullbright one (0x48e1c3)
+	if ( ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) || ( ent->e.renderfx & RF_FULLBRIGHT )
+		|| r_light_nolight->integer || !w ) {
 		for ( i = 0 ; i < 6 ; i++ ) {
 			VectorSet( ent->lightCube[i], tr.identityLightByte, tr.identityLightByte, tr.identityLightByte );
 		}
@@ -435,6 +550,13 @@ void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3
 		if ( r_debugLight->integer > 2 ) {
 			ri.Printf( PRINT_ALL, "cube: ent %d renderfx %x sun %s (dir %.2f %.2f %.2f colour %.0f %.0f %.0f)\n", ent->e.entityNumber, ent->e.renderfx,
 				sky ? "seen" : "hidden", tr.sunDir[0], tr.sunDir[1], tr.sunDir[2], tr.sunColor[0], tr.sunColor[1], tr.sunColor[2] );
+		}
+		// r_light_sun_line (0x48cdc6): the trace, yellow at the model when
+		// it reached the sky and black when not, white at its far end
+		if ( r_light_sun_line->integer ) {
+			static const vec3_t	white = { 1, 1, 1 }, yellow = { 1, 1, 0 }, black = { 0, 0, 0 };
+
+			R_AddLightLine( origin, end, sky ? yellow : black, white );
 		}
 		if ( sky ) {
 			sunLocal[0] = DotProduct( tr.sunDir, ent->e.axis[0] );
