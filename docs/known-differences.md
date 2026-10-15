@@ -1629,11 +1629,58 @@ What is implemented, and on what basis:
   model; Quake III used the world origin, which is wrong for FAKK2's brush models (their
   faces are stored about the model's origin), so which faces a moving platform lit
   depended on where in the map it stood, and tested only the first light. `probe-dlight`
-  on `training` matches retail in every shot (a mean difference of about 2.5 per
-  channel, as with no light; it was 5.4 with the old pass). Of FAKK2's light types
-  `additive` is honoured and the lens flare bits give the light a lens flare (next);
-  retail picks a different blend for an additive light (`0x47d32b`), which has not been
-  read or followed. Swipes are drawn (see "Weapon effects").
+  on `training` matches retail in every shot (a mean difference of about 2 per channel,
+  as with no light; it was 5.4 with the old pass).
+
+  The world was still lit less than retail's: the chaingun's flash on `zoo`
+  (`probe-fx-guns` shots 0 and 1) lit a wide yellow pool of floor around Julie on retail
+  and almost none on ours, a mean difference of about 20 per channel against 14 with the
+  guns quiet. The floor there is one large face (`textures/we_cemetary/cemtrim5`, with
+  no shader script, so opaque and lightmapped) that spans many BSP leaves. Quake III's
+  walk of the world tree dropped a light from the side of each node plane it didn't
+  reach, and adds a surface once, with the lights of the first leaf that reaches it, so
+  when a leaf away from the light came first the floor was drawn unlit. Retail's walk
+  (`0x486440`) passes every light down both sides of each node unchanged, and only the
+  surface tests cull: a face's plane against the light's radius, a patch's bounds, and
+  nothing for a triangle soup. Retail then projects the light on a surface when its
+  shader sorts at 4 (`decal`) or below: its three stage iterators (`0x47c640` and the
+  undefined ones holding `0x47dede` and `0x47e1ce`) all test `dlightBits`, a `tess`
+  field at `0xcdaccc` and `shader->sort <= 4.0` (`0x4d5718`), with `opaque` 3, `decal`
+  4 and `seeThrough` 5 (`0x4758b0`). The `tess` field (between `dlightBits` and
+  `numIndexes`, a field Ritual added) is always zero, so that test never skips the pass:
+  `R_Init` (`0x461958`) clears the whole of `tess` (`rep stosd` of `0x6984` dwords from
+  `0xcc06e0`, to `0xcdacf0`), and nothing writes it afterwards. The three reads are the
+  only references to its address in the image, no instruction takes an address in the
+  end of `tess` as a pointer or reaches it through a register and displacement, and
+  the arrays before it, filled per vertex, end at `0xcdacc0`. Ours has no such field or
+  test. Quake III stopped at opaque, and the generic
+  iterator also skipped `nodlight` and sky surfaces; retail reads neither surface flag
+  there, and does not test them in the world walk or `R_AddDrawSurf` (`0x463da0`)
+  either. Both are followed. With the fix, `probe-fx-guns` shots 0 and 1 differ from
+  retail by about 16 per channel (15.5, 16.3, 19.4) against 13 to 14 for the quiet
+  shots, and the light the flash adds to the floor (shot 0 against shot 2 on each game,
+  `shots.py delta --grid 4x3`) matches: 34.5 and 45.9 in red in the two floor cells on
+  retail, 33.8 and 46.9 on ours (0.2 and 3.0 before). `probe-dlzoo` holds the
+  hand gun's test light over the same floor: ours drew no light at all (4.5 in red
+  against 3.3 without the light) and now differs by 2.2 and 1.9. Still open:
+  `nodlight` is honoured nowhere, as in retail, and the GL2
+  renderer keeps Quake III's tests. Of FAKK2's light types the lens flare bits give
+  the light a lens flare (next), and `additive` (bit 4, from a TIKI light's type or an
+  entity's `rendereffects +additivedynamiclight`) picks the blend: retail tests that bit
+  in the light's type (`0x47d32b`) and draws an ordinary light with `GL_State(0x823)`
+  and an additive one with `GL_State(0x824)`. Its `GL_State` (`0x470ad0`) makes those
+  `glBlendFunc(GL_DST_COLOR, GL_ONE)` and `glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE)`,
+  both with `glDepthFunc(GL_EQUAL)` (retail's depth-equal bit is `0x800`, Quake III's
+  `0x20000`). So an additive light adds its colour scaled by how dark the surface
+  already is, rather than modulated by it; Quake III's `GL_ONE, GL_ONE`, which this
+  port had, added it in full and lit the floor too bright. `probe-dladd` holds the
+  ordinary test light and then an additive one (`fx\test_dladd.tik`) over `zoo`'s
+  floor: the additive shot differed from retail by 4.0, 3.6 and 2.3 per channel and
+  now by 2.2, 2.0 and 2.3, as the ordinary one does, and what it adds over the
+  ordinary light matches cell by cell (7.35 and 7.68 in red against retail's 7.45 and
+  7.82). A TIKI emitter's `dlight` reads its first type as a number (the client game
+  module's `DynamicLight`), so `additive` written there is 0 on both games; `4` works.
+  Swipes are drawn (see "Weapon effects").
 - **Debug lines**: the game module's (`G_DebugLine`: `cam show`, the AI's node display,
   `csys_draw`) and the client game module's are drawn as `fakk2.exe` draws them. The
   renderer is handed the game's array and count (`ri.DebugLines`, as retail's refimport

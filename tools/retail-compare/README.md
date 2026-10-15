@@ -150,6 +150,10 @@ skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <probe> -Map zo
 - `probe-dlight` (on `training`, not `zoo`) holds `fx\test_dlight.tik`, a light the
   hand gun's muzzle flash colour and radius, at four places over a glowing pad
   (`padfloor_target1`, a brush model) and shoots each from a script camera.
+  `probe-dlzoo` holds the same light over `zoo`'s corridor floor ahead of Julie's start,
+  a world face that spans many leaves, at two places, from a script camera.
+  `probe-dladd` holds it and then `fx\test_dladd.tik`, the same light with the additive
+  type, at one place over that floor.
 
 A dual-handed weapon's primary fire is `+attackleft` and its alternate `+attackright`
 (`global/julie_torso.st`); one-handed weapons attack with `+attackright`.

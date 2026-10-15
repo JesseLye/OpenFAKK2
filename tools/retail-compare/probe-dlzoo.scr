@@ -1,0 +1,28 @@
+// Dynamic lights on zoo's floor, for the real client: the held test light
+// (fx\test_dlight.tik, the hand gun's flash colour and radius; copy it in first) in
+// the corridor ahead of Julie's start, seen from a camera behind her. A shot before
+// the light, then the light 40 units over the floor, then 16 units over it, further on.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname dzcam origin "-2500 1568 140" angles "30 0 0"
+wait 0.1
+cuecamera $dzcam
+wait 1
+stuffcmd "screenshot"
+wait 3
+spawn test_dlight.tik origin "-2250 1568 40" targetname dz1
+wait 0.2
+$dz1 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+$dz1 remove
+spawn test_dlight.tik origin "-2150 1568 16" targetname dz2
+wait 0.2
+$dz2 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "quit"
+end

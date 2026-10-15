@@ -582,9 +582,10 @@ static void ProjectDlightTexture_scalar( void ) {
 
 		GL_Bind( tr.dlightImage );
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
-		// where they aren't rendered
+		// where they aren't rendered; an additive light adds less where the
+		// surface is already bright (fakk2.exe 0x47d32b), not Quake III's ONE, ONE
 		if ( dl->additive ) {
-			GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
+			GL_State( GLS_SRCBLEND_ONE_MINUS_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
 		}
 		else {
 			GL_State( GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ONE | GLS_DEPTHFUNC_EQUAL );
@@ -1216,11 +1217,12 @@ void RB_StageIteratorGeneric( void )
 	//
 	RB_IterateStagesGeneric( input );
 
-	// 
-	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE
-		&& !(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY) ) ) {
+	// now do any dynamic lighting needed: decals too, and the surface flags
+	// aren't read (fakk2.exe 0x47c640 and the other two iterators test only
+	// sort <= 4.0, and a tess field that R_Init clears and nothing sets)
+	//
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 
@@ -1307,7 +1309,7 @@ void RB_StageIteratorVertexLitTexture( void )
 	// 
 	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE ) {
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 
@@ -1414,7 +1416,7 @@ void RB_StageIteratorLightmappedMultitexture( void ) {
 	// 
 	// now do any dynamic lighting needed
 	//
-	if ( tess.dlightBits && tess.shader->sort <= SS_OPAQUE ) {
+	if ( tess.dlightBits && tess.shader->sort <= SS_DECAL ) {
 		ProjectDlightTexture();
 	}
 

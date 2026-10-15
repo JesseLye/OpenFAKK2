@@ -1,0 +1,28 @@
+// Additive dynamic lights on zoo's floor, for the real client: probe-dlzoo's camera and
+// spot, with no light, then test_dlight.tik's ordinary light, then test_dladd.tik, the
+// same light with the additive type (copy fx\*.tik in first). Retail blends an additive
+// light with GL_ONE_MINUS_DST_COLOR, GL_ONE (fakk2.exe 0x47d32b).
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname dacam origin "-2500 1568 140" angles "30 0 0"
+wait 0.1
+cuecamera $dacam
+wait 1
+stuffcmd "screenshot"
+wait 3
+spawn test_dlight.tik origin "-2250 1568 40" targetname da1
+wait 0.2
+$da1 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+$da1 remove
+spawn test_dladd.tik origin "-2250 1568 40" targetname da2
+wait 0.2
+$da2 anim idle
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "quit"
+end
