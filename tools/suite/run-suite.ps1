@@ -48,7 +48,7 @@ if ($Changed) {
     $Areas = @()
     foreach ($f in $changedFiles) {
         foreach ($rule in $config.paths) {
-            if ($f -like $rule.pattern) { $Areas += @($rule.areas); if (Get-Prop $rule 'checks') { $Only += @($rule.checks) } }
+            if ($f -like $rule.pattern) { $Areas += @(Get-Prop $rule 'areas' @() | Where-Object { $_ }); if (Get-Prop $rule 'checks') { $Only += @($rule.checks) } }
         }
         # a probe that changed brings its own checks
         if ($f -match '^tools/retail-compare/(probe[^/]*)\.scr$') { $p = $Matches[1]; $Only += @($all | Where-Object { (Get-Prop $_ 'probe') -eq $p } | ForEach-Object group) }
