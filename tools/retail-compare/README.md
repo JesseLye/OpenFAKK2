@@ -39,12 +39,31 @@ retail game again. Choose the probe with `-Probe`:
   prints it again.
 - `probe-entities` runs `whatis` on entities 0 to 299 after ten seconds.
 - `probe-entry` prints the player six times in the first five seconds after entry.
+- `probe-sling` gives the player the sling, charges and fires it standing still, and runs
+  `whatis` on entities 0 to 299 a third of a second later, so the rock is among them.
+  `probe-sling-down` does the same after holding `+lookdown`; the test player cannot
+  pitch, so that one is for the real client (`run-client.ps1 -Run "+map zoo +script
+  thread probe-sling-down.scr::probe"`).
+- `probe-gaspod-down` gives the gas sling and its ammo (`$player ammo "Gas Pod" 5`, since
+  the sling starts empty), fires it after 0.6 s of `+lookdown`, and reads the pod's slot
+  every 0.05 s because it explodes where it lands. Real client only; it is the regression
+  probe for the trace owner rule (the pod parked in Julie's chest before the fix).
+- `probe-walk-jump` walks two seconds, jumps, lands and stops, reading the player every
+  0.1 s through each slow-down. On the headless test player the final position reads 4 to
+  6 units short of retail (see `docs/known-differences.md`, "With scripted input");
+  `-Extra "+set sv_fps 40"` closes it.
 
 `-RetailTwice` runs the retail game a second time in place of OpenFAKK2. The game seeds
 its random numbers from the clock, so retail differs from itself on some maps; this shows
 by how much. `-Extra "<arguments>"` adds to OpenFAKK2's command line only.
 
 A probe must end with `pendingevents`; that is how the script knows it has finished.
+
+OpenFAKK2 runs with the install as `fs_basepath` and `build\sandbox\home` as
+`fs_homepath`; the retail runs use a clean copy of the install. So that ours does not
+read the player's own `autoexec.cfg` from the install, `common.ps1` keeps an empty one in
+the sandbox home. Archived cvars persist in the sandbox's `config.cfg` between runs: if
+a client-side default changes (as `cl_run` did), delete the old `seta` line there.
 
 ## The client and the map viewer
 

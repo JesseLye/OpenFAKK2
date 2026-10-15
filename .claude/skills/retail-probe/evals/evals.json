@@ -1,0 +1,46 @@
+{
+  "skill_name": "retail-probe",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Does the gas-pod sling (weapon_sling_gas) throw its pod the same distance as retail on zoo when Julie fires it standing still at level pitch? Give me the numbers from both engines.",
+      "expected_output": "A probe in tools/retail-compare that gives weapon_sling_gas.tik, loads it with the script event ($player ammo \"Gas Pod\" N, since the sling starts empty and give ammo_*.tik does not credit it), selects it with a hand argument, fires it, and reads the pod's slot every 0.05 s after the release (it explodes where it lands, so a later sweep misses it); a compare-player.ps1 run; a report giving the pod's last in-flight position on retail and on OpenFAKK2 and whether they agree within tolerance.",
+      "files": [],
+      "expectations": [
+        "The probe loads the sling with a script-line ammo event ($player ammo \"Gas Pod\" ...) rather than, or in addition to, give ammo_*.tik, and the report confirms a shot was spent (playerammo_Gas Pod counted down in levelvars) on both engines",
+        "The probe selects the weapon with a hand argument (use GasSling right|left|dual) and presses then releases an attack key",
+        "The probe reads the pod's entity slot at a 0.05 s to 0.1 s cadence starting right after the release, rather than relying only on a sweep taken seconds later",
+        "The probe was run on both engines with compare-player.ps1, so both a player-retail-zoo-*.log and a player-ours-zoo-*.log exist for it",
+        "The report gives the pod's position on retail and on OpenFAKK2 as numbers taken from those logs, and says whether they agree within the harness tolerance, with the verdict matching the numbers",
+        "The probe ends with stuffcmd \"pendingevents\" so the runners know it has finished"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Someone says the gas-pod sling (weapon_sling_gas) still hits Julie when she fires it standing still and looking down. Is that fixed in this build? Compare with the build in the main checkout at C:\\Users\\Chse\\Desktop\\OpenFAKK2.",
+      "expected_output": "A probe that holds +lookdown before firing, run through the real client (not the headless test player, which cannot pitch) against both this worktree's build and the main checkout's build; a report stating where the pod ended up in each run relative to Julie and a clear fixed/not-fixed verdict with evidence.",
+      "files": [],
+      "expectations": [
+        "The probe holds +lookdown (press, wait, release) before firing, so the shot is aimed steeply down",
+        "The probe was run through the real client (openfakk2.exe) rather than the headless dedicated server, since the test player cannot pitch",
+        "Two runs were made with the same probe: one against the main checkout's build under C:\\Users\\Chse\\Desktop\\OpenFAKK2\\build and one against this worktree's build",
+        "The report gives the pod's position relative to Julie's position for each run, as numbers taken from the logs",
+        "The report's fixed/not-fixed verdict follows from those numbers (a pod within Julie's 30x30x96 box or bouncing at her counts as hitting her; one well past her counts as flying)",
+        "The report does not claim a retail comparison was made for the pitched shot, since the headless comparison cannot reproduce the pitch"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Does Julie land where retail does after walking forward for two seconds and jumping on zoo? Show the numbers.",
+      "expected_output": "A probe using +forward and +moveup with whatis 0 readings before and after, run with compare-player.ps1; a report with the player's origin on retail and on OpenFAKK2 and the difference in units, noting the known half-frame tolerance.",
+      "files": [],
+      "expectations": [
+        "The probe holds +forward for about two seconds and presses +moveup, with whatis 0 readings before the walk and after landing",
+        "The probe was run on both engines with compare-player.ps1, so both a player-retail-zoo-*.log and a player-ours-zoo-*.log exist for it",
+        "The report gives the player's Origin after landing on retail and on OpenFAKK2 as numbers taken from those logs, and the difference between them",
+        "The report interprets the difference sensibly: a difference of a couple of units is attributed to the known key-timing offset rather than called a bug, and a larger one is flagged as a real difference",
+        "The probe ends with stuffcmd \"pendingevents\" so the runners know it has finished"
+      ]
+    }
+  ]
+}

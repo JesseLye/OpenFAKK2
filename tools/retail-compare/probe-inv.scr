@@ -4,7 +4,7 @@ wait 25
 stuffcmd "give weapon_sword.tik"
 stuffcmd "give weapon_uzi.tik"
 stuffcmd "give weapon_smallshield.tik"
-stuffcmd "give weapon_crossbow.tik"
+stuffcmd "give weapon_cbow.tik"
 stuffcmd "give weapon_chainsword.tik"
 wait 1
 stuffcmd "warpinv swords"

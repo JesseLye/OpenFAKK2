@@ -41,3 +41,6 @@ profile
 *.opensdf
 *.suo
 /.vs
+
+# Claude Code worktrees (the skills under .claude are tracked)
+/.claude/worktrees/

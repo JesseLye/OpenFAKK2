@@ -339,7 +339,9 @@ void CL_KeyMove( usercmd_t *cmd ) {
 	// walks the player unless it is set. Whether the retail client also
 	// scales the move values has not been examined; they are left at full.
 	movespeed = 127;
-	if ( in_speed.active ^ cl_run->integer ) {
+	// Retail (fakk2.exe 0x41e540): the run button is set when the speed key's
+	// state equals "cl_run is 0", so +speed runs with cl_run 0 and walks with it on.
+	if ( in_speed.active == ( cl_run->integer == 0 ) ) {
 		cmd->buttons |= BUTTON_RUN;
 	} else {
 		cmd->buttons &= ~BUTTON_RUN;
@@ -413,7 +415,7 @@ void CL_JoystickMove( usercmd_t *cmd ) {
 	float pitch   = j_pitch->value   * cl.joystickAxis[j_pitch_axis->integer];
 	float up      = j_up->value      * cl.joystickAxis[j_up_axis->integer];
 
-	if ( in_speed.active ^ cl_run->integer ) {
+	if ( in_speed.active == ( cl_run->integer == 0 ) ) {
 		cmd->buttons |= BUTTON_RUN;
 	}
 

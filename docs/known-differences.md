@@ -88,10 +88,11 @@ client is ported.
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
 | `sv_timeout` | 120 | 200 | |
-| `com_maxfps` | 85 | 125 | |
+| `com_maxfps` | 85 | 85 | Both register 85 (`fakk2.exe` `0x42e31b`, `CVAR_ARCHIVE`). The 125 seen earlier was archived into the sandbox `config.cfg` from the player's own install config, which OpenFAKK2 read through `fs_basepath`; the harness now shadows that (see `tools/retail-compare/README.md`) |
 | `sv_allowdownload` | 1 | 0 | |
 | `g_skill` | 1 | not registered | Registered by the retail engine, not the game |
 | `paused` | 0 | 0 | Was ioquake3's `cl_paused`, renamed; `sv_paused` stays, read-only |
+| `cl_run` | 0 | 0 | Was 1 (Quake III's). Registered at `0x422626` with "0", `CVAR_ARCHIVE`; the run button (`0x41e540`) is set when `in_speed.active == (cl_run == 0)`. Julie walks with `+forward` alone until the player turns "always run" on; the shipped `default.cfg` binds only `SHIFT +speed` and sets no `cl_run` |
 
 ## Rules inferred, not read from the binary
 
@@ -100,7 +101,9 @@ corresponding retail code has not been examined.
 
 - **Traces skip entities whose solid type is `SOLID_NOT` or `SOLID_TRIGGER`.** Inferred
   from an actor seated in a non-solid chair (`homes1`) and items inside brush entities
-  (`towncenter_evil`).
+  (`towncenter_evil`); since read in `SV_ClipMoveToEntities` (`0x448fe0`), which also
+  showed which entities a trace skips for its pass entity (see "Firing a projectile"
+  below).
 - **A temporary box model takes its entity's contents.** First inferred from solid pods
   that solid-only traces must hit (`otto`, `oracle`); since read in `SV_ClipHandleForEntity`
   (`0x448660`), which also showed that a brush entity the game has made `SOLID_BBOX` clips
@@ -524,11 +527,50 @@ On `zoo`:
 - Before walking, all 18 fields `whatis` prints for the player match retail.
 - After walking, 17 match. The position differs by 2.0 units after 275 travelled
   (retail x = -2077.05, OpenFAKK2 x = -2079.06), under half a server frame of movement.
-  Probably the key press landing in a different part of the frame; not investigated.
+
+That gap is the harness, not the game. `probe-walk-jump.scr` (walk two seconds, jump,
+land, stop, player read every 0.1 s) shows every speed agreeing with retail: 91 u/s
+walking, a 400 u/s jump carrying 160 u/s forward, gravity 800, the same animations at
+the same times. The shortfall appears only while she slows down on the ground: 1 to 2
+units at each of the jump wind-up, the landing and the stop, 4 to 6 in all (retail ends
+at x = -1954.84 to -1956.16 over three runs, ours at -1960.45). Ground friction is
+integrated per movement command (`PM_Friction` in `bg_pmove.c`, `drop = control *
+pm_friction * frametime`), and the headless test player builds one command per server
+frame (`SV_TestPlayer_Frame`, `sv_fps` 20, 50 ms) where the retail client builds one per
+rendered frame. The stopping distances back this up: retail covers 9.08 units from 91 u/s
+to a stop, which the per-command model gives for 30 to 40 fps; ours at 20 Hz covers 7.54,
+the model's 7.63. At `sv_fps 40` ours stops at -1954.26 and through the real client at
+-1957.14, both inside retail's spread. The real client first *ran* this probe at 345 u/s
+because our `cl_run` defaulted to 1; retail's default is 0 (see "Cvar differences"), and
+ours now matches. A sandbox `config.cfg` written by an older build still carries
+`seta cl_run "1"`, since the cvar is archived; delete that line or the client keeps running.
 
 What the retail client puts in a movement command has not been read from the binary.
 Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
 127, and a turn rate of 140 degrees per second for `+left` / `+right`.
+
+### Firing a projectile
+
+`probe-sling.scr` gives the player the sling (`give weapon_sling.tik`, `use Sling dual`),
+charges it for 1.5 seconds with `+attackright`, releases, and dumps every entity 0.3
+seconds later. On `zoo` the rock (`fx_slingshot.tik`, entity 134) lands 864 units ahead on
+both engines, within 0.02 units of retail's position.
+
+This found one engine difference, fixed by following `fakk2.exe`. **Which entities a
+trace skips** (`SV_ClipMoveToEntities` at `0x448fe0`): besides the pass entity, its own
+missiles, and other missiles with the same owner, as in Quake III, retail also skips the
+*owner* of the pass entity, as Quake II did. The game moves a projectile with the
+projectile itself as the pass entity, and a fresh rock starts inside the player's box
+(it is launched from the sling's `tag_barrel` in Julie's hand, about 19 units ahead of
+her origin, and its 16-unit box overlaps her 30-unit one). Quake III's rule left the rock
+colliding with Julie whenever its first frame of movement did not
+carry it clear of her box: standing still and aiming steeply down, the rock stayed
+bouncing at her chest instead of flying past (`probe-sling-down.scr`, run through the
+real client because the test player cannot pitch; moving added her velocity to the rock
+and hid the problem). The same function confirmed the inferred `SOLID_NOT` /
+`SOLID_TRIGGER` rule above, and showed that when a trace starts inside an entity retail
+also records that entity's number in the accumulated trace, which Quake III did not.
+`SV_PointContents` has not been compared.
 
 ## The renderer and the map viewer
 
