@@ -473,19 +473,9 @@ Prints the value, default, and latched string of the given variable
 ============
 */
 void Cvar_Print( cvar_t *v ) {
-	Com_Printf ("\"%s\" is:\"%s" S_COLOR_WHITE "\"",
-			v->name, v->string );
-
-	if ( !( v->flags & CVAR_ROM ) ) {
-		if ( !Q_stricmp( v->string, v->resetString ) ) {
-			Com_Printf (", the default" );
-		} else {
-			Com_Printf (" default:\"%s" S_COLOR_WHITE "\"",
-					v->resetString );
-		}
-	}
-
-	Com_Printf ("\n");
+	// FAKK2 (Cvar_Command, fakk2.exe 0x42f3ae): the value and the default, always
+	Com_Printf ("\"%s\" is:\"%s\" default:\"%s\"\n",
+			v->name, v->string, v->resetString );
 
 	if ( v->latchedString ) {
 		Com_Printf( "latched: \"%s\"\n", v->latchedString );
@@ -674,6 +664,46 @@ void Cvar_SetValue( const char *var_name, float value) {
 		Com_sprintf (val, sizeof(val), "%f",value);
 	}
 	Cvar_Set (var_name, val);
+}
+
+/*
+============
+Cvar_Arithmetic_f
+
+FAKK2's add, subtract and scale (fakk2.exe 0x42f650, 0x42f700, 0x42f7b0): the
+cvar's value with the amount added, taken away or multiplied in, worded as
+Cvar_SetValue words a value and set as "set" sets one, so a read-only or cheat
+cvar is refused. Retail does the sum at the FPU's precision and prints the
+result as a double; so does this.
+============
+*/
+static void Cvar_Arithmetic_f( void ) {
+	const char	*cmd = Cmd_Argv( 0 );
+	float		amount;
+	double		value;
+	char		val[32];
+
+	if ( Cmd_Argc() < 3 ) {
+		Com_Printf( "usage: %s <variable> <amount>\n", cmd );
+		return;
+	}
+
+	amount = atof( Cmd_Argv( 2 ) );
+	value = Cvar_VariableValue( Cmd_Argv( 1 ) );
+	if ( !Q_stricmp( cmd, "add" ) ) {
+		value += amount;
+	} else if ( !Q_stricmp( cmd, "subtract" ) ) {
+		value -= amount;
+	} else {
+		value *= amount;
+	}
+
+	if ( value == (int)value ) {
+		Com_sprintf( val, sizeof( val ), "%i", (int)value );
+	} else {
+		Com_sprintf( val, sizeof( val ), "%f", value );
+	}
+	Cvar_Set2( Cmd_Argv( 1 ), val, qfalse );
 }
 
 /*
@@ -1463,4 +1493,11 @@ void Cvar_Init (void)
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
 	Cmd_AddCommand ("cvar_modified", Cvar_ListModified_f);
 	Cmd_AddCommand ("cvar_restart", Cvar_Restart_f);
+
+	Cmd_AddCommand ("add", Cvar_Arithmetic_f);
+	Cmd_SetCommandCompletionFunc( "add", Cvar_CompleteCvarName );
+	Cmd_AddCommand ("subtract", Cvar_Arithmetic_f);
+	Cmd_SetCommandCompletionFunc( "subtract", Cvar_CompleteCvarName );
+	Cmd_AddCommand ("scale", Cvar_Arithmetic_f);
+	Cmd_SetCommandCompletionFunc( "scale", Cvar_CompleteCvarName );
 }

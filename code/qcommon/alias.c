@@ -336,6 +336,7 @@ const char *Alias_ListFindRandom( AliasList_t *list, const char *alias ) {
 	return node ? node->real_name : NULL;
 }
 
+// developer output, as retail's (fakk2.exe 0x41c460 prints through Com_DPrintf)
 void Alias_ListDump( AliasList_t *list ) {
 	int		i;
 
@@ -344,14 +345,14 @@ void Alias_ListDump( AliasList_t *list ) {
 	}
 	Alias_ListSort( list );
 
-	Com_Printf( "Alias List: %s\n", list->name );
-	Com_Printf( "Alias Name / Weight / Real Name\n" );
+	Com_DPrintf( "Alias List: %s\n", list->name );
+	Com_DPrintf( "Alias Name / Weight / Real Name\n" );
 	for ( i = 0 ; i < list->num_in_list ; i++ ) {
 		AliasListNode_t	*node = list->sorted_list[i];
 
-		Com_Printf( "%32s %3.2f %s\n", node->alias_name, node->weight, node->real_name );
+		Com_DPrintf( "%32s %3.2f %s\n", node->alias_name, node->weight, node->real_name );
 	}
-	Com_Printf( "%d total aliases\n", list->num_in_list );
+	Com_DPrintf( "%d total aliases\n", list->num_in_list );
 }
 
 /*

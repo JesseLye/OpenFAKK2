@@ -128,10 +128,7 @@ Missing from OpenFAKK2, to be done:
   `ctrlbindlist`, the `cl_altbindings` and `cl_ctrlbindings` switches (advanced options),
   and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
   `weapgroup<n>` and CTRL+n to `saveweaps <n>`; here those twenty lines fail.
-- Console: `add`, `subtract`, `scale` (cvar arithmetic, which Ritual's TIKI document uses
-  for `r_lodscale`), `alias` and `aliasdump`, and the `com_dropsim` cvar. `echo` and a
-  cvar's printed value are formatted differently (retail: `"mapdir" is:"" default:""`,
-  and `echo` ends each word with a space).
+- Console: the `com_dropsim` cvar.
 - Input: `m_invert_pitch` (the controls menu's invert check box), `freelook`, `m_up`,
   `+togglemouse`. OpenFAKK2 names the holster button `+holsterweapon` where retail has
   `+holster`; no retail file binds either.
@@ -204,6 +201,22 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   and writes `foo`; ours does the same. Retail also kept the name in the registry for the
   next start; ours does not. Quake III ran only `default.cfg`, its own config and
   `autoexec.cfg`.
+- **Console aliases** are Quake II's (`alias` `0x42c8a0`): `alias` lists them,
+  `alias <name> [words]` makes one of the words joined by spaces as a line of its own
+  (names under 32 characters), and a command line whose first word is no command but an
+  alias runs it (`Cmd_ExecuteString` `0x42cf0b`: commands, then aliases, then cvars,
+  then the two game modules, then the server), at most 16 times between two runs of the
+  command buffer ("ALIAS_LOOP_COUNT"). The config file keeps them under its own heading
+  (`0x42cab0`); retail's config file has three headed parts, bindings, cvars and
+  aliases, and ours now has too. `aliasdump` (the client's, `0x41c550`) prints the
+  global sound alias list, as developer output (`0x41c460`).
+- **`add`, `subtract` and `scale`** (`0x42f650`, `0x42f700`, `0x42f7b0`) change a cvar
+  by an amount, as `set` would set it (read-only and cheat cvars refuse), writing a
+  whole result as an integer.
+- **How the console prints**: a cvar as `"name" is:"value" default:"default"`
+  (`0x42f3ae`), and `echo` each word followed by a space (`0x42c780`). One script run
+  on both games (sums, alias listing, an alias, a loop of two aliases, `echo`) printed
+  the same lines.
 - **`cd` and `dir`** (`0x431b50`, `0x431cd0`, registered in `FS_Startup` with `path` and
   `touchFile`) work on the operating system's directories, not the game's file system.
   `fs_filedir` is where they start, the game directory's `maps` folder at first; `cd

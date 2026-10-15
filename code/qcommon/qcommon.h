@@ -470,6 +470,10 @@ void	Cmd_TokenizeStringIgnoreQuotes( const char *text_in );
 // breaks the string up into arg tokens.
 
 void	Cmd_ExecuteString( const char *text );
+
+// FAKK2's console aliases (Quake II's)
+void	Cmd_SetAlias( const char *name, const char *value );
+void	Cmd_WriteAliases( fileHandle_t f );
 // Parses a single line of text into arguments and tries to execute it
 // as if it was typed at the console
 
