@@ -841,6 +841,7 @@ int			Com_Filter(char *filter, char *name, int casesensitive);
 int			Com_FilterPath(char *filter, char *name, int casesensitive);
 int			Com_RealTime(qtime_t *qtime);
 qboolean	Com_SafeMode( void );
+const char	*Com_ConfigName( void );
 void		Com_RunAndTimeServerPacket(netadr_t *evFrom, msg_t *buf);
 
 qboolean	Com_IsVoipTarget(uint8_t *voipTargets, int voipTargetsSize, int clientNum);

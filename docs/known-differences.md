@@ -124,9 +124,6 @@ retail's default is 3 (640x480).
 
 Missing from OpenFAKK2, to be done:
 
-- `exec menu.cfg` and `exec localized.cfg` at startup (both strings are in `fakk2.exe`):
-  `menu.cfg` gives the menus' defaults (`g_skill`, `cl_altbindings`, `cl_ctrlbindings`,
-  the third-person camera), `localized.cfg` the dialog texts.
 - Weapon groups: `altbind`, `ctrlbind`, `unaltbind`, `unctrlbind`, `altbindlist`,
   `ctrlbindlist`, the `cl_altbindings` and `cl_ctrlbindings` switches (advanced options),
   and `saveweaps <n>` ("Saved Weapon Group %d"). `default.cfg` binds ALT+n to
@@ -197,6 +194,16 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
 
 ## The console
 
+- **The configs run at startup** (`Com_Init` `0x42e14b`): `default.cfg`, `menu.cfg` (the
+  menus' defaults: `g_skill`, `cl_altbindings`, `cl_ctrlbindings`, the third-person
+  camera), the player's config, `localized.cfg` (the dialog texts) and `autoexec.cfg`;
+  only the player's config is skipped in safe mode. The `config` cvar names the player's
+  config, `config.cfg` when not set; it prints "Config: <name>" and is where the
+  configuration is written (`0x42e710`, `0x42e650`). Retail reads it with `exec`, which
+  adds `.cfg`, and writes it under the name as given, so `+set config foo` reads `foo.cfg`
+  and writes `foo`; ours does the same. Retail also kept the name in the registry for the
+  next start; ours does not. Quake III ran only `default.cfg`, its own config and
+  `autoexec.cfg`.
 - **`cd` and `dir`** (`0x431b50`, `0x431cd0`, registered in `FS_Startup` with `path` and
   `touchFile`) work on the operating system's directories, not the game's file system.
   `fs_filedir` is where they start, the game directory's `maps` folder at first; `cd

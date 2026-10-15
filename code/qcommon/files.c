@@ -1340,7 +1340,7 @@ long FS_FOpenFileRead(const char *filename, fileHandle_t *file, qboolean uniqueF
 	if(!fs_searchpaths)
 		Com_Error(ERR_FATAL, "Filesystem call made without initialization");
 
-	isLocalConfig = !strcmp(filename, "autoexec.cfg") || !strcmp(filename, Q3CONFIG_CFG);
+	isLocalConfig = !strcmp(filename, "autoexec.cfg") || !strcmp(filename, Com_ConfigName());
 	for(search = fs_searchpaths; search; search = search->next)
 	{
 		// autoexec.cfg and q3config.cfg can only be loaded outside of pk3 files.
@@ -4526,7 +4526,7 @@ void FS_Restart( int checksumFeed ) {
 
 		// skip the q3config.cfg if "safe" is on the command line
 		if ( !Com_SafeMode() ) {
-			Cbuf_AddText ("exec " Q3CONFIG_CFG "\n");
+			Cbuf_AddText( va( "exec %s\n", Com_ConfigName() ) );
 		}
 	}
 

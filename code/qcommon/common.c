@@ -57,6 +57,7 @@ fileHandle_t	com_journalDataFile;		// config files are written here
 
 cvar_t	*com_speeds;
 cvar_t	*com_developer;
+cvar_t	*com_config;			// FAKK2: the player's config file, see Com_ExecuteCfg
 cvar_t	*com_dedicated;
 cvar_t	*com_timescale;
 cvar_t	*com_fixedtime;
@@ -2371,19 +2372,50 @@ For controlling environment variables
 ==================
 */
 
+/*
+FAKK2 (Com_Init, fakk2.exe 0x42e14b): default.cfg, then the menus' defaults in
+menu.cfg, then the player's config, then the dialog texts in localized.cfg and
+autoexec.cfg. The "config" cvar names the player's config, config.cfg when it is
+not set (retail also remembered a name given on the command line in the
+registry); only that file is skipped in safe mode, and it is the one the
+configuration is written back to.
+*/
 void Com_ExecuteCfg(void)
 {
 	Cbuf_ExecuteText(EXEC_NOW, "exec default.cfg\n");
 	Cbuf_Execute(); // Always execute after exec to prevent text buffer overflowing
+	Cbuf_ExecuteText(EXEC_NOW, "exec menu.cfg\n");
+	Cbuf_Execute();
+
+	Com_StartupVariable( "config" );
+	com_config = Cvar_Get( "config", "", 0 );
+	if ( !com_config->string[0] ) {
+		Cvar_Set( "config", Q3CONFIG_CFG );
+	}
 
 	if(!Com_SafeMode())
 	{
-		// skip the q3config.cfg and autoexec.cfg if "safe" is on the command line
-		Cbuf_ExecuteText(EXEC_NOW, "exec " Q3CONFIG_CFG "\n");
-		Cbuf_Execute();
-		Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
+		// skip the config.cfg if "safe" is on the command line
+		Cbuf_ExecuteText(EXEC_NOW, va( "exec %s\n", Com_ConfigName() ));
 		Cbuf_Execute();
 	}
+	Com_Printf( "Config: %s \n", Com_ConfigName() );
+
+	Cbuf_ExecuteText(EXEC_NOW, "exec localized.cfg\n");
+	Cbuf_Execute();
+	Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
+	Cbuf_Execute();
+}
+
+/*
+==================
+Com_ConfigName
+
+The file the player's configuration is read from and written to
+==================
+*/
+const char *Com_ConfigName( void ) {
+	return ( com_config && com_config->string[0] ) ? com_config->string : Q3CONFIG_CFG;
 }
 
 /*
@@ -2989,7 +3021,7 @@ void Com_WriteConfiguration( void ) {
 	}
 	cvar_modifiedFlags &= ~CVAR_ARCHIVE;
 
-	Com_WriteConfigToFile( Q3CONFIG_CFG );
+	Com_WriteConfigToFile( Com_ConfigName() );
 
 	// not needed for dedicated or standalone
 #if !defined(DEDICATED) && !defined(STANDALONE)
