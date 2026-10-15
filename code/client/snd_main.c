@@ -186,12 +186,204 @@ void S_StopAllSounds( void )
 }
 
 /*
+FAKK2's looping sounds. The client game module names no entity for a looping
+sound: the retail engine files each one under its sound (0x45c2d0, a slot of
+that sound not yet taken this frame, else a free one), and its sound update
+(0x45c470) plays every stationary loop of one sound as a single Miles sample.
+That sample's volume is the sum of what each loop would give at its distance
+(the first loop's volume and minimum distance for all of them, full within the
+minimum distance, the inverse of the distance beyond, nothing past 64 times
+it), no more than the sound information's "maxfactor" times the loudest of
+them when that is 1 or more, and no more than 1; it sits half the minimum
+distance from the listener, in the direction of the loops weighted by their
+volumes. A new loop of a sound already playing joins that sample where it is.
+The module passes no velocity, so every loop is stationary (retail plays a
+moving one on its own).
+
+Sounds that burn on several entities at once rely on it: global/sound0.txt
+gives the fire on a burning creature (flame2.wav, three on a large one, put
+out and lit again as the fire sword keeps hitting it) "maxfactor 1", so any
+number of them sounds like the nearest one. Played one per entity, each new
+fire started the sound again from its beginning over the others.
+
+So the frame's loops are gathered here and handed to the backend when the
+module respatializes (or at the update, if it does not), one per sound, under
+a key kept from frame to frame for that sound.
+*/
+#define	S_MAX_LOOPS			MAX_GENTITIES
+#define	S_MAX_LOOP_KEYS		64
+#define	S_LOOP_KEY_BASE		( ENTITYNUM_WORLD - 1 )	// keys count down from here, clear of the low entity numbers
+#define	S_MAX_LOOP_SFX		4096					// MAX_SFX in both backends
+
+typedef struct {
+	vec3_t		origin;
+	sfxHandle_t	sfx;
+	float		volume;
+	float		minDist;
+	float		gain;
+	qboolean	taken;
+} sLoop_t;
+
+static sLoop_t				s_loops[S_MAX_LOOPS];
+static int					s_numLoops;
+static qboolean				s_loopsChanged;
+static int					s_loopKeySfx[S_MAX_LOOP_KEYS];	// each key's sound plus one, 0 for none
+static const soundInfo_t	*s_loopSfxInfo[S_MAX_LOOP_SFX];
+static vec3_t				s_listenerOrigin;
+
+/*
+=================
+S_ResetLoops
+=================
+*/
+static void S_ResetLoops( void )
+{
+	s_numLoops = 0;
+	s_loopsChanged = qfalse;
+	Com_Memset( s_loopKeySfx, 0, sizeof( s_loopKeySfx ) );
+	Com_Memset( (void *)s_loopSfxInfo, 0, sizeof( s_loopSfxInfo ) );
+}
+
+/*
+=================
+S_SendLoops
+
+Merges the frame's loops by sound and hands them to the backend, once for
+each S_ClearLoopingSounds.
+=================
+*/
+static void S_SendLoops( void )
+{
+	sfxHandle_t	sfx[S_MAX_LOOP_KEYS];
+	vec3_t		origin[S_MAX_LOOP_KEYS];
+	float		volume[S_MAX_LOOP_KEYS], minDist[S_MAX_LOOP_KEYS];
+	int			key[S_MAX_LOOP_KEYS];
+	qboolean	keyUsed[S_MAX_LOOP_KEYS];
+	int			numSounds = 0;
+	int			i, j, k;
+
+	if( !s_loopsChanged ) {
+		return;
+	}
+	s_loopsChanged = qfalse;
+
+	for( i = 0; i < s_numLoops; i++ ) {
+		s_loops[i].taken = qfalse;
+	}
+
+	for( i = 0; i < s_numLoops && numSounds < S_MAX_LOOP_KEYS; i++ ) {
+		sLoop_t				*lead = &s_loops[i];
+		const soundInfo_t	*info;
+		float				vol, dist, total = 0, loudest = 0;
+		vec3_t				dir, v;
+
+		if( lead->taken ) {
+			continue;
+		}
+
+		info = ( lead->sfx >= 0 && lead->sfx < S_MAX_LOOP_SFX ) ? s_loopSfxInfo[lead->sfx] : NULL;
+		if( !info ) {
+			info = S_SoundInfoForName( NULL );
+		}
+		vol = lead->volume < 0 ? info->volume : lead->volume;
+		minDist[numSounds] = lead->minDist < 0 ? info->minDist : lead->minDist;
+
+		for( j = i; j < s_numLoops; j++ ) {
+			sLoop_t	*loop = &s_loops[j];
+
+			if( loop->sfx != lead->sfx ) {
+				continue;
+			}
+			loop->taken = qtrue;
+			dist = Distance( loop->origin, s_listenerOrigin );
+			if( dist <= minDist[numSounds] ) {
+				loop->gain = vol;
+			} else if( dist < minDist[numSounds] * SOUND_MAX_DIST_FACTOR ) {
+				loop->gain = vol * minDist[numSounds] / dist;
+			} else {
+				loop->gain = 0;
+			}
+			total += loop->gain;
+			if( loop->gain > loudest ) {
+				loudest = loop->gain;
+			}
+		}
+
+		if( info->maxFactor >= 1 && total > info->maxFactor * loudest ) {
+			total = info->maxFactor * loudest;
+		}
+		if( total <= 0 ) {
+			continue;
+		}
+
+		VectorClear( dir );
+		for( j = i; j < s_numLoops; j++ ) {
+			sLoop_t	*loop = &s_loops[j];
+
+			if( loop->sfx != lead->sfx ) {
+				continue;
+			}
+			VectorSubtract( loop->origin, s_listenerOrigin, v );
+			VectorNormalize( v );
+			VectorMA( dir, loop->gain / total, v, dir );
+		}
+		VectorNormalize( dir );
+		VectorMA( s_listenerOrigin, minDist[numSounds] * 0.5f, dir, origin[numSounds] );
+
+		sfx[numSounds] = lead->sfx;
+		volume[numSounds] = total > 1 ? 1 : total;
+		numSounds++;
+	}
+
+	// a sound keeps the key it had, so the backend carries on playing it
+	Com_Memset( keyUsed, 0, sizeof( keyUsed ) );
+	for( i = 0; i < numSounds; i++ ) {
+		key[i] = -1;
+		for( k = 0; k < S_MAX_LOOP_KEYS; k++ ) {
+			if( s_loopKeySfx[k] == sfx[i] + 1 ) {
+				key[i] = k;
+				keyUsed[k] = qtrue;
+				break;
+			}
+		}
+	}
+	for( i = 0; i < numSounds; i++ ) {
+		if( key[i] >= 0 ) {
+			continue;
+		}
+		for( k = 0; k < S_MAX_LOOP_KEYS; k++ ) {
+			if( !keyUsed[k] ) {
+				key[i] = k;
+				keyUsed[k] = qtrue;
+				break;
+			}
+		}
+	}
+	for( k = 0; k < S_MAX_LOOP_KEYS; k++ ) {
+		if( !keyUsed[k] ) {
+			s_loopKeySfx[k] = 0;
+		}
+	}
+
+	for( i = 0; i < numSounds; i++ ) {
+		s_loopKeySfx[key[i]] = sfx[i] + 1;
+		if( si.AddLoopingSound ) {
+			si.AddLoopingSound( S_LOOP_KEY_BASE - key[i], origin[i], vec3_origin,
+				sfx[i], volume[i], minDist[i] );
+		}
+	}
+}
+
+/*
 =================
 S_ClearLoopingSounds
 =================
 */
 void S_ClearLoopingSounds( qboolean killall )
 {
+	s_numLoops = 0;
+	s_loopsChanged = qtrue;
+
 	if( si.ClearLoopingSounds ) {
 		si.ClearLoopingSounds( killall );
 	}
@@ -202,12 +394,19 @@ void S_ClearLoopingSounds( qboolean killall )
 S_AddLoopingSound
 =================
 */
-void S_AddLoopingSound( int entityNum, const vec3_t origin,
-		const vec3_t velocity, sfxHandle_t sfx, float volume, float minDist )
+void S_AddLoopingSound( const vec3_t origin, sfxHandle_t sfx, float volume, float minDist )
 {
-	if( si.AddLoopingSound ) {
-		si.AddLoopingSound( entityNum, origin, velocity, sfx, volume, minDist );
+	sLoop_t	*loop;
+
+	if( s_numLoops >= S_MAX_LOOPS ) {
+		return;
 	}
+	loop = &s_loops[s_numLoops++];
+	VectorCopy( origin, loop->origin );
+	loop->sfx = sfx;
+	loop->volume = volume;
+	loop->minDist = minDist;
+	s_loopsChanged = qtrue;
 }
 
 /*
@@ -243,6 +442,11 @@ S_Respatialize
 void S_Respatialize( int entityNum, const vec3_t origin,
 		vec3_t axis[3], int inwater )
 {
+	// the module respatializes after adding the frame's loops, and the
+	// software mixer mixes its loops here
+	VectorCopy( origin, s_listenerOrigin );
+	S_SendLoops( );
+
 	if( si.Respatialize ) {
 		si.Respatialize( entityNum, origin, axis, inwater );
 	}
@@ -288,6 +492,8 @@ void S_Update( void )
 	
 	MUSIC_Update( );	// FAKK2: feeds the songs through the raw streams
 
+	S_SendLoops( );		// a frame that cleared its loops without respatializing
+
 	if( si.Update ) {
 		si.Update( );
 	}
@@ -324,11 +530,16 @@ S_RegisterSound
 */
 sfxHandle_t	S_RegisterSound( const char *sample, qboolean compressed )
 {
-	if( si.RegisterSound ) {
-		return si.RegisterSound( sample, compressed );
-	} else {
+	sfxHandle_t	sfx;
+
+	if( !si.RegisterSound ) {
 		return 0;
 	}
+	sfx = si.RegisterSound( sample, compressed );
+	if( sfx >= 0 && sfx < S_MAX_LOOP_SFX ) {
+		s_loopSfxInfo[sfx] = S_SoundInfoForName( sample );	// for the loops' maxfactor
+	}
+	return sfx;
 }
 
 /*
@@ -592,6 +803,7 @@ void S_Shutdown( void )
 	}
 
 	Com_Memset( &si, 0, sizeof( soundInterface_t ) );
+	S_ResetLoops( );
 
 	Cmd_RemoveCommand( "play" );
 	Cmd_RemoveCommand( "music");

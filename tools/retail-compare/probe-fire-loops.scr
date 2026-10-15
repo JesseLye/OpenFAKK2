@@ -1,0 +1,32 @@
+// Several loops of one sound at once: the fire a burning creature carries
+// (fx_catchfire.tik loops sound/environment/fire/flame2.wav, "maxfactor 1" in
+// global/sound0.txt), for a recording at zoo's start. One fire 80 units ahead for
+// 4 s, then two more beside it for 4 s, then the first put out and a fourth lit
+// for 4 s (what the fire sword does to a burning creature), then silence. The
+// retail engine plays the loops of one sound as one sample no louder than
+// maxfactor times the loudest (0x45c470), so all three phases sound alike. The
+// player starts at -2352 1568 0 facing +x; the fires are at eye height.
+probe:
+waitforplayer
+wait 2
+spawn script_origin targetname f1 origin "-2272 1568 80"
+wait 0.2
+$f1 loopsound sound/environment/fire/flame2.wav
+wait 4
+spawn script_origin targetname f2 origin "-2272 1600 80"
+spawn script_origin targetname f3 origin "-2272 1536 80"
+wait 0.2
+$f2 loopsound sound/environment/fire/flame2.wav
+$f3 loopsound sound/environment/fire/flame2.wav
+wait 4
+$f1 remove
+spawn script_origin targetname f4 origin "-2272 1584 80"
+wait 0.2
+$f4 loopsound sound/environment/fire/flame2.wav
+wait 4
+$f2 remove
+$f3 remove
+$f4 remove
+wait 2
+stuffcmd "pendingevents"
+end

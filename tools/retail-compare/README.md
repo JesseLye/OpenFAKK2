@@ -208,6 +208,10 @@ sound; play a tone of known level through it first if in doubt. The probes put
   both, 3 s each with 3 s between; the game's own sounds, not the tone, so read it with
   `rms` over each burst. Use `-Volume 0.06`: the uzis are loud enough at 0.25 to reach
   the output path's compression.
+- `probe-fire-loops`: a burning creature's fire loop (`flame2.wav`, `maxfactor 1`) 80
+  units ahead, then three of them, then one put out and another lit, 4 s each; the
+  retail engine plays loops of one sound as one, so all three stretches should read
+  alike with `rms`.
 
 `save-load.ps1 -Map <map>` checks saved games against themselves rather than against
 retail: it plays the map with `probe-save`, which saves the game three seconds after the
