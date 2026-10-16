@@ -295,6 +295,10 @@ static qboolean LF_Visible( const lfSet_t *set, const viewParms_t *view ) {
 LF_DrawQuad
 
 A quad in the -1..1 screen space: x, y its centre, sx, sy its half-sizes.
+Not retail's: in a view wider than 4:3 a half-width is measured against the
+width of a 4:3 view of the same height, so a quad keeps the shape and size it
+has at 4:3 instead of stretching with the screen (the view shows more to the
+sides there, see CL_CG_R_RenderScene). Retail's 4:3 views are unchanged.
 =================
 */
 static void LF_DrawQuad( const viewParms_t *view, float x, float y, float sx, float sy, const vec4_t color, shader_t *shader ) {
@@ -307,6 +311,12 @@ static void LF_DrawQuad( const viewParms_t *view, float x, float y, float sx, fl
 		return;
 	}
 	RE_SetColor( color );
+	if ( view->viewportWidth * 3 > view->viewportHeight * 4 ) {
+		float	sizeW = halfH * 4 / 3;
+
+		RE_StretchPic( cx + x * halfW - sx * sizeW, cy - ( y + sy ) * halfH, 2 * sx * sizeW, 2 * sy * halfH, 0, 0, 1, 1, shader->index );
+		return;
+	}
 	RE_StretchPic( cx + ( x - sx ) * halfW, cy - ( y + sy ) * halfH, 2 * sx * halfW, 2 * sy * halfH, 0, 0, 1, 1, shader->index );
 }
 

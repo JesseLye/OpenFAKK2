@@ -2150,6 +2150,40 @@ What is implemented, and on what basis:
   the rest at the edges of the moving clouds. Also checked on `homes1`, in a window shot
   (`PrintWindow`, as the suite takes them), through `vid_restart` and in a save's picture.
 
+### Views wider than 4:3 (deliberate)
+
+Retail ran at 4:3 shapes. Its client game module (`CG_CalcFov`, `cg_view.c:398`) keeps
+the horizontal field of view it is given, the player state's `fov` (90 by default, or a
+script camera's), and derives the vertical one from the view's width and height, so a
+wider window shows the same width and less height: the picture is cropped at the top and
+bottom and looks zoomed in. OpenFAKK2 shows more to the sides instead (Hor+), only
+beyond 4:3; at 4:3 and narrower nothing changes.
+
+- **The field of view.** The engine widens the module's scene as it passes it to the
+  renderer (`CL_CG_R_RenderScene`, `cl_cgame.c`), so it works with the rebuilt module and
+  with Ritual's `cgamex86.dll` alike: both half-angle tangents are scaled by the view's
+  width over that of a 4:3 view of the same height. The vertical field of view becomes
+  the one a 4:3 view of the module's horizontal one has, and the horizontal one fills the
+  width (90 at 4:3 is 106.3 by 73.7 at 16:9). Scaling the tangents keeps the module's
+  underwater warp, which moves the two apart. The module's own `cg.refdef` is left as it
+  was; nothing in it reads the field of view back (its zoom sensitivity is never set, as
+  FAKK2's module never zooms). Scenes without the world (`RDF_NOWORLDMODEL`) are left as
+  they are, and the inventory's and HUD's model windows draw through the client, not
+  this path. Script cameras' fields of view come through the player state and widen the
+  same way.
+- **`cl_widescreenFov`** (archived, 1; not retail's): 0 keeps retail's crop.
+- **Lens flares** project with the view's fields of view, so they follow. Their quads are
+  sized in the view's -1..1 screen space (`LF_DrawQuad`), which beyond 4:3 would stretch
+  them across with the window; there a quad's width is measured against a 4:3 view of the
+  same height, so a flare keeps its 4:3 shape and size. This applies whatever
+  `cl_widescreenFov` is.
+
+Checked with `probe-lensflare` (a script camera on `training`'s four targets, without and
+with their flares) at `r_mode -1` 960x540 and 720x540: the middle 720 columns of the
+16:9 shots matched the 4:3 shots to a mean of 0.11 per channel, the difference all in
+the HUD, and the flares added the same light to both (within 1%). With
+`cl_widescreenFov 0` the 16:9 shot is retail's crop.
+
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
   triggers the player must walk into. The test player can now be given key presses, but

@@ -66,6 +66,7 @@ cvar_t	*rcon_client_password;
 cvar_t	*rconAddress;
 
 cvar_t	*cl_timeout;
+cvar_t	*cl_widescreenFov;
 cvar_t	*cl_maxpackets;
 cvar_t	*cl_packetdup;
 cvar_t	*cl_timeNudge;
@@ -3621,6 +3622,7 @@ void CL_Init( void ) {
 	cl_timeout = Cvar_Get ("cl_timeout", "125", 0);	// FAKK2: the retail default
 
 	cl_timeNudge = Cvar_Get ("cl_timeNudge", "0", CVAR_TEMP );
+	cl_widescreenFov = Cvar_Get( "cl_widescreenFov", "1", CVAR_ARCHIVE );	// not retail's: see CL_CG_R_RenderScene
 	cl_shownet = Cvar_Get ("cl_shownet", "0", CVAR_TEMP );
 	cl_showSend = Cvar_Get ("cl_showSend", "0", CVAR_TEMP );
 	cl_showTimeDelta = Cvar_Get ("cl_showTimeDelta", "0", CVAR_TEMP );
