@@ -4,8 +4,10 @@
 
 tone: the levels of the probes' 1 kHz tone, one per plateau (sound_levels.py's
 tone_levels and plateaus), compared plateau by plateau and channel by channel.
-rms: each recording's power per channel in one-second windows, compared window by
-window over the length of the shorter. Prints "max level difference: <dB> dB".
+rms: for music and game sounds, the spread of each recording's power per channel over
+the quarter seconds that have sound in them (50th, 75th and 90th percentiles), compared;
+it does not depend on when each game started the sound. Prints "max level difference:
+<dB> dB".
 """
 import os
 import sys
@@ -27,20 +29,28 @@ def tone(a, b):
     return float(max(diffs)) + (10.0 * abs(len(pa) - len(pb))), note
 
 
+def active_levels(x):
+    """Each quarter second's power per channel in dB, for the quarters with sound in them."""
+    win = sound_levels.RATE // 4
+    n = len(x) // win
+    levels = np.array([10 * np.log10(np.maximum((x[i * win:(i + 1) * win].astype(np.float64) ** 2).mean(axis=0), 1e-12)) for i in range(n)])
+    return levels[levels.max(axis=1) > -60]
+
+
 def rms(a, b):
-    rate = sound_levels.RATE
-    n = min(len(a), len(b)) // rate
-    out = []
-    for i in range(n):
-        wa = a[i * rate:(i + 1) * rate].astype(np.float64)
-        wb = b[i * rate:(i + 1) * rate].astype(np.float64)
-        la = 10 * np.log10(np.maximum((wa ** 2).mean(axis=0), 1e-12))
-        lb = 10 * np.log10(np.maximum((wb ** 2).mean(axis=0), 1e-12))
-        if max(la.max(), lb.max()) > -60:  # ignore silence on both
-            out.append(np.abs(la - lb).max())
-    if not out:
-        return 100.0, 'no sound in either recording'
-    return float(max(out)), '%d one-second windows compared' % len(out)
+    # The two games start the sound at slightly different moments, so window against
+    # window compares sound with silence (90 dB on music). Instead: the spread of levels
+    # while there is sound, its 50th, 75th and 90th percentiles per channel. Not the
+    # quieter quarters: they are the decays between the uzi's bursts, which moved 6 dB
+    # between two runs of ours.
+    la, lb = active_levels(a), active_levels(b)
+    if not len(la) or not len(lb):
+        return 100.0, 'no sound in %s' % ('either recording' if not len(la) and not len(lb) else 'one recording')
+    pa = np.percentile(la, [50, 75, 90], axis=0)
+    pb = np.percentile(lb, [50, 75, 90], axis=0)
+    note = 'sound for %.1f s retail, %.1f s ours; median L/R %.1f/%.1f retail, %.1f/%.1f ours' % (
+        len(la) / 4, len(lb) / 4, pa[0][0], pa[0][1], pb[0][0], pb[0][1])
+    return float(np.abs(pa - pb).max()), note
 
 
 def main():

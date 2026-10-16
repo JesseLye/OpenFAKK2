@@ -191,11 +191,17 @@
       "knownIssue": "crashes (exit 0xC0000028, no report) changing from creeperpens to zoo 60 frames after the load, before the player has entered; see docs/known-differences.md, Changing maps before the player enters",
       "note": "the restart check's map changes, each started 60 frames after the last, before the player has entered" },
 
-    { "name": "sound-pan", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-sound-pan", "map": "zoo", "measure": "tone" },
-    { "name": "sound-distance", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-sound-distance", "map": "zoo", "measure": "tone" },
-    { "name": "sound-turn", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-sound-turn", "map": "zoo", "measure": "tone" },
-    { "name": "music", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-music", "map": "zoo", "music": 0.6, "measure": "rms" },
-    { "name": "uzi", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-uzi", "map": "zoo", "volume": 0.06, "measure": "rms" },
-    { "name": "fire-loops", "areas": ["sound"], "level": "full", "sound": true, "kind": "sound", "probe": "probe-fire-loops", "map": "zoo", "measure": "rms" }
+    { "name": "sound-pan", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-sound-pan", "map": "zoo", "measure": "tone" },
+    { "name": "sound-distance", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-sound-distance", "map": "zoo", "measure": "tone" },
+    { "name": "sound-turn", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-sound-turn", "map": "zoo", "measure": "tone" },
+    { "name": "music", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-music", "map": "zoo", "music": 0.6, "measure": "rms" },
+    { "name": "uzi", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-uzi", "map": "zoo", "volume": 0.06, "measure": "rms" },
+    { "name": "fire-loops", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",
+      "kind": "sound", "probe": "probe-fire-loops", "map": "zoo", "measure": "rms" }
   ]
 }

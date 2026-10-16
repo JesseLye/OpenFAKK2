@@ -110,7 +110,15 @@ check is for.
 | `cfgrun` | the client with a config (`cfg`, `{maps} ...` or `{each} ...` per map) | `doneMarker` reached; console warnings (`countWarnings`); frame times (`frameTimes`, com_speeds) |
 | `saveload` | `save-load.ps1` | level variables and readings differing between the saved and the loaded game |
 | `chain` | `level-chain.ps1` | levels reached, autosaves, inventory against retail's run |
-| `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`) |
+| `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`): the probe tone's plateaus (`tone`), or the 50th, 75th and 90th percentiles of the levels while sound plays (`rms`, music and game sounds, so the two games' start times do not matter) |
+
+The sound checks record the speakers by WASAPI loopback, so they play out loud and record
+anything else playing; run them with `-Sound` when nobody minds. They need pyaudiowpatch
+and numpy, which a virtual environment in the main checkout's `build\suite\sound-venv`
+gets on first use (`FAKK2_SOUND_PYTHON` names another Python). Two runs of ours differ by
+0.2 dB or less; ours against retail, 2026-10-16: pan 0.7, turn 0.4, music 0.5, fire
+loops 0.2, uzi 1.6 and distance 5.5 dB (far sounds; retail's Miles volumes are whole
+numbers).
 
 Console warnings are counted without two kinds every run prints by the hundred: the
 `.tga` lookups that fall back to `.ftx`, and the collision model's bevel notes.

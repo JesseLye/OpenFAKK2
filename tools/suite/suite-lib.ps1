@@ -17,6 +17,23 @@ $CaptureScript = Join-Path $RepoRoot '.claude\skills\retail-capture\scripts\capt
 $ProbeClient = Join-Path $RepoRoot '.claude\skills\retail-probe\scripts\probe-client.ps1'
 $Python = if ($env:FAKK2_PYTHON) { $env:FAKK2_PYTHON } else { 'python' }
 
+# The Python the sound checks record and measure with: it needs pyaudiowpatch (WASAPI
+# loopback) and numpy, which the system Python lacks. FAKK2_SOUND_PYTHON names one;
+# otherwise a virtual environment in the main checkout's build\suite\sound-venv, made on
+# first use (pip install pyaudiowpatch numpy).
+function Get-SoundPython {
+    if ($env:FAKK2_SOUND_PYTHON) { return $env:FAKK2_SOUND_PYTHON }
+    $venv = Join-Path $SuiteShared 'sound-venv'
+    $py = Join-Path $venv 'Scripts\python.exe'
+    if (-not (Test-Path $py)) {
+        New-Item -ItemType Directory -Force $SuiteShared | Out-Null
+        & $Python -m venv $venv | Out-Null
+        & $py -m pip install --quiet pyaudiowpatch numpy | Out-Null
+        if ($LASTEXITCODE) { throw "could not install pyaudiowpatch and numpy into $venv" }
+    }
+    $py
+}
+
 function Read-SuiteConfig { Get-Content (Join-Path $SuiteDir 'suite.json') -Raw | ConvertFrom-Json }
 
 function Get-Prop($Object, [string]$Name, $Default = $null) {
@@ -270,6 +287,7 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
             $mus = Get-Prop $Check 'music'; if ($mus) { $sr.Music = [double]$mus }
             if ($secs) { $sr.Secs = $secs }
             if ($Side -eq 'ours' -and $Bin) { $sr.Bin = $Bin }
+            $sr.Python = Get-SoundPython
             $output = & (Join-Path $RetailCompare 'sound-record.ps1') @sr
             Copy-IfThere (Join-Path $LogDir "sound-$engine-$probe-suite.npy") "$Out\sound.npy" | Out-Null
             Copy-IfThere (Join-Path $LogDir "sound-$engine-$probe-suite.log") "$Out\game.log" | Out-Null
@@ -557,10 +575,10 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             $result = @{ metrics = $metrics; evidence = @($text | Where-Object { $_ -match '\S' } | Select-Object -First 12); images = @() }
         }
         'sound' {
-            $text = & $Python -I (Join-Path $SuiteDir 'sound_metric.py') (Join-Path $Retail 'sound.npy') (Join-Path $Ours 'sound.npy') ([string](Get-Prop $Check 'measure' 'tone')) 2>&1
+            $text = & (Get-SoundPython) -I (Join-Path $SuiteDir 'sound_metric.py') (Join-Path $Retail 'sound.npy') (Join-Path $Ours 'sound.npy') ([string](Get-Prop $Check 'measure' 'tone')) 2>&1
             $m = [regex]::Match(($text -join "`n"), 'max level difference: ([\d.]+) dB')
             $metrics = [ordered]@{ db = $(if ($m.Success) { [double]$m.Groups[1].Value } else { 100 }) }
-            $result = @{ metrics = $metrics; evidence = @($text); images = @() }
+            $result = @{ metrics = $metrics; evidence = @($text | ForEach-Object { "$_" }); images = @() }
         }
         'build' {
             $code = [int](Get-Content (Join-Path $Ours 'exit.txt') -ErrorAction SilentlyContinue | Select-Object -First 1)
