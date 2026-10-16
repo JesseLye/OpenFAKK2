@@ -157,8 +157,13 @@ Logs land in `build\compare`: `player-retail-<map>-<probe>.log`, `player-ours-<m
 from the headless comparison, `client-<name>-<map>-<probe>.log` from the client runner
 (`client-retail-...` with `-Retail`). Every run starts both games from an empty
 `config.cfg` (ours on the test home, `build\sandbox\test-home`, never the player's
-`build\sandbox\home`), so a cvar passed in `-Extra` lasts that run only. Runners take
-turns through the harness lock and refuse to start beside the player's own game.
+`build\sandbox\home`), so a cvar passed in `-Extra` lasts that run only. Runners share
+the machine with other worktrees' games through the harness lock and refuse to start
+beside the player's own game. Held keys are timed by rendered frames, which a busy
+machine shifts: for a run whose answer is a position or a timing (strafes, stopping
+distances, frame rates), set `$env:FAKK2_HARNESS_MODE = 'exclusive'` first so it runs
+alone, and give a suite check that does so `"exclusive": "timing"` (the strafe checks
+have it). `tools/retail-compare/README.md`, "Games side by side, or alone", has the rules.
 The client's log echoes every server print twice (once as the raw `serverCommand`, once
 as console output); `readings.ps1` drops the echo.
 

@@ -89,12 +89,30 @@ function Reset-RetailConfig([string]$GameDir) {
     Remove-GeneratedPaths $fakk
 }
 
-# --- one game at a time -------------------------------------------------------------
+# --- games side by side, or alone ---------------------------------------------------
 # Every runner takes the harness lock before it starts a game and lets it go once the game
-# has stopped, so sessions in several worktrees take turns. The lock is a file in the main
-# checkout's build\ held open with no sharing: a second opener fails until the holder
-# closes it, and Windows closes it when the holder's process ends, however it ends. The
-# holder writes who it is to harness.lock.owner. Nested runners (compare.ps1 calling
+# has stopped. Most runs share it, so several worktrees' games run at once: each worktree
+# has its own test home and retail sandbox, and two retail games, or two of ours, run side
+# by side (tried 2026-10-16). A run that needs the machine to itself takes it alone:
+#
+#   shared     (the default) up to FAKK2_HARNESS_SLOTS games at once (4), one per worktree,
+#              since a worktree's games share its home
+#   exclusive  no other harness game: recording the speakers (the loopback takes every
+#              game's sound), retail's sound playback (another window in front silences it),
+#              and timing (frame times, held keys: a busy machine moves them, as the
+#              strafe checks showed)
+#
+# The mode is the caller's -Mode, else FAKK2_HARNESS_MODE (run-suite.ps1 and
+# refresh-retail.ps1 set it per check from suite.json's "exclusive"), else shared.
+#
+# The lock is files in the main checkout's build\, held open, so Windows frees them when a
+# holder's process ends however it ends: harness.lock itself, open for reading by every
+# shared holder and with no sharing by an exclusive one (or by a runner from before shared
+# runs, which so takes it alone), one of harness.slots\slot<n> per shared holder, and the
+# worktree's own build\harness.worktree.lock. Runners queue in the order they asked
+# (harness.lock.queue): a shared run may pass waiting shared runs, but none passes an
+# exclusive one, which so is not starved. harness.holders lists who holds it, and an
+# exclusive holder also writes harness.lock.owner. Nested runners (compare.ps1 calling
 # run-retail.ps1) share the lock of the process that took it.
 #
 # A game started by Start-HarnessGame is put in a job object that kills it when this
@@ -102,7 +120,10 @@ function Reset-RetailConfig([string]$GameDir) {
 # shell) leaves no game behind, and none that writes into a home after it has gone.
 $HarnessLockFile = Join-Path $MainRoot 'build\harness.lock'
 $HarnessQueue = "$HarnessLockFile.queue"
-New-Item -ItemType Directory -Force (Split-Path $HarnessLockFile) | Out-Null
+$HarnessSlots = Join-Path $MainRoot 'build\harness.slots'
+$HarnessHolders = Join-Path $MainRoot 'build\harness.holders'
+$HarnessWorktreeLock = Join-Path $RepoRoot 'build\harness.worktree.lock'
+New-Item -ItemType Directory -Force (Split-Path $HarnessLockFile), (Split-Path $HarnessWorktreeLock) | Out-Null
 
 if (-not ('OpenFakk2Harness.KillJob' -as [type])) {
     Add-Type -Namespace OpenFakk2Harness -Name KillJob -MemberDefinition @'
@@ -145,60 +166,96 @@ function Get-FakkGames {
     }
 }
 
-function Enter-HarnessLock([string]$What = '') {
-    if ($global:OpenFakk2HarnessLock) { $global:OpenFakk2HarnessLock.Depth++; return }
+function Get-HarnessHolders {
+    @(Get-ChildItem $HarnessHolders -File -ErrorAction SilentlyContinue | ForEach-Object {
+        $hpid = [int]($_.BaseName -replace '\D', '')
+        if (Get-Process -Id $hpid -ErrorAction SilentlyContinue) { Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue }
+        else { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    })
+}
+
+# Opens a file for the lock, or $null when another holder's sharing does not allow it.
+function Open-HarnessFile([string]$Path, [IO.FileAccess]$Access, [IO.FileShare]$Share) {
+    try { [IO.File]::Open($Path, 'OpenOrCreate', $Access, $Share) } catch [IO.IOException] { $null }
+}
+
+function Enter-HarnessLock([string]$What = '', [ValidateSet('', 'shared', 'exclusive')][string]$Mode = '') {
+    if (-not $Mode) { $Mode = if ($env:FAKK2_HARNESS_MODE -eq 'exclusive') { 'exclusive' } else { 'shared' } }
+    if ($global:OpenFakk2HarnessLock) {
+        if ($Mode -eq 'exclusive' -and $global:OpenFakk2HarnessLock.Mode -ne 'exclusive') { throw 'harness: a nested runner asked for the lock alone while its caller shares it; take it exclusive in the caller' }
+        $global:OpenFakk2HarnessLock.Depth++; return
+    }
     $waitSecs = if ($env:FAKK2_HARNESS_WAIT) { [int]$env:FAKK2_HARNESS_WAIT } else { 3600 }
+    $slots = if ($env:FAKK2_HARNESS_SLOTS) { [Math]::Max(1, [int]$env:FAKK2_HARNESS_SLOTS) } else { 4 }
     $deadline = (Get-Date).AddSeconds($waitSecs)
-    $owner = "$HarnessLockFile.owner"
     $lastWhy = ''
-    # Runners queue for the lock in the order they asked: each leaves a ticket named by the
-    # time it asked, and only the oldest ticket of a live process may take the lock. A run
-    # that takes the lock game after game (refresh-retail.ps1) would otherwise take it back
-    # the moment it let go, before a waiter polling every second could see it free.
-    New-Item -ItemType Directory -Force $HarnessQueue | Out-Null
-    $ticket = Join-Path $HarnessQueue ('{0:D20}-{1}' -f [DateTime]::UtcNow.Ticks, $PID)
-    Set-Content -Path $ticket -Value "pid $PID`: $What ($RepoRoot)" -Encoding utf8
+    New-Item -ItemType Directory -Force $HarnessQueue, $HarnessSlots, $HarnessHolders | Out-Null
+    # a ticket named by the time it asked and the mode: the queue's order
+    $ticket = Join-Path $HarnessQueue ('{0:D20}-{1}-{2}' -f [DateTime]::UtcNow.Ticks, $Mode, $PID)
+    Set-Content -Path $ticket -Value "pid $PID ($Mode): $What ($RepoRoot)" -Encoding utf8
     try {
         while ($true) {
-            $first = $null
-            foreach ($t in @(Get-ChildItem $HarnessQueue -File | Sort-Object Name)) {
-                $tpid = [int]($t.Name -replace '^\d+-', '')
-                if (-not (Get-Process -Id $tpid -ErrorAction SilentlyContinue)) { Remove-Item $t.FullName -Force -ErrorAction SilentlyContinue; continue }
-                $first = $t; break
-            }
             $why = ''
-            if ($first -and $first.FullName -ne $ticket) {
-                $why = "waiting in line behind $(Get-Content $first.FullName -ErrorAction SilentlyContinue | Select-Object -First 1)"
+            # the tickets ahead: a shared run waits only for exclusive ones, an exclusive one for all
+            $ahead = $null
+            foreach ($t in @(Get-ChildItem $HarnessQueue -File | Sort-Object Name)) {
+                if ($t.FullName -eq $ticket) { break }
+                $tpid = [int](($t.Name -split '-')[-1])
+                if (-not (Get-Process -Id $tpid -ErrorAction SilentlyContinue)) { Remove-Item $t.FullName -Force -ErrorAction SilentlyContinue; continue }
+                # a ticket from a runner older than shared runs has no mode: it takes the lock alone
+                if ($Mode -eq 'exclusive' -or $t.Name -notmatch '-shared-') { $ahead = $t; break }
             }
+            if ($ahead) { $why = "waiting in line behind $(Get-Content $ahead.FullName -ErrorAction SilentlyContinue | Select-Object -First 1)" }
             else {
-                $stream = $null
-                try { $stream = [IO.File]::Open($HarnessLockFile, 'OpenOrCreate', 'ReadWrite', 'None') } catch [IO.IOException] { }
-                if ($stream) {
-                    $games = @(Get-FakkGames)
-                    $player = @($games | Where-Object { -not $_.Harness })
-                    if ($player.Count) {
-                        $stream.Dispose()
-                        throw ("The player's own game is running ({0}, pid {1}, {2}). The harness does not start a game beside it: close it and run this again." -f $player[0].Name, $player[0].Id, $player[0].Path)
+                $taken = @()
+                try {
+                    $wt = Open-HarnessFile $HarnessWorktreeLock 'ReadWrite' 'None'
+                    if (-not $wt) { $why = 'waiting for this worktree''s other game (its games share the test home)' }
+                    else {
+                        $taken += $wt
+                        $main = if ($Mode -eq 'exclusive') { Open-HarnessFile $HarnessLockFile 'ReadWrite' 'None' } else { Open-HarnessFile $HarnessLockFile 'Read' 'Read' }
+                        if (-not $main) {
+                            $held = @(Get-HarnessHolders)
+                            $who = Get-Content "$HarnessLockFile.owner" -TotalCount 1 -ErrorAction SilentlyContinue
+                            $why = if ($held.Count) { "waiting for the harness, in use by: $($held -join '; ')" } elseif ($who) { "waiting for the harness lock, held by $who" } else { 'waiting for the harness lock' }
+                        }
+                        else {
+                            $taken += $main
+                            $slot = $null
+                            if ($Mode -eq 'shared') {
+                                for ($i = 0; $i -lt $slots -and -not $slot; $i++) { $slot = Open-HarnessFile (Join-Path $HarnessSlots "slot$i") 'ReadWrite' 'None' }
+                                if (-not $slot) { $why = "waiting for one of the $slots shared places: $((Get-HarnessHolders) -join '; ')" }
+                                else { $taken += $slot }
+                            }
+                            if (-not $why) {
+                                $games = @(Get-FakkGames)
+                                $player = @($games | Where-Object { -not $_.Harness })
+                                if ($player.Count) {
+                                    throw ("The player's own game is running ({0}, pid {1}, {2}). The harness does not start a game beside it: close it and run this again." -f $player[0].Name, $player[0].Id, $player[0].Path)
+                                }
+                                # a harness game whose runner has gone (killed before it could stop the game,
+                                # by a runner older than the job object) is stopped, or later runs would wait on it
+                                foreach ($o in @($games | Where-Object Orphan)) {
+                                    Write-Host "harness: stopping $($o.Name) (pid $($o.Id)), left running by a harness run that has ended"
+                                    Stop-Process -Id $o.Id -Force -ErrorAction SilentlyContinue
+                                }
+                                $busy = @($games | Where-Object { -not $_.Orphan })
+                                if ($Mode -eq 'exclusive' -and $busy.Count) {
+                                    $why = "waiting for a game another harness run started without the lock: $($busy[0].Name) (pid $($busy[0].Id))"
+                                }
+                                else {
+                                    $line = "pid $PID ($Mode) since $(Get-Date -Format s): $What ($RepoRoot)"
+                                    Set-Content -Path (Join-Path $HarnessHolders "$PID.txt") -Value $line -Encoding utf8
+                                    if ($Mode -eq 'exclusive') { Set-Content -Path "$HarnessLockFile.owner" -Value $line -Encoding utf8 }
+                                    $global:OpenFakk2HarnessLock = @{ Streams = $taken; Mode = $Mode; Depth = 1 }
+                                    $taken = @()
+                                    return
+                                }
+                            }
+                        }
                     }
-                    # a harness game whose runner has gone (killed before it could stop the game,
-                    # by a runner older than the job object) is stopped, or every later run would wait on it
-                    foreach ($o in @($games | Where-Object Orphan)) {
-                        Write-Host "harness: stopping $($o.Name) (pid $($o.Id)), left running by a harness run that has ended"
-                        Stop-Process -Id $o.Id -Force -ErrorAction SilentlyContinue
-                    }
-                    $busy = @($games | Where-Object { -not $_.Orphan })
-                    if (-not $busy.Count) {
-                        $global:OpenFakk2HarnessLock = @{ Stream = $stream; Depth = 1 }
-                        Set-Content -Path $owner -Value "pid $PID since $(Get-Date -Format s): $What ($RepoRoot)" -Encoding utf8
-                        return
-                    }
-                    $stream.Dispose()
-                    $why = "waiting for a game another harness run started without the lock: $($busy[0].Name) (pid $($busy[0].Id))"
                 }
-                else {
-                    $who = Get-Content $owner -ErrorAction SilentlyContinue | Select-Object -First 1
-                    $why = "waiting for the harness lock, held by $(if ($who) { $who } else { 'a run that is starting' })"
-                }
+                finally { foreach ($s in $taken) { $s.Dispose() } }
             }
             if ((Get-Date) -gt $deadline) { throw "harness: gave up after ${waitSecs}s $why" }
             if ($why -ne $lastWhy) { Write-Host "harness: $why"; $lastWhy = $why }
@@ -213,8 +270,9 @@ function Exit-HarnessLock {
     if (-not $lock) { return }
     $lock.Depth--
     if ($lock.Depth -gt 0) { return }
-    Remove-Item "$HarnessLockFile.owner" -ErrorAction SilentlyContinue
-    $lock.Stream.Dispose()
+    Remove-Item (Join-Path $HarnessHolders "$PID.txt") -ErrorAction SilentlyContinue
+    if ($lock.Mode -eq 'exclusive') { Remove-Item "$HarnessLockFile.owner" -ErrorAction SilentlyContinue }
+    foreach ($s in $lock.Streams) { $s.Dispose() }
     $global:OpenFakk2HarnessLock = $null
 }
 

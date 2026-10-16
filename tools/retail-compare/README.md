@@ -44,12 +44,27 @@ for a change.
   `+set net_noudp 1 +set net_noipx 1` (`$OursNoNet`, `$RetailNoNet`), so Windows never
   asks to let a new executable through its firewall. The loopback a local game and the
   test player use still works.
-- **One game at a time.** Every runner starts its game through `Start-HarnessGame`, which
-  takes the harness lock, `build\harness.lock` in the main checkout (shared by all
-  worktrees), and `Stop-HarnessGame` in a `finally` lets it go. Another runner waits
-  ("harness: waiting for the harness lock, held by ..."; up to `FAKK2_HARNESS_WAIT`
-  seconds, an hour by default). While the player's own game runs (one not started by a
-  harness: `run.cmd`, the installed game) the runner refuses with a message. A harness
+- **Games side by side, or alone.** Every runner starts its game through
+  `Start-HarnessGame`, which takes the harness lock (files in the main checkout's
+  `build\`, shared by all worktrees), and `Stop-HarnessGame` in a `finally` lets it go.
+  Most runs *share* it: up to `FAKK2_HARNESS_SLOTS` games at once (4), one per worktree,
+  since a worktree's games share its test home. Each worktree has its own test home and
+  retail sandbox, and two retail games, or two of ours, run side by side; checks run in
+  two worktrees at once gave the same results as alone (2026-10-16). A run that needs the
+  machine to itself takes it *exclusive*: no other harness game while it runs, and no new
+  shared run starts while it waits. That is anything that records the speakers (the
+  loopback takes every game's sound: `sound-record.ps1` always), anything that needs to
+  be the window in front (retail's sound playback is silenced by another window), and
+  anything timed (frame times, held keys: a busy machine moves them; the strafe checks
+  depended on frame pacing). The mode is `Enter-HarnessLock`'s `-Mode`, else
+  `FAKK2_HARNESS_MODE` (`run-suite.ps1` and `refresh-retail.ps1` set it from a check's
+  `exclusive` in `suite.json`), else shared: for a timing experiment by hand, set
+  `$env:FAKK2_HARNESS_MODE = 'exclusive'` first. A waiting runner says what it waits
+  for ("harness: waiting for the harness, in use by: pid ... (shared) ..."; up to
+  `FAKK2_HARNESS_WAIT` seconds, an hour by default); `build\harness.holders` lists the
+  holders. Runners queue in the order they asked, a shared one passing waiting shared
+  ones but never an exclusive one. While the player's own game runs (one not started by
+  a harness: `run.cmd`, the installed game) the runner refuses with a message. A harness
   game whose runner has gone is stopped.
 - **Safe to cut short.** Each game is tied to the PowerShell process that started it (a
   job object that kills it when the process ends) and the lock is a file held open, so a

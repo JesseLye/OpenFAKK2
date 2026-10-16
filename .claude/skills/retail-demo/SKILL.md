@@ -30,8 +30,9 @@ is `retail-probe`'s timeline view.
 `build\compare\demos\<demo>\`. Ours needs a build (in a fresh worktree copy
 `scripts\build-msvc.cmd` from the main checkout, then `scripts\build-msvc.cmd x86 Release`,
 or point `-Bin` at the main checkout's `build\x86-Release\Release`). Retail needs the game
-disc in a drive and puts its window on screen; every run takes the harness lock and waits
-for other sessions' games.
+disc in a drive and puts its window on screen. Every run takes the harness lock: frames
+and diff runs share the machine with other worktrees' games, sound runs take it alone
+(`tools/retail-compare/README.md`, "Games side by side, or alone").
 
 ```powershell
 $demo = '.claude\skills\retail-demo\scripts\demo.ps1'
@@ -120,8 +121,9 @@ hear). Retail prints volumes already scaled by `s_volume`; the comparison divide
 out. An alias with several sounds draws one at random on each game (`site1` / `site2`), so
 those are counted as variants, not differences. Keep `-Volume` at 0.25, or 0.06 for loud
 weapons: this machine's output compresses above about -20 dBFS. The recording also takes
-whatever else plays, so nothing else should, and another session's game window in front
-silences retail (see the memory note on measuring sound).
+whatever else plays: the recorder holds the harness alone, so no other session's game
+plays or comes in front of retail meanwhile, but your own music or video would be
+recorded, so nothing else should play.
 
 **Diff.** `demo_diff.py` pairs snapshots by time since each demo began, and entities by
 model, closest first. It prints when the player's position, view and stats first part,
@@ -144,7 +146,10 @@ A difference worth keeping fixed becomes a suite check, so it cannot come back u
 ```
 
 or, for a demo recorded by hand, `"demoFile": "<name>.dm3"` (in `build\demos`) in place of
-`"probe"` and `"map"`. `"keep": ["8-9.5"]` and `"every": 2` thin the frames. Then make its
+`"probe"` and `"map"`. `"keep": ["8-9.5"]` and `"every": 2` thin the frames. A frames
+check shares the machine with other worktrees' games, which does not move its pictures;
+give it `"exclusive": "timing"` only if it measures time (as `timedemo` does), with the
+reason in its note (`tools/suite/README.md`, "suite.json"). Then make its
 retail reference with `tools\suite\refresh-retail.ps1 -Only demo-dxx` (the game disc; it
 records or copies the demo and plays it on retail), commit the probe and the entry with a
 trailer so the merge keeps its first result:

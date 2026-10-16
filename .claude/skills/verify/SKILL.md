@@ -61,6 +61,14 @@ with the Read tool.
 - A newly failing check is yours until shown otherwise. Fix it, or explain it in your
   answer with the evidence. Never call a failure noise without running that check again
   (`-Only <name>`); if it passes on a rerun, say so and give both results.
+- Other worktrees' games may have run beside yours: checks share the machine unless
+  `suite.json` marks them `exclusive` (`build\harness.holders` lists who holds it; see
+  `tools/retail-compare/README.md`, "Games side by side, or alone"). When a failure looks
+  like timing (a position a few units off after held keys, a frame time), rerun it
+  alone: `$env:FAKK2_HARNESS_MODE = 'exclusive'` before `-Only <name>`. If it fails only
+  when shared, that is no excuse to wave it through: give the check `"exclusive":
+  "timing"` with the evidence in its note, and say so. A failure that repeats alone is
+  real; `fstrafe` looked flaky and was a frame-rate bug.
 - A crash fails its check and the report carries the named stack.
 - "Skipped: no retail reference" or "made from an older probe" means a reference needs
   `tools\suite\refresh-retail.ps1 -Only <check>` (the game disc, windows on screen). If

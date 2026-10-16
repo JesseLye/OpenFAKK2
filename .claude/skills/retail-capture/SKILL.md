@@ -194,10 +194,11 @@ its waits are long.
   "default" retail capture). The harness now empties `config.cfg` before every game it
   starts (`Reset-TestHome`, `Reset-RetailConfig` in `common.ps1`), so a setting lasts one
   run: pass it on every run that needs it.
-- **One game at a time.** Every runner takes the harness lock (`build\harness.lock` in
-  the main checkout) and waits while another session's game runs ("harness: waiting
-  for..."); it refuses to start beside the player's own game. A run cut short takes its
-  game with it.
+- **Games share the machine.** Every runner takes the harness lock; captures share it,
+  so other worktrees' games may run beside yours (`tools/retail-compare/README.md`,
+  "Games side by side, or alone"). Shots are taken of each game's own window, so that
+  does not reach the pictures. A runner refuses to start beside the player's own game,
+  and a run cut short takes its game with it.
 - **Cheat cvars do nothing on ours** under `+map` (cheats are off): a `CVAR_CHEAT` cvar
   stays at its default and the "experiment" shows no change. Cheat *commands* (`give`,
   `whatis`) do work on both. Read a cvar's value back in the log before trusting a result
