@@ -1,6 +1,6 @@
 ---
 name: retail-probe
-description: Verify OpenFAKK2's in-game behaviour against the retail FAKK2 engine with probe scripts that drive the player (give a weapon, fire it, walk, look up or down) and dump entity state with `whatis`. Use this whenever a change touches the server, game module, physics, traces, weapons or projectiles, whenever someone reports what happens in play ("the rock hits Julie", "she falls through", "the door doesn't open"), and whenever you need to show a fix working in the real game rather than in a unit test, even if nobody says "probe", "harness" or "retail".
+description: Verify OpenFAKK2's in-game behaviour against the retail FAKK2 engine with probe scripts that drive the player (give a weapon, fire it, walk, look up or down) and dump entity state with `whatis`. Use this whenever a change touches the server, game module, physics, traces, weapons or projectiles, whenever someone reports what happens in play ("the rock hits Julie", "she falls through", "the door doesn't open"), and whenever you need to show a fix working in the real game rather than in a unit test, even if nobody says "probe", "harness" or "retail". To see when the two games part ways over a whole stretch of play, record the probe as a demo on both and compare them (retail-demo's diff mode). Something seen or heard during play goes to retail-demo; menus, loading and the intro to retail-capture.
 ---
 
 # Probing gameplay against retail
@@ -30,7 +30,9 @@ relying on it. Never commit anything from them.
 | Server-side state after scripted keys, compared with retail | `tools\retail-compare\compare-player.ps1 -Map <m> -Probe <p>` (headless test player) | Yes: retail runs the same probe |
 | Anything that needs aim pitch, the mouse, the camera or the HUD | `scripts\probe-client.ps1 -Probe <p> -Map <m>` (the real OpenFAKK2 client, this repo's build) | Yes: the same command with `-Retail` runs the probe on the real retail client |
 | "Did my change fix it?" | `probe-client.ps1` twice: `-Bin <main checkout>\build\x86-Release\Release -Name before`, then the default build `-Name fixed` | Before/after, plus `-Retail` for what it should be |
-| What something looks like (weapon effects, decals, sprites, swipes, the HUD, fog, lighting) | the `retail-capture` skill: screenshots from the same probe on both engines, paired with a difference image | Yes |
+| When the games part ways over a stretch of play: every entity, the player, the server's sounds and prints, 20 times a second | the `retail-demo` skill's diff mode: the probe records a demo on each game and `demo_diff.py` compares them as a timeline | Yes: retail's take is the reference |
+| What something looks or sounds like during play (weapon effects, swipes, the HUD while playing, lighting, sound) | the `retail-demo` skill: one demo played on both games | Yes |
+| A menu, the loading screen, the intro, a still through a camera | the `retail-capture` skill: screenshots from the same probe on both engines | Yes |
 
 The headless test player (`sv_testplayer 1`) only knows the movement and attack keys:
 `+forward +back +moveleft +moveright +moveup +movedown +left +right +attackleft
@@ -56,8 +58,28 @@ The retail client silently drops the end of a long command line, so a long probe
 plus `-Extra` means the probe never starts on `-Retail`: keep client probe names short
 (14 characters was too long with `-Extra "+set r_mode 4"`).
 
-A probe whose answer is a picture, not a reading, belongs to the `retail-capture` skill:
-the weapon effect probes (`probe-shotgun`, `probe-fx-*`, `probe-sprites`, ...) run there.
+A probe whose answer is a picture, not a reading, belongs to `retail-demo` (play) or
+`retail-capture` (menus, stills): the weapon effect probes (`probe-shotgun`, `probe-fx-*`,
+`probe-sprites`, ...) run there.
+
+### A whole timeline: the probe as a demo on both games
+
+`whatis` shows chosen moments. To see *when* the games part ways, make the probe record
+(set `g_syncronousClients 1`, `record <probe>` after the setup, `stoprecord` and `quit` at
+the end; the `retail-demo` skill has the template) and run
+
+```powershell
+.claude\skills\retail-demo\scripts\demo.ps1 -Probe probe-dzoo -Map zoo -Mode diff
+```
+
+It records on both games (kept as `build\demos\<probe>-retail.dm3` and `-ours.dm3`) and
+prints when the player's position, view and stats first differ, each entity pair (paired
+by model, closest first) that drifts more than `--tolerance` or changes animation, the
+entities only one game has, the sounds the server started, and the prints and server
+commands. `-Demo <a> -Against <b>` compares two takes already made, without recording.
+Actors' choices and gibs come from the clock and part early on both; a scripted move,
+a door, a camera or a projectile that parts is the lead. Weapon and animation sounds are
+the client's, not in the demo.
 
 ## Write the probe
 

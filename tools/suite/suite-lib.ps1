@@ -98,6 +98,9 @@ function Get-CheckInputHash($Check) {
     $probe = Get-Prop $Check 'probe'
     if ($probe) { $files += Join-Path $RetailCompare "$probe.scr" }
     if ($Check.kind -eq 'chain') { $files += Join-Path $RetailCompare 'chain.scr' }
+    # a demo check made from a demo someone recorded: that demo, so a new take of it is stale
+    $demoFile = Get-Prop $Check 'demoFile'
+    if ($demoFile) { $files += Join-Path $DemoDir $demoFile }
     $files = @($files | Where-Object { Test-Path $_ })
     if (-not $files.Count) { return '' }
     $sha = [Security.Cryptography.SHA1]::Create()
@@ -451,11 +454,18 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
             Copy-IfThere $console "$Out\game.log" | Out-Null
         }
         'demo' {
-            # retail: the probe records demos/<probe>.dm3 and quits; the demo is kept in the
-            # reference and both games play that one (ours from the reference)
+            # retail: the probe records demos/<probe>.dm3 and quits, or "demoFile" names a demo
+            # someone recorded (in build\demos); the demo is kept in the reference and both
+            # games play that one (ours from the reference)
             $rate = [int](Get-Prop $Check 'avidemo' 2); $every = [int](Get-Prop $Check 'every' 1); $keep = @(Get-Prop $Check 'keep' @())
             $play = if ($secs) { $secs } else { 120 }
-            if ($Side -eq 'retail') {
+            $demoFile = Get-Prop $Check 'demoFile'
+            if ($Side -eq 'retail' -and $demoFile) {
+                $given = Join-Path $DemoDir $demoFile
+                if (-not (Copy-IfThere $given "$Out\demo.dm3")) { $output += "no demo: $given is not there (copy the recorded .dm3 into $DemoDir)"; break }
+                $output += Invoke-DemoPlayback retail "$Out\demo.dm3" $Out $rate $every $play "$extra $sideExtra".Trim() '' $keep
+            }
+            elseif ($Side -eq 'retail') {
                 $recorded = Join-Path $fakk "demos\$probe.dm3"
                 Remove-Item $recorded -ErrorAction SilentlyContinue
                 $output = @(& $ProbeClient -Probe $probe -Map $map -Name retail -Retail -Secs $(Get-Prop $Check 'recordSecs' 120) -Extra $extra -Classname none -Entity -1)

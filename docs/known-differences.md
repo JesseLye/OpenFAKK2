@@ -18,6 +18,23 @@ from them may be committed; Ritual's licence does not allow copying them.
 
 ## Unexplained
 
+### The game's sounds about 12 dB quieter in a demo's playback
+
+Found with the `retail-demo` skill's sound mode (2026-10-16), not yet investigated. The
+suite's `demo-zoo` demo (recorded on retail: creepers, the chaingun, rockets) played at its
+own speed on both games and recorded from the speakers (`sound-record.ps1 -Demo`) is
+quieter on ours by 11.6 to 11.7 dB, steadily, second by second through the whole fight:
+on the OpenAL backend and on the software mixer alike, at `s_volume 0.25` and again at
+0.06 (both well under the output path's compression). Both games start the same 103
+sounds in the same order with the same minimum distances (retail's `s_show_sounds`, ours'
+`s_show`); retail prints each volume already multiplied by `s_volume` (0.25 where ours
+prints 1), apart from the random alias variants. The probes' 1 kHz tone, placed by a
+level script, plays within 0.5 dB of retail (see "Panning and loudness"), so what differs
+is either the game's own sounds (started by the client game module from the models'
+TIKI files) or demo playback. 11.6 dB is close to a factor of 4, which is `s_volume` at
+0.25 but not at 0.06, where the gap is the same. Not yet tried: the same scene in live
+play, and `s_volume 1`.
+
 ### Idle animation variants picked differently
 
 On `zoo`, three actors that have two idle animations (`vymish_multi`, `vymish_ground`,

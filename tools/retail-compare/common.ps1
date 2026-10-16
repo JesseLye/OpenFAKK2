@@ -37,6 +37,11 @@ if (Test-Path $gitLink -PathType Leaf) {
 # run uses the ones built beside the executable. Set FAKK2_TEST_MODULES=retail to run
 # Ritual's gamex86.dll and cgamex86.dll from the install instead.
 $PlayHome = Join-Path $MainRoot 'build\sandbox\home'
+# Demos kept for comparing (.dm3, either engine's): the main checkout's build\demos, shared
+# by every worktree and never committed (they are made from Ritual's data). A demo a player
+# records lands in its game's fakk\demos; copy it here to use it (retail-demo skill, suite
+# "demo" checks with "demoFile").
+$DemoDir = Join-Path $MainRoot 'build\demos'
 $TestHome = Join-Path $Sandbox 'test-home'
 $TestFakk = Join-Path $TestHome 'fakk'
 New-Item -ItemType Directory -Force $TestFakk | Out-Null
