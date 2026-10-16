@@ -233,6 +233,12 @@ frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+s
 `probe-fov` takes Julie's view on `zoo`, again after `fov 110`, through a script camera
 (which keeps its own 90) and back on the player; with `-RetailExtra "+setu fov 110"
 -OursExtra "+set fov 110"` the first shot is already at 110 on both.
+`probe-wide` is for ours only, at a wide window and at a 4:3 one of the same height
+(`-Mode -1 -OursExtra "+set r_customwidth 1280 +set r_customheight 720"`, then 960): on
+`training` the entry cinematic, the player's view with the sword in the HUD, a script
+camera, a saved game (`save\config_probewide.tga` in the test home), a camera in the rope
+pool's water and the full-screen inventory. The wide shots' middle should match the 4:3
+ones below the HUD (`docs/known-differences.md`, "Views wider than 4:3").
 `probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
 on `zoo`; copy that tik into `build\sandbox\retail\fakk\models` and
 `build\sandbox\test-home\fakk\models` first.
@@ -279,7 +285,7 @@ save menu, copy the install's `save\*.ssv` and `*.tga` into
 `build\sandbox\retail\fakk\save` first, so retail lists the games ours finds in the install.
 `-OursExtra` adds to ours' command line after its `r_mode 3`: with `-Side ours -Name wide
 -OursExtra '+set r_mode -1 +set r_customwidth 1280 +set r_customheight 720'` it shoots
-ours' menus on a 16:9 window (`scr_keepAspect`; retail has no wide layout to pair with).
+ours' menus on a 16:9 window (`cl_widescreenHud`; retail has no wide layout to pair with).
 
 The retail runs use a clean copy of the install. Ours runs on the test home (see "How the
 runners start the games"), which shadows the install's `autoexec.cfg` and `config.cfg`

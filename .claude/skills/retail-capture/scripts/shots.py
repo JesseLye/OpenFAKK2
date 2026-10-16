@@ -9,6 +9,11 @@
       channel, the share of pixels whose largest channel differs by more than --threshold
       (default 24), and the box around those pixels. Masked rectangles count as equal.
 
+  shots.py middle WIDE.tga NARROW.tga OUT.png [--top Y] [--zoom N]
+      A wide window's shot against a 4:3 one of the same height: the wide one's middle
+      columns, as many as the narrow one has, from row Y down (below the HUD, which keeps
+      to the window's corners), with the figures as pair gives them.
+
   shots.py delta OFF.tga ON.tga [--grid COLSxROWS] [--crop ...] [--mask ...] [--mask-notify]
       What an effect adds: the sum and mean of ON - OFF per channel, over the image and per
       grid cell. Take OFF and ON in one probe (the effect toggled between two screenshots)
@@ -118,6 +123,27 @@ def cmd_pair(args):
     (wb, hb, rb), _ = load(args.b, args)
     if (wa, ha) != (wb, hb):
         sys.exit('the images differ in size: %dx%d and %dx%d' % (wa, ha, wb, hb))
+    ox, oy = (args.crop[0], args.crop[1]) if args.crop else (0, 0)
+    compare((wa, ha, ra), ma, (wb, hb, rb), args, ox, oy)
+
+
+def cmd_middle(args):
+    """The middle of a wide shot against a 4:3 one of the same height, from --top down."""
+    wide, narrow = read_tga(args.wide), read_tga(args.narrow)
+    if wide[1] != narrow[1] or wide[0] < narrow[0]:
+        sys.exit('not a wide shot and a narrower one of the same height: %dx%d and %dx%d'
+                 % (wide[0], wide[1], narrow[0], narrow[1]))
+    w, h = narrow[0], narrow[1]
+    x0 = (wide[0] - w) // 2
+    a = crop(wide, (x0, args.top, x0 + w, h))
+    b = crop(narrow, (0, args.top, w, h))
+    compare(a, mask_grid(a[0], a[1], [], None), b, args, 0, args.top)
+
+
+def compare(img_a, ma, img_b, args, ox, oy):
+    """Writes A | B | |A-B|x4 and prints the difference figures; ox, oy place the images
+    in the full screenshot for the box."""
+    (wa, ha, ra), (wb, hb, rb) = img_a, img_b
     sums = [0, 0, 0]
     n = over = 0
     bx0, by0, bx1, by1 = wa, ha, -1, -1
@@ -147,7 +173,6 @@ def cmd_pair(args):
         strip.append(ra[y] + bytearray(gap * 3) + rb[y] + bytearray(gap * 3) + diff_rows[y])
     img = zoom((wa * 3 + gap * 2, ha, strip), args.zoom)
     write_png(args.output, *img)
-    ox, oy = (args.crop[0], args.crop[1]) if args.crop else (0, 0)
     print('%s: A | B | |A-B|x4' % args.output)
     if not n:
         print('every pixel is masked')
@@ -218,6 +243,15 @@ def main():
     masking(sp)
     sp.add_argument('--threshold', type=int, default=24)
     sp.set_defaults(fn=cmd_pair)
+
+    sp = sub.add_parser('middle')
+    sp.add_argument('wide')
+    sp.add_argument('narrow')
+    sp.add_argument('output')
+    sp.add_argument('--top', type=int, default=0)
+    sp.add_argument('--zoom', type=int, default=1)
+    sp.add_argument('--threshold', type=int, default=24)
+    sp.set_defaults(fn=cmd_middle)
 
     sp = sub.add_parser('delta')
     sp.add_argument('off')

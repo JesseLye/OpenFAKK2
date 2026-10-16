@@ -237,8 +237,11 @@ foreach ($c in $selected) {
     elseif ($known -and $r.status -eq 'pass') { $r.reason = "passes, so its known issue may be fixed: take knownIssue out of suite.json and known-differences.md" }
     $r.seconds = [int]((Get-Date) - $t0).TotalSeconds
     Write-Host (" {0} ({1}s){2}" -f $r.status, $r.seconds, $(if ($r.status -in 'fail', 'error', 'skipped') { ": $($r.reason)" } else { '' }))
-    # what -AcceptMoves keeps: declared moves, improvements, results against a remade reference
-    $accept = $AcceptMoves -and ($r.status -eq 'moved' -or $r.improved -or $r.staleBaseline -or ($r.status -eq 'unmatched' -and (Get-Move $c)))
+    # what -AcceptMoves keeps: declared moves, improvements, results against a remade
+    # reference, and a declared check's first result (a new check that passes has no last
+    # good result to fail against later otherwise)
+    $accept = $AcceptMoves -and ($r.status -eq 'moved' -or $r.improved -or $r.staleBaseline -or ($r.status -eq 'unmatched' -and (Get-Move $c)) -or
+        ((Get-Move $c) -and -not (Test-Path (Join-Path $baseDir 'baseline.json'))))
     if (($UpdateBaseline -or $accept) -and $r.status -in 'pass', 'known', 'unmatched', 'fail', 'moved' -and -not $r.crash -and $r.metrics.Count) {
         $r.details += $(if ($UpdateBaseline) { 'kept as ours'' last good result (-UpdateBaseline)' } else { 'kept as ours'' last good result (-AcceptMoves)' })
         New-Item -ItemType Directory -Force $baseDir | Out-Null

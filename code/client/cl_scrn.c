@@ -30,7 +30,7 @@ cvar_t		*cl_debuggraph;
 cvar_t		*cl_graphheight;
 cvar_t		*cl_graphscale;
 cvar_t		*cl_graphshift;
-cvar_t		*scr_keepAspect;
+cvar_t		*cl_widescreenHud;
 
 // the screenshot a saveshot takes at the end of the frame it draws
 static char		scr_saveShotCmd[MAX_STRING_CHARS];
@@ -59,7 +59,7 @@ SCR_Layout640
 
 How the 640x480 layer lies on the window: its scale each way and where its
 left edge is, in window pixels. FAKK2 stretches it over the whole window;
-on a window wider than 4:3, scr_keepAspect keeps its shape instead, scaled
+on a window wider than 4:3, cl_widescreenHud keeps its shape instead, scaled
 by the height and centred, so the window reaches past it on both sides
 (SCR_ScreenLeft640). A 4:3 or narrower window is stretched as before.
 ================
@@ -68,7 +68,7 @@ static void SCR_Layout640( float *xscale, float *yscale, float *xoffset ) {
 	*xscale = cls.glconfig.vidWidth / 640.0f;
 	*yscale = cls.glconfig.vidHeight / 480.0f;
 	*xoffset = 0;
-	if ( scr_keepAspect && scr_keepAspect->integer &&
+	if ( cl_widescreenHud && cl_widescreenHud->integer &&
 		cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
 		*xscale = *yscale;
 		*xoffset = ( cls.glconfig.vidWidth - 640 * *xscale ) * 0.5f;
@@ -521,7 +521,7 @@ a game (sv_save.c), as the retail client's (0x423130): the screen is drawn
 again without the menus or the console and the renderer's screenshot
 command takes it, scaled to the size given. Retail runs the screenshot after
 the frame; here it is queued inside it, ahead of the buffer swap. On a wide
-window kept at 4:3 (scr_keepAspect) the picture is the 4:3 middle of it,
+window kept at 4:3 (cl_widescreenHud) the picture is the 4:3 middle of it,
 which the load and save menu shows in its 4:3 box unsqueezed.
 ==================
 */
@@ -556,7 +556,7 @@ void SCR_Init( void ) {
 	cl_graphshift = Cvar_Get ("graphshift", "0", CVAR_CHEAT);
 	// OpenFAKK2's: the HUD, menus and prints keep their 4:3 shape on a wide
 	// window (0 stretches them over it, as retail)
-	scr_keepAspect = Cvar_Get ("scr_keepAspect", "1", CVAR_ARCHIVE);
+	cl_widescreenHud = Cvar_Get ("cl_widescreenHud", "1", CVAR_ARCHIVE);
 
 	Cmd_AddCommand( "saveshot", SCR_SaveShot_f );
 
