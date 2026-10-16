@@ -89,7 +89,9 @@ needs. `maps` (a list, or `"all"`) or `menus` expands one entry into a check per
 (`spawn/zoo`); `quickMaps` makes some of those quick and `skipMaps` leaves some out. `always: true` runs it at every
 level. `sound: true` runs it only with `-Sound`. `tolerance` per measure (or `"*"`), a
 number or `"N%"` of the last good value; by default 0, and 1 percentage point for
-screenshots; `toleranceWhy` says where a larger one comes from. Two runs measured with
+screenshots; `toleranceMin` (per measure or `"*"`) is the smallest tolerance allowed,
+for a percentage of numbers so small that machine load moves them more (`frametime`'s
+sub-millisecond medians); `toleranceWhy` says where a larger one comes from. Two runs measured with
 `-Noise` can agree by luck: the probes that aim with `+lookdown` for a fixed time reach a
 pitch that depends on frame timing, and their shots moved by 2 to 5 points between runs
 of one build that `-Noise` had seen agree within one, so those have explicit tolerances. `knownIssue` reports a failure among the known differences, for a bug

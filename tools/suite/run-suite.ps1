@@ -107,8 +107,10 @@ $noiseAll = @{}
 if (Test-Path $noiseFile) { $j = Get-Content $noiseFile -Raw | ConvertFrom-Json; foreach ($p in $j.PSObject.Properties) { $noiseAll[$p.Name] = $p.Value } }
 
 # The tolerance for one measure: suite.json's "tolerance" (by name, or "*"; a number or
-# "N%" of ours' last good value), the kind's default, and at least 1.5 times the noise
-# measured for it (-Noise) or, for the match with retail, retail's own spread.
+# "N%" of ours' last good value), the kind's default, no less than "toleranceMin" (by
+# name or "*"; for a percentage of a value so small that machine load moves it more),
+# and at least 1.5 times the noise measured for it (-Noise) or, for the match with
+# retail, retail's own spread.
 function Get-Tolerance($c, [string]$metric, $base, [string]$which = 'base') {
     $t = 0.0
     if (($c.kind -in 'capture', 'menus') -or $metric -like 'shot*') { $t = 1.0 }
@@ -118,6 +120,9 @@ function Get-Tolerance($c, [string]$metric, $base, [string]$which = 'base') {
         if ([string]$v -match '^([\d.]+)%$') { $t = if ($null -ne $base) { [double]$base * [double]$Matches[1] / 100 } else { [double]::MaxValue } }
         else { $t = [double]$v }
     }
+    $minCfg = Get-Prop $c 'toleranceMin'
+    $min = Get-Prop $minCfg $metric (Get-Prop $minCfg '*' $null)
+    if ($null -ne $min) { $t = [Math]::Max($t, [double]$min) }
     $n = Get-Prop (Get-Prop $noiseAll[$c.name] 'ours') $metric $null
     if ($null -ne $n) { $t = [Math]::Max($t, 1.5 * [double]$n) }
     if ($which -eq 'retail') {

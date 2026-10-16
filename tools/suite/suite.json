@@ -138,7 +138,8 @@
       "oursExtra": "+set com_maxfps 0 +set r_swapInterval 0",
       "cfg": ["wait 20", "{each} viewmap {map}; wait 100; com_speeds 1; wait 400; com_speeds 0; echo ==== frametime {map}", "viewstop", "wait 5", "echo ==== frametime done", "quit"],
       "doneMarker": "==== frametime done", "frameTimes": true, "secs": 240,
-      "tolerance": { "*": "50%" },
+      "tolerance": { "*": "50%" }, "toleranceMin": { "*": 1 },
+      "toleranceWhy": "the medians are 0.2 to 0.7 ms (thousands of frames a second), where machine load alone moved cemetery from 0.2 to 0.4-1.1 ms on one build; a slowdown worth catching is several ms",
       "note": "the median frame time on viewmap's camera on three heavy maps, uncapped; a sharp rise fails" },
 
     { "name": "menus", "areas": ["interface"], "level": "standard", "kind": "menus", "menus": ["main", "loadsave", "options", "advancedoptions", "controls", "credits"], "quickMaps": ["main"],
