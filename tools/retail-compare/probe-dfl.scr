@@ -1,0 +1,83 @@
+// Records the suite's muzzle flash close-ups demo (demos/probe-dfl.dm3): the scenes of
+// probe-muzz2 to probe-muzz5 on zoo, where the player starts at (-2352 1568 0) looking
+// down +x. Through a camera beside the barrel: the chaingun, one hand gun shot, the
+// shotgun's blast and the rocket launcher, each fired straight ahead; then the uzi
+// through a camera close beside its muzzle, and through one over the floor to her right
+// where the casings land. The "demo-flashes" check plays it at 20 frames a second and
+// keeps the frames around each firing (the times after "record" are noted below); made
+// on retail by refresh-retail.ps1. record needs g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "camside" origin "-2310 1480 50" angles "5 90 0"
+spawn Camera targetname "cammuz" origin "-2296 1512 62" angles "0 102 0"
+spawn Camera targetname "camfloor" origin "-2330 1470 70" angles "40 95 0"
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "give weapon_chaingun.tik"
+wait 0.5
+stuffcmd "use Chaingun dual"
+wait 3
+stuffcmd "record probe-dfl"
+// 0.5
+wait 0.5
+cuecamera $camside
+// 1.5: the chaingun, 1 s
+wait 1
+stuffcmd "+attackleft"
+wait 1
+stuffcmd "-attackleft"
+// 3.5: the hand gun
+wait 1
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+// 7.0: one shot
+wait 3
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 8.1: the shotgun
+wait 0.9
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+// 11.5: one blast
+wait 3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 12.6: the rocket launcher
+wait 1
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+// 16.1: one rocket
+wait 3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 17.7: the uzi
+wait 1.5
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+// 21.2: beside the muzzle; 22.2: a 2 s burst
+wait 3
+cuecamera $cammuz
+wait 1
+stuffcmd "+attackright"
+wait 2
+stuffcmd "-attackright"
+// 24.7: over the floor; 25.7: a 1.5 s burst, then the casings settling
+wait 0.5
+cuecamera $camfloor
+wait 1
+stuffcmd "+attackright"
+wait 1.5
+stuffcmd "-attackright"
+// 28.2
+wait 1
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

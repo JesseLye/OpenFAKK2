@@ -80,6 +80,7 @@ cvar_t	*cl_timedemoLog;
 cvar_t	*cl_autoRecordDemo;
 cvar_t	*cl_aviFrameRate;
 cvar_t	*cl_avidemo;		// FAKK2: a screenshot every frame
+cvar_t	*cl_demoSeed;		// not retail's: see CL_PlayDemo_f
 cvar_t	*cl_aviMotionJpeg;
 cvar_t	*cl_forceavidemo;
 
@@ -1024,6 +1025,14 @@ void CL_PlayDemo_f( void ) {
 	clc.state = CA_CONNECTED;
 	clc.demoplaying = qtrue;
 	Q_strncpyz( clc.servername, arg, sizeof( clc.servername ) );
+
+	// not retail's: cl_demoSeed seeds the random numbers before the client game module
+	// loads, so a playback draws the same random effects (particles, flash bursts, an
+	// explosion's streaks) every time; the test suite plays its demos with it. The
+	// module's rand() shares the engine's C runtime, and its state is per thread.
+	if ( cl_demoSeed->integer ) {
+		srand( cl_demoSeed->integer );
+	}
 
 	// read demo messages until connected
 	while ( clc.state >= CA_CONNECTED && clc.state < CA_PRIMED ) {
@@ -3510,6 +3519,7 @@ void CL_Init( void ) {
 	cl_autoRecordDemo = Cvar_Get ("cl_autoRecordDemo", "0", CVAR_ARCHIVE);
 	cl_aviFrameRate = Cvar_Get ("cl_aviFrameRate", "25", CVAR_ARCHIVE);
 	cl_avidemo = Cvar_Get ("cl_avidemo", "0", 0);	// FAKK2 (0x42258f)
+	cl_demoSeed = Cvar_Get ("cl_demoSeed", "0", 0);	// not retail's: see CL_PlayDemo_f
 	cl_aviMotionJpeg = Cvar_Get ("cl_aviMotionJpeg", "1", CVAR_ARCHIVE);
 	cl_forceavidemo = Cvar_Get ("cl_forceavidemo", "0", 0);
 

@@ -116,7 +116,7 @@ check is for.
 | `saveload` | `save-load.ps1` | level variables and readings differing between the saved and the loaded game |
 | `chain` | `level-chain.ps1` | levels reached, autosaves, inventory against retail's run |
 | `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`): the probe tone's plateaus (`tone`), or the 50th, 75th and 90th percentiles of the levels while sound plays (`rms`, music and game sounds, so the two games' start times do not matter) |
-| `demo` | retail: `probe` records `demos/<probe>.dm3` (kept in the reference); both: that demo played with `cl_avidemo` (`avidemo` frames a second, every `every`-th kept) | % of pixels differing per frame, as `capture` |
+| `demo` | retail: `probe` records `demos/<probe>.dm3` (kept in the reference); both: that demo played with `cl_avidemo` (`avidemo` frames a second, every `every`-th kept, only those in the `keep` windows when it has them), ours with `cl_demoSeed 1` | % of pixels differing per frame, as `capture` |
 | `timedemo` | ours: each of the `demos` checks' retail demos with `timedemo 1`, uncapped | the mean frame time without the first `skipFrames` (20) frames (`cl_timedemoLog`), judged against ours' last good result; whether each played to the end |
 
 The sound checks record the speakers by WASAPI loopback, so they play out loud and record
@@ -139,10 +139,23 @@ demo, recorded by its probe on retail (`refresh-retail.ps1`; the probe sets
 `g_syncronousClients`, records, plays and quits), and retail's frames of it. Playing a
 demo with `cl_avidemo N` makes every frame 1/N s of the demo and takes a screenshot of
 it on both engines, so frame n is the same moment on both: no held keys, no frame
-timing. Two runs of ours differed by 0.05 points or less on swamp1 and by 0.3 or less
-on zoo but for two frames of explosions (particles drawn at random, 1.1 and 2.6), where
-probes that aim with `+lookdown` move by tens of points. What still differs from retail
-is the client side: the renderer, the client game module, the HUD.
+timing. What still differs from retail is the client side: the renderer, the client
+game module, the HUD.
+
+The client game module draws its effects (particles, smoke, flash bursts, an
+explosion's streaks) with `rand()`, which the engine seeds from the OS at start, so two
+playbacks of one demo drew different effects: on demos close to the guns, frames with
+effects moved by up to 10 points between runs of one build. Ours plays the suite's demos
+with `cl_demoSeed 1`, an OpenFAKK2 cvar that seeds the random numbers when a demo starts,
+before the client game module loads; two runs of ours then differed by 0.04 points or
+less on every frame of `demo-flashes`, `demo-guns` and `demo-muzzle` (2026-10-16). Retail draws its own random effects, so frames full of them differ
+from retail by more (an explosion close up, 30 points) without anything being wrong;
+they are judged against ours' last good result.
+
+A demo check's `keep` windows ("from-to" in seconds of the demo; frame n is n/`avidemo`
+s) keep the frames around the moments that matter, so a demo can hold several scenes
+with the weapon changes between them left out. The windows are part of the reference:
+changing them makes it stale, as changing the probe does.
 
 - `demo-zoo` (`probe-dzoo`): two creepers fight Julie; chaingun, rockets, her death; 15
   s, 2 frames a second.
@@ -150,14 +163,23 @@ is the client side: the renderer, the client game module, the HUD.
   the water; 36 s, 1 frame a second.
 - `demo-muzzle` (`probe-dmuz`): `muzzle`'s scene (the still flash model, then the uzi
   fired through two cameras by her hand); 5.5 s at 20 frames a second, so each flash
-  (0.05 s) is in the same frames on both games. Two runs of ours differed by 0.45 points
-  or less over its 111 frames; `muzzle`'s screenshots had moved by up to 10.
+  (0.05 s) is in the same frames on both games. `muzzle`'s screenshots had moved by up
+  to 10 points between runs.
 - `demo-crosshair` (`probe-dxhr`): `crosshair`'s scene (the shotgun's crosshair on the
   wall, then on the floor after `+lookdown`), at the pitch retail reached; 2.5 s, 4
-  frames a second. Two runs of ours differed by 0.11 points or less; `crosshair`'s
-  floor shot moved by 10 to 12, as its pitch depends on frame timing.
-- `timedemo` times both demos, uncapped (1.2 ms a frame on 2026-10-16), in place of a
-  camera over an empty map.
+  frames a second. `crosshair`'s floor shot moved by 10 to 12, as its pitch depends on
+  frame timing.
+- `demo-flashes` (`probe-dfl`): the scenes of `probe-muzz2` to `probe-muzz5`, which are
+  no longer checks of their own: the chaingun, hand gun, shotgun and rocket launcher
+  fired through a camera beside the barrel, the uzi through one beside its muzzle and
+  one over its casings; 28 s at 20 frames a second, 212 kept. Those checks' shots had
+  moved by up to 10 points.
+- `demo-guns` (`probe-dgun`): the scenes of `fx-guns`, `fx-range`, `shotgun` and
+  `rocket` in one take: nine weapons fired at the floor ahead; 41 s at 10 frames a
+  second, 156 kept. Those four stay as full-level checks of the whole game (their shots
+  moved by up to 16 points); this one runs at standard.
+- `timedemo` times `demo-zoo`'s and `demo-swamp1`'s demos, uncapped (1.2 ms a frame on
+  2026-10-16), in place of a camera over an empty map.
 
 A probe that changes makes its reference stale, as for any check; `refresh-retail.ps1
 -Only demo-zoo` records the demo again and the `timedemo` check uses the new one.

@@ -2338,9 +2338,15 @@ is off while it records). `demo <name>` (`0x420610`) plays `demos/<name>`, or
 Retail's widths limit ours as they limit retail: 16-bit `eFlags` and `parent`, 10-bit
 frames, 8-bit sound indexes, shorts in the player's arrays, 1023-character configstrings.
 
+`cl_demoSeed` (default 0, not archived) is not retail's: when it is set, `demo` seeds the
+random numbers with it before the client game module loads (`CL_PlayDemo_f`), so a
+playback draws the same random effects every time. The client game module's `rand()`
+shares the engine's C runtime, whose state is per thread, so the one seed covers it. The
+test suite plays its demos with it; retail has nothing like it, and draws its own.
+
 The test suite plays retail demos frame by frame on both games (`demo-zoo`,
-`demo-swamp1`, `demo-muzzle`, `demo-crosshair`; `tools/suite/README.md`, "Demos"): the
-same snapshots on both, so what
+`demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`;
+`tools/suite/README.md`, "Demos"): the same snapshots on both, so what
 differs is the client side. Most frames differ by under 2% of their pixels. The first
 differences they show, not yet investigated:
 
@@ -2362,6 +2368,10 @@ differences they show, not yet investigated:
   but its ragged outline differs (frames 46 to 56, 92 to 100); whether that is the
   emitter's random rotation, which no two games share, or a shape ours gets wrong, is
   not yet known.
+- Frames full of random effects differ most, from the same effects drawn at other
+  angles and sizes: the chaingun's flame burst beside the barrel (`demo-flashes` frames
+  39 to 45, 13 points) and a rocket's explosion close up, its light streaks at other
+  angles (`demo-flashes` 323 to 325 and `demo-guns` 378 to 385, 14 to 34 points).
 
 Still ours: the client-to-server messages (ioquake3's user commands and client commands,
 now in retail's bits) and the netchan header, which demos do not hold and were not read;
