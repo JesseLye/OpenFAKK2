@@ -55,7 +55,19 @@ folder, and says whether the original game does the same. See the
 
 ## Screenshots
 
-None in the repository: the game's art is Ritual's, and nothing made from it is committed.
+OpenFAKK2 at 1920x1080 with 4x anti-aliasing: the widescreen view and HUD, and two of the
+game's own cinematics.
+
+| | |
+| --- | --- |
+| ![The fakkhouse intro: Julie on the landing pad under two moons](docs/assets/images/fakkhouse-intro.jpg) | ![The town of homes1 at dusk](docs/assets/images/homes1.jpg) |
+| *fakkhouse: the intro cinematic* | *homes1* |
+| ![A cinematic in creeperpens](docs/assets/images/creeperpens-cinematic.jpg) | ![Inside the Lander's Roost](docs/assets/images/landersroost.jpg) |
+| *creeperpens: a cinematic* | *landersroost* |
+| ![The skull door in shield](docs/assets/images/shield.jpg) | ![A waterfall on the cliffs](docs/assets/images/cliff1.jpg) |
+| *shield* | *cliff1* |
+
+The game's art in these is Ritual Entertainment's.
 
 ## Building from source
 

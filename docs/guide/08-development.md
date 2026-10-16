@@ -65,9 +65,9 @@ that trustworthy is the same for agents and people:
 ## Rules for contributions
 
 - **Never commit Ritual's data or documents.** The game's files, Ritual's design
-  documents and tools release, demos and screenshots of the game stay out of the
+  documents and tools release, demos, and the harness's screenshots stay out of the
   repository (demos live in `build\demos`, references in `build\suite`; `build\` is
-  ignored).
+  ignored). The only exception is the README's few screenshots, in `docs/assets/images`.
 - **Keep the engine and the game code apart.** The engine is GPLv2+; `code/fakk` is under
   Ritual's SDK licence, which doesn't allow redistributing modified copies and isn't GPL
   compatible. Change `code/fakk` only where the game code can't compile otherwise, and say

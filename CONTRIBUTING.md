@@ -13,7 +13,7 @@ OpenFAKK2 is not public yet and has no issue tracker; this is how work on it is 
   and read its report ([the suite's README](tools/suite/README.md)). A check you change on
   purpose is declared in the commit with a `Suite-moves:` trailer and the reason.
 - **Never commit Ritual's data or documents**: the game's files, Ritual's design documents or
-  tools, demos or screenshots of the game.
+  tools, demos, or screenshots of the game beyond the README's few in `docs/assets/images`.
 - **Keep the engine and `code/fakk` apart.** The engine is GPLv2+; `code/fakk` is Ritual's
   SDK code under its own licence. Change it only where the game code can't compile
   otherwise.
