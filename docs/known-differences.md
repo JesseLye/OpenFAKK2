@@ -18,6 +18,21 @@ from them may be committed; Ritual's licence does not allow copying them.
 
 ## Unexplained
 
+### Changing maps before the player enters
+
+Found by the test suite's `map-rush` check (2026-10-16), not yet investigated or fixed.
+The OpenFAKK2 client, given `map` commands 60 frames apart from a config (`map zoo`,
+`training`, `zoo`, `fakkhouse`, `homes1`, `creeperpens`, `zoo`), dies changing from
+`creeperpens` to `zoo`: the log ends at `==== ShutdownGame ====` right after
+`Going from CS_CONNECTED to CS_PRIMED`, so the level is changed while the client is still
+primed and the player has not entered. The process exits with `0xC0000028`
+(`STATUS_BAD_STACK`) and writes no crash report or `crash.dmp`; Sys_CrashReport's handler
+never ran. With or without sound, the same each time. It does not happen with 120 or more
+frames between the commands (the player in the level first; the suite's `restart` check),
+nor with `creeperpens` then `zoo` 60 frames apart in a fresh session, nor with eight
+changes between `zoo` and `training` 120 frames apart. Retail was not tried: its `wait`
+counts milliseconds, so the same config is not the same test.
+
 ### Idle animation variants picked differently
 
 On `zoo`, three actors that have two idle animations (`vymish_multi`, `vymish_ground`,

@@ -1,0 +1,317 @@
+// The level chain: an automated playthrough of the whole game by gamemap, the way the
+// game moves from one level to the next (trigger_changelevel and the cinematics' exits,
+// with the side trips to training, landersroost, fog, water and blood). Started on intro
+// with "+map intro +script thread chain.scr::s0" by tools\suite\level-chain.ps1, on the
+// real client (gamemap autosaves only when the server is not dedicated), retail's or ours.
+// Each step waits four seconds of level time (the autosave comes at 1.75 s), prints a
+// "==== chain" marker, the inventory and the player, and then queues the next level and
+// this script's thread for it: gamemap spawns the level before the next command runs, so
+// the thread starts on the new level, as "+script thread" does on the command line. The
+// player is given a few weapons on fakkhouse, so the inventory has something to carry.
+// Only the first step uses waitforplayer: on under, whose intro sets the player's model,
+// a waitforplayer started by the previous level's gamemap never returned, on the retail
+// game as on ours.
+// Order and spawn spots come from the maps' trigger_changelevel entities and the
+// *_cinemas.scr scripts.
+
+s0:
+waitforplayer
+wait 4
+stuffcmd "echo ==== chain s0 intro"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread chain.scr::s1"
+end
+
+s1:
+wait 4
+stuffcmd "give weapon_sword.tik"
+stuffcmd "give weapon_uzi.tik"
+stuffcmd "give weapon_shotgun.tik"
+stuffcmd "give weapon_cbow.tik"
+wait 1
+stuffcmd "echo ==== chain s1 fakkhouse"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap training$spawn_fakkhouse"
+stuffcmd "script thread chain.scr::s2"
+end
+
+s2:
+wait 4
+stuffcmd "echo ==== chain s2 training$spawn_fakkhouse"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap fakkhouse$spawn_training"
+stuffcmd "script thread chain.scr::s3"
+end
+
+s3:
+wait 4
+stuffcmd "echo ==== chain s3 fakkhouse$spawn_training"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap homes1$spawn_fakkhouse"
+stuffcmd "script thread chain.scr::s4"
+end
+
+s4:
+wait 4
+stuffcmd "echo ==== chain s4 homes1$spawn_fakkhouse"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap landersroost$spawn_homes1"
+stuffcmd "script thread chain.scr::s5"
+end
+
+s5:
+wait 4
+stuffcmd "echo ==== chain s5 landersroost$spawn_homes1"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap homes1$spawn_landersroost"
+stuffcmd "script thread chain.scr::s6"
+end
+
+s6:
+wait 4
+stuffcmd "echo ==== chain s6 homes1$spawn_landersroost"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap creeperpens$spawn_homes1"
+stuffcmd "script thread chain.scr::s7"
+end
+
+s7:
+wait 4
+stuffcmd "echo ==== chain s7 creeperpens$spawn_homes1"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap homes2good"
+stuffcmd "script thread chain.scr::s8"
+end
+
+s8:
+wait 4
+stuffcmd "echo ==== chain s8 homes2good"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap towncenter_good"
+stuffcmd "script thread chain.scr::s9"
+end
+
+s9:
+wait 4
+stuffcmd "echo ==== chain s9 towncenter_good"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap under"
+stuffcmd "script thread chain.scr::s10"
+end
+
+s10:
+wait 4
+stuffcmd "echo ==== chain s10 under"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap over"
+stuffcmd "script thread chain.scr::s11"
+end
+
+s11:
+wait 4
+stuffcmd "echo ==== chain s11 over"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap shield"
+stuffcmd "script thread chain.scr::s12"
+end
+
+s12:
+wait 4
+stuffcmd "echo ==== chain s12 shield"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap homes2evil"
+stuffcmd "script thread chain.scr::s13"
+end
+
+s13:
+wait 4
+stuffcmd "echo ==== chain s13 homes2evil"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap otto$spawn_homes2evil"
+stuffcmd "script thread chain.scr::s14"
+end
+
+s14:
+wait 4
+stuffcmd "echo ==== chain s14 otto$spawn_homes2evil"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap towncenter_evil"
+stuffcmd "script thread chain.scr::s15"
+end
+
+s15:
+wait 4
+stuffcmd "echo ==== chain s15 towncenter_evil"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cliff1"
+stuffcmd "script thread chain.scr::s16"
+end
+
+s16:
+wait 4
+stuffcmd "echo ==== chain s16 cliff1"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cliff2$spawn_cliff1"
+stuffcmd "script thread chain.scr::s17"
+end
+
+s17:
+wait 4
+stuffcmd "echo ==== chain s17 cliff2$spawn_cliff1"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap swamp1$spawn_cliff2"
+stuffcmd "script thread chain.scr::s18"
+end
+
+s18:
+wait 4
+stuffcmd "echo ==== chain s18 swamp1$spawn_cliff2"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap swamp2$spawn_swamp1"
+stuffcmd "script thread chain.scr::s19"
+end
+
+s19:
+wait 4
+stuffcmd "echo ==== chain s19 swamp2$spawn_swamp1"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap swamp3$spawn_swamp2"
+stuffcmd "script thread chain.scr::s20"
+end
+
+s20:
+wait 4
+stuffcmd "echo ==== chain s20 swamp3$spawn_swamp2"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap gruff"
+stuffcmd "script thread chain.scr::s21"
+end
+
+s21:
+wait 4
+stuffcmd "echo ==== chain s21 gruff"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap gruff_cinema"
+stuffcmd "script thread chain.scr::s22"
+end
+
+s22:
+wait 4
+stuffcmd "echo ==== chain s22 gruff_cinema"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cemetery$spawn_gruff"
+stuffcmd "script thread chain.scr::s23"
+end
+
+s23:
+wait 4
+stuffcmd "echo ==== chain s23 cemetery$spawn_gruff"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap fog"
+stuffcmd "script thread chain.scr::s24"
+end
+
+s24:
+wait 4
+stuffcmd "echo ==== chain s24 fog"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cemetery$spawn_fog"
+stuffcmd "script thread chain.scr::s25"
+end
+
+s25:
+wait 4
+stuffcmd "echo ==== chain s25 cemetery$spawn_fog"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap water"
+stuffcmd "script thread chain.scr::s26"
+end
+
+s26:
+wait 4
+stuffcmd "echo ==== chain s26 water"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cemetery$spawn_water"
+stuffcmd "script thread chain.scr::s27"
+end
+
+s27:
+wait 4
+stuffcmd "echo ==== chain s27 cemetery$spawn_water"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap blood"
+stuffcmd "script thread chain.scr::s28"
+end
+
+s28:
+wait 4
+stuffcmd "echo ==== chain s28 blood"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap cemetery$spawn_blood"
+stuffcmd "script thread chain.scr::s29"
+end
+
+s29:
+wait 4
+stuffcmd "echo ==== chain s29 cemetery$spawn_blood"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap oracleway"
+stuffcmd "script thread chain.scr::s30"
+end
+
+s30:
+wait 4
+stuffcmd "echo ==== chain s30 oracleway"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap oracle"
+stuffcmd "script thread chain.scr::s31"
+end
+
+s31:
+wait 4
+stuffcmd "echo ==== chain s31 oracle"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "gamemap end"
+stuffcmd "script thread chain.scr::s32"
+end
+
+s32:
+wait 4
+stuffcmd "echo ==== chain s32 end"
+stuffcmd "listinventory"
+stuffcmd "whatis 0"
+stuffcmd "echo ==== chain end"
+end

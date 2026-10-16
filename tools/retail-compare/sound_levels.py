@@ -43,20 +43,22 @@ def name(path):
     return path.replace("\\", "/").split("/")[-1].removesuffix(".npy")
 
 
-if sys.argv[1] == "tone":
-    args = sys.argv[2:]
-    labels = args.pop(0).split(",") if not args[0].endswith(".npy") else []
-    cols = [plateaus(tone_levels(np.load(f).astype(np.float64))) for f in args]
-    print(" " * 10 + "".join(f"{name(f)[:19]:>20}" for f in args))
-    for k in range(max(len(c) for c in cols)):
-        row = f"{labels[k] if k < len(labels) else k:<10}"
-        for c in cols:
-            row += f"{'%6.1f/%6.1f' % tuple(c[k]) if k < len(c) else '':>20}"
-        print(row)
-else:
-    a, b = float(sys.argv[2]), float(sys.argv[3])
-    for f in sys.argv[4:]:
-        x = np.load(f)[int(a * RATE):int(b * RATE)].astype(np.float64)
-        p = (x ** 2).mean(axis=0)
-        db = 10 * np.log10(np.maximum(np.append(p, p.mean()), 1e-15))
-        print(f"{name(f):<40} L {db[0]:6.2f}  R {db[1]:6.2f}  L+R {db[2]:6.2f}")
+# run as a script; sound_metric.py imports the functions above
+if __name__ == "__main__":
+    if sys.argv[1] == "tone":
+        args = sys.argv[2:]
+        labels = args.pop(0).split(",") if not args[0].endswith(".npy") else []
+        cols = [plateaus(tone_levels(np.load(f).astype(np.float64))) for f in args]
+        print(" " * 10 + "".join(f"{name(f)[:19]:>20}" for f in args))
+        for k in range(max(len(c) for c in cols)):
+            row = f"{labels[k] if k < len(labels) else k:<10}"
+            for c in cols:
+                row += f"{'%6.1f/%6.1f' % tuple(c[k]) if k < len(c) else '':>20}"
+            print(row)
+    else:
+        a, b = float(sys.argv[2]), float(sys.argv[3])
+        for f in sys.argv[4:]:
+            x = np.load(f)[int(a * RATE):int(b * RATE)].astype(np.float64)
+            p = (x ** 2).mean(axis=0)
+            db = 10 * np.log10(np.maximum(np.append(p, p.mean()), 1e-15))
+            print(f"{name(f):<40} L {db[0]:6.2f}  R {db[1]:6.2f}  L+R {db[2]:6.2f}")

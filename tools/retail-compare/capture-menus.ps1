@@ -1,13 +1,13 @@
 param([string[]]$Menus = @('main', 'loadsave', 'options', 'advancedoptions', 'controls', 'credits'),
-      [ValidateSet('both', 'retail', 'ours')][string]$Side = 'both', [string]$Name = 'ours')
+      [ValidateSet('both', 'retail', 'ours')][string]$Side = 'both', [string]$Name = 'ours', [string]$Bin = '')
 # Screenshots FAKK2's menus on the retail game and on ours, one run per menu, and pairs
 # them as build\compare\captures\menus\pair-<Name>-<menu>.png (retail | ours | difference).
 # No map is loaded: each run pushes the menu (a comma-separated list pushes several, one
 # after another), waits for its half-second fade and takes one screenshot at 640x480.
 #
 # Retail draws its menus dimmed under its console window, which it opens at startup while
-# developer is above 0, and saves developer to its config.cfg, so this takes "seta
-# developer" out of the retail sandbox's config and runs both games with developer 0.
+# developer is above 0, so both games run with developer 0 (and every harness run starts
+# retail with an empty config.cfg, so no archived developer comes back).
 # Retail runs its menus far faster than 60 fps, so its waits are long; and a second
 # pushmenu in the same frame as the first is lost, so pushes are a wait apart.
 # For the load and save menu, copy the install's save\*.ssv and *.tga into
@@ -21,13 +21,6 @@ $retailDir = Join-Path $Sandbox 'retail'
 if ($Side -ne 'ours' -and -not (Test-Path "$retailDir\fakk2.exe")) {
     & (Join-Path $PSScriptRoot 'run-retail.ps1') -Name retail -Map zoo -Secs 5 | Out-Null
 }
-$retailConfig = "$retailDir\fakk\config.cfg"
-if (Test-Path $retailConfig) {
-    $lines = Get-Content $retailConfig
-    $kept = $lines | Where-Object { $_ -notmatch '^\s*seta\s+developer\s' }
-    if ($kept.Count -ne $lines.Count) { Set-Content -Path $retailConfig -Value $kept -Encoding ascii }
-}
-
 foreach ($m in $Menus) {
     $menu = ($m -split ',')[-1]
     $cfg = @('wait 60')
@@ -37,17 +30,24 @@ foreach ($m in $Menus) {
     if ($Side -ne 'ours') {
         Set-Content "$retailDir\fakk\menushot.cfg" $cfg -Encoding ascii
         Remove-Item "$retailDir\fakk\screenshots" -Recurse -ErrorAction SilentlyContinue
-        $p = Start-Process -FilePath "$retailDir\fakk2.exe" -WorkingDirectory $retailDir -PassThru -ArgumentList `
-            "+set r_fullscreen 0 +set r_mode 3 +set s_initsound 0 +set developer 0 +exec menushot.cfg"
-        if (-not $p.WaitForExit(90000)) { $p.Kill(); $p.WaitForExit() }
+        $p = $null
+        try {
+            # Start-HarnessGame empties the sandbox's config.cfg, so no archived developer
+            $p = Start-HarnessGame -Side retail -Exe "$retailDir\fakk2.exe" -WorkDir $retailDir -What "capture-menus retail $menu" `
+                -Arguments "+set r_fullscreen 0 +set r_mode 3 +set s_initsound 0 +set developer 0 +exec menushot.cfg"
+            $p.WaitForExit(90000) | Out-Null
+        }
+        finally { Stop-HarnessGame $p }
         $f = Get-ChildItem "$retailDir\fakk\screenshots\shot*" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($f) { Copy-Item $f.FullName "$out\retail-$menu.tga" -Force } else { "[retail] ${menu}: no screenshot" }
     }
     if ($Side -ne 'retail') {
-        Set-Content "$Sandbox\home\fakk\menushot.cfg" $cfg -Encoding ascii
-        Remove-Item "$Sandbox\home\fakk\screenshots" -Recurse -ErrorAction SilentlyContinue
-        & (Join-Path $PSScriptRoot 'run-client.ps1') -Run '+set r_mode 3 +set developer 0 +exec menushot.cfg' -Secs 90 -Name "menus-$Name" | Out-Null
-        $f = Get-ChildItem "$Sandbox\home\fakk\screenshots\shot*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        # the cfg is written after Reset-TestHome has run (run-client starts the game), but
+        # that only touches config.cfg and autoexec.cfg
+        Set-Content "$TestFakk\menushot.cfg" $cfg -Encoding ascii
+        Remove-Item "$TestFakk\screenshots" -Recurse -ErrorAction SilentlyContinue
+        & (Join-Path $PSScriptRoot 'run-client.ps1') -Run '+set r_mode 3 +set developer 0 +exec menushot.cfg' -Secs 90 -Name "menus-$Name" -Bin $Bin | Out-Null
+        $f = Get-ChildItem "$TestFakk\screenshots\shot*" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($f) { Copy-Item $f.FullName "$out\$Name-$menu.tga" -Force } else { "[$Name] ${menu}: no screenshot" }
     }
     if ((Test-Path "$out\retail-$menu.tga") -and (Test-Path "$out\$Name-$menu.tga")) {

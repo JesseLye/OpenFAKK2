@@ -32,8 +32,7 @@ param(
 #                 point it at another checkout's build, with -Name before, to compare builds.
 #   -Mode         r_mode on both; 3 is 640x480 on both engines.
 #   -Extra        engine command line for both games; -RetailExtra / -OursExtra for one.
-#                 On retail, an archived cvar set here is saved in the sandbox's config.cfg
-#                 and carries into later retail runs. Set it back or check that file.
+#                 Both games start every run from an empty config.cfg, so these last one run.
 #   -MaskNotify   ignore the "Wrote screenshots/..." line in the difference figures.
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
@@ -60,8 +59,14 @@ function Invoke-Side([string]$label, [string]$exe, [string]$workDir, [string]$ga
     $before = @{}
     if (Test-Path $shotDir) { Get-ChildItem $shotDir -File | ForEach-Object { $before[$_.Name] = $_.LastWriteTimeUtc } }
 
-    $p = Start-Process -FilePath $exe -WorkingDirectory $workDir -ArgumentList $arguments -PassThru -WindowStyle $windowStyle
-    if (-not $p.WaitForExit($Secs * 1000)) { $p.Kill(); $p.WaitForExit(); $state = "stopped after ${Secs}s" } else { $state = "exited with code $($p.ExitCode)" }
+    $p = $null
+    # in a finally: a caller that stops the pipeline early (| Select-Object -First 1) or a
+    # Ctrl+C would otherwise leave the game running and the lock held
+    try {
+        $p = Start-HarnessGame -Side $(if ($label -eq 'retail') { 'retail' } else { 'ours' }) -Exe $exe -WorkDir $workDir -Arguments $arguments -WindowStyle $windowStyle -What "capture $label $Map $probeName"
+        if (-not $p.WaitForExit($Secs * 1000)) { $state = "stopped after ${Secs}s" } else { $state = "exited with code $($p.ExitCode)" }
+    }
+    finally { Stop-HarnessGame $p }
 
     $log = Join-Path $LogDir "capture-$label-$(Get-MapTag $Map)-$probeName.log"
     if (Test-Path $console) { Copy-Item $console $log -Force } else { $log = '(no console log)' }
@@ -89,7 +94,6 @@ if ($Side -ne 'ours') {
         # first use: copies fakk2.exe and the game modules, hard-links the paks
         & (Join-Path $RepoRoot 'tools\retail-compare\run-retail.ps1') -Name retail -Map $Map -Secs 5 | Out-Null
     }
-    Copy-Item "$GameInstall\fakk\default.cfg" "$gameDir\fakk\default.cfg" -Force
     $arguments = "+set r_fullscreen 0 +set r_mode $Mode +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra $RetailExtra +map $Map +script thread $probeName.scr::probe"
     Invoke-Side 'retail' (Join-Path $gameDir 'fakk2.exe') $gameDir $gameDir $arguments 'Minimized'
@@ -99,14 +103,10 @@ if ($Side -ne 'retail') {
     if (-not $Bin) { $Bin = Join-Path $RepoRoot 'build\x86-Release\Release' }
     $exe = Join-Path $Bin 'openfakk2.exe'
     if (-not (Test-Path $exe)) { throw "no client at $exe (build it, or pass -Bin)" }
-    $homeDir = Join-Path $Sandbox 'home'
-    $arguments = "+set fs_basepath `"$GameInstall`" +set fs_homepath `"$homeDir`" +set com_abnormalExitDialog 0 " +
+    $arguments = "$OursHomeArgs " +
         "+set r_fullscreen 0 +set r_mode $Mode +set in_nograb 1 +set in_mouse 0 +set s_initsound 0 +set logfile 2 +set developer 1 " +
         "$Extra $OursExtra +map $Map +script thread $probeName.scr::probe"
-    # in a finally: a caller that stops the pipeline early (| Select-Object -First 1)
-    # or a Ctrl+C would otherwise skip it and leave the player's next game with no mouse
-    try { Invoke-Side $Name $exe $Bin $homeDir $arguments 'Normal' }
-    finally { Clear-HarnessMouse }
+    Invoke-Side $Name $exe $Bin $TestHome $arguments 'Normal'
 }
 
 $i = 0
