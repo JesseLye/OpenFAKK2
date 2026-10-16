@@ -735,12 +735,14 @@ screenshot
 screenshot [silent]
 screenshot [levelshot]
 screenshot [filename]
-screenshot <path> <width> <height>
+screenshot <path> <width> <height> [<x> <srcwidth>]
 
 Doesn't print the pacifier message if there is a second arg
 
 FAKK2: the last form is the client's saveshot (a saved game's picture): the
-whole screen scaled to the size given, written to the path as given.
+whole screen scaled to the size given, written to the path as given; or
+the column srcwidth wide from x (OpenFAKK2's, the 4:3 middle of a wide
+window).
 ================== 
 */  
 void R_ScreenShot_f (void) {
@@ -753,13 +755,22 @@ void R_ScreenShot_f (void) {
 		return;
 	}
 
-	if ( ri.Cmd_Argc() == 4 ) {
+	if ( ri.Cmd_Argc() == 4 || ri.Cmd_Argc() == 6 ) {
 		int		outWidth = atoi( ri.Cmd_Argv( 2 ) );
 		int		outHeight = atoi( ri.Cmd_Argv( 3 ) );
+		int		x = 0, width = glConfig.vidWidth;
 
+		if ( ri.Cmd_Argc() == 6 ) {
+			x = atoi( ri.Cmd_Argv( 4 ) );
+			width = atoi( ri.Cmd_Argv( 5 ) );
+			if ( x < 0 || width <= 0 || x + width > glConfig.vidWidth ) {
+				x = 0;
+				width = glConfig.vidWidth;
+			}
+		}
 		if ( outWidth > 0 && outHeight > 0 && outWidth <= 4096 && outHeight <= 4096 ) {
 			Q_strncpyz( checkname, ri.Cmd_Argv( 1 ), sizeof( checkname ) );
-			R_TakeScreenshotScaled( 0, 0, glConfig.vidWidth, glConfig.vidHeight, outWidth, outHeight, checkname, qfalse );
+			R_TakeScreenshotScaled( x, 0, width, glConfig.vidHeight, outWidth, outHeight, checkname, qfalse );
 			return;
 		}
 	}

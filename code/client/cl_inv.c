@@ -792,7 +792,7 @@ static void INV_DrawScreen( void ) {
 	float	rowH, y, x;
 	int		t, i;
 
-	SCR_FillRect( 0, 0, 640, 480, back );
+	SCR_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, back );
 	rowH = ( 480 - 40 ) / (float)( inv_numTypes > 0 ? inv_numTypes : 1 );
 	if ( rowH > 72 ) {
 		rowH = 72;
@@ -851,7 +851,8 @@ void INV_Draw( void ) {
 	}
 	w = inv.width;
 	h = inv.height;
-	bx = inv.alignRight ? 640 - w - inv.horizOffset : inv.horizOffset;
+	// at the window's side, wide or not
+	bx = inv.alignRight ? SCR_ScreenRight640() - w - inv.horizOffset : SCR_ScreenLeft640() + inv.horizOffset;
 	y = inv.vertOffset;
 
 	// the slots

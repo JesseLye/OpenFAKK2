@@ -266,6 +266,9 @@ with no map loaded, one run per menu on each game, and pairs them in
 opens its console window at startup while it is set, dimming the menus). For the load and
 save menu, copy the install's `save\*.ssv` and `*.tga` into
 `build\sandbox\retail\fakk\save` first, so retail lists the games ours finds in the install.
+`-OursExtra` adds to ours' command line after its `r_mode 3`: with `-Side ours -Name wide
+-OursExtra '+set r_mode -1 +set r_customwidth 1280 +set r_customheight 720'` it shoots
+ours' menus on a 16:9 window (`scr_keepAspect`; retail has no wide layout to pair with).
 
 The retail runs use a clean copy of the install. Ours runs on the test home (see "How the
 runners start the games"), which shadows the install's `autoexec.cfg` and `config.cfg`
