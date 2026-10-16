@@ -42,6 +42,7 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 */
 
 #include "client.h"
+#include "../qcommon/alias.h"
 
 #include <sys/stat.h>
 #include <time.h>
@@ -6551,8 +6552,28 @@ void URC_DrawPic( float x, float y, float w, float h, qhandle_t shader, const ve
 	}
 }
 
+/*
+=================
+URC_PlayAliasSound
+
+The inventory's sounds (retail 0x408860) go through the engine's local
+sound (0x43ed80), as the client game's do: the name looked up among the
+global aliases (global0.scr's "alias snd_inv_select ..."), or a file,
+started on the listener's CHAN_MENU. The menus' aliascache lines do not
+name them.
+=================
+*/
 void URC_PlayAliasSound( const char *name ) {
-	URC_PlaySound( name );
+	const char	*path;
+
+	if ( !name[0] ) {
+		return;
+	}
+	path = Alias_FindRandom( name );
+	if ( !path ) {
+		path = name;
+	}
+	S_StartLocalSound( S_RegisterSound( path, qfalse ), CHAN_MENU );
 }
 
 /*

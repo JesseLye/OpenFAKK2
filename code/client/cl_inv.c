@@ -371,11 +371,9 @@ void INV_Close( void ) {
 	inv_fullScreen = qfalse;
 }
 
-// the first (dir 1) or last (dir -1) owned item of a slot, or -1
-static int INV_FirstOwned( const invType_t *type, int dir ) {
-	int		i;
-
-	for ( i = dir > 0 ? 0 : type->numItems - 1 ; i >= 0 && i < type->numItems ; i += dir ) {
+// the owned item of a slot from i on, going by dir, or -1 (retail 0x408610)
+static int INV_OwnedFrom( const invType_t *type, int i, int dir ) {
+	for ( ; i >= 0 && i < type->numItems ; i += dir ) {
 		if ( INV_Owned( &type->items[i] ) ) {
 			return i;
 		}
@@ -383,67 +381,106 @@ static int INV_FirstOwned( const invType_t *type, int dir ) {
 	return -1;
 }
 
+// the first (dir 1) or last (dir -1) owned item of a slot, or -1
+static int INV_FirstOwned( const invType_t *type, int dir ) {
+	return INV_OwnedFrom( type, dir > 0 ? 0 : type->numItems - 1, dir );
+}
+
 /*
 =================
-INV_SelectType
+INV_ShowType
 
-Retail 0x408cf0: show the slot with its first item.
+Retail 0x408ac0: the bar up on a slot. A slot it was not already showing
+gets a new bar, with nothing highlighted, and the change sound.
 =================
 */
-static void INV_SelectType( int t ) {
+static void INV_ShowType( int t ) {
+	if ( !INV_Open() || t != inv_curType ) {
+		inv_curItem = -1;
+		URC_PlayAliasSound( inv.changeSound );
+	}
 	inv_curType = t;
-	inv_curItem = INV_FirstOwned( &inv_types[t], 1 );
+	inv_showTime = cls.realtime;
+}
+
+/*
+=================
+INV_Highlight
+
+Retail 0x40a2d0: an item of the slot highlighted, with the change sound,
+so a slot that comes up with its item highlighted sounds it twice.
+=================
+*/
+static void INV_Highlight( int i ) {
+	inv_curItem = i;
 	inv_showTime = cls.realtime;
 	URC_PlayAliasSound( inv.changeSound );
 }
 
 /*
 =================
+INV_SelectType
+
+Retail 0x408cf0: show the slot with its first item highlighted, whether
+the player has it or not.
+=================
+*/
+static void INV_SelectType( int t ) {
+	INV_ShowType( t );
+	if ( inv_types[t].numItems > 0 ) {
+		INV_Highlight( 0 );
+	}
+}
+
+/*
+=================
+INV_CycleType
+
+Retail 0x408dc0, a "warpinv" key for the slot already up with an item
+highlighted: the slot's next item, from its last back to its first,
+whether the player has it or not.
+=================
+*/
+static void INV_CycleType( void ) {
+	INV_Highlight( ( inv_curItem + 1 ) % inv_types[inv_curType].numItems );
+}
+
+/*
+=================
 INV_Step
 
-Retail 0x408670: the next or previous owned item, running on into the
-next or previous slot.
+Retail 0x408670: the next or previous item the player has in the slot;
+past its end the next or previous slot's first (or last) one, or its
+first item when the player has none of them. With the bar down it opens
+on the first slot's first item.
 =================
 */
 static void INV_Step( int dir ) {
-	int		t, i, tries;
+	int		t, i;
 
 	if ( !inv_numTypes ) {
 		return;
 	}
 	if ( !INV_Open() ) {
-		t = inv_curType >= 0 ? inv_curType : 0;
-		i = INV_FirstOwned( &inv_types[t], 1 );
-		inv_curType = t;
-		inv_curItem = i;
-		if ( i >= 0 ) {
-			inv_showTime = cls.realtime;
-			URC_PlayAliasSound( inv.changeSound );
-			return;
-		}
+		INV_ShowType( 0 );		// 0x408ca0
 	}
 	t = inv_curType;
-	for ( i = inv_curItem + dir ; i >= 0 && i < inv_types[t].numItems ; i += dir ) {
-		if ( INV_Owned( &inv_types[t].items[i] ) ) {
-			inv_curItem = i;
-			inv_showTime = cls.realtime;
-			URC_PlayAliasSound( inv.changeSound );
-			return;
+	if ( inv_curItem < 0 ) {
+		i = 0;
+	} else {
+		i = INV_OwnedFrom( &inv_types[t], inv_curItem + dir, dir );
+		if ( i < 0 ) {
+			t = ( t + dir + inv_numTypes ) % inv_numTypes;
+			INV_ShowType( t );
+			i = INV_FirstOwned( &inv_types[t], dir );
+			if ( i < 0 ) {
+				i = 0;
+			}
 		}
 	}
-	for ( tries = 0 ; tries < inv_numTypes ; tries++ ) {
-		t = ( t + dir + inv_numTypes ) % inv_numTypes;
-		i = INV_FirstOwned( &inv_types[t], dir );
-		if ( i >= 0 ) {
-			inv_curType = t;
-			inv_curItem = i;
-			inv_showTime = cls.realtime;
-			URC_PlayAliasSound( inv.changeSound );
-			return;
-		}
+	if ( i < inv_types[t].numItems ) {
+		INV_Highlight( i );
 	}
-	inv_showTime = cls.realtime;
-	URC_PlayAliasSound( inv.rejectSound );
 }
 
 /*
@@ -451,7 +488,7 @@ static void INV_Step( int dir ) {
 INV_Equip
 
 Retail 0x409e50 (left) and 0x40a090 (right): the highlighted item to the
-hand, when it goes there.
+hand, when the player has it (0x4070b0) and it goes there.
 =================
 */
 static void INV_Equip( int hand ) {
@@ -462,6 +499,11 @@ static void INV_Equip( int hand ) {
 		return;
 	}
 	item = &inv_types[inv_curType].items[inv_curItem];
+	if ( !INV_Owned( item ) ) {
+		URC_PlayAliasSound( inv.rejectSound );
+		inv_showTime = cls.realtime;
+		return;
+	}
 	if ( item->checkAmmo && INV_Ammo( item, &amount, &max ) && amount <= 0 ) {
 		URC_PlayAliasSound( inv.rejectSound );
 		inv_showTime = cls.realtime;
@@ -482,6 +524,25 @@ static void INV_Equip( int hand ) {
 	}
 	URC_PlayAliasSound( inv.selectSound );
 	INV_Close();
+}
+
+// whether a binding is "warpinv <the slot up>" (its first two words, as
+// retail splits it at the spaces)
+static qboolean INV_WarpsToCurrent( const char *bind ) {
+	char	buf[MAX_STRING_CHARS];
+	char	*slot, *end;
+
+	Q_strncpyz( buf, bind, sizeof( buf ) );
+	if ( Q_stricmpn( buf, "warpinv ", 8 ) ) {
+		return qfalse;
+	}
+	for ( slot = buf + 8 ; *slot == ' ' ; slot++ ) {
+	}
+	end = strchr( slot, ' ' );
+	if ( end ) {
+		*end = 0;
+	}
+	return !Q_stricmp( slot, inv_types[inv_curType].name );
 }
 
 /*
@@ -521,6 +582,12 @@ qboolean INV_KeyEvent( int key ) {
 	if ( !bind || !bind[0] ) {
 		return qfalse;
 	}
+	// a "warpinv" key for the slot up with an item highlighted moves the
+	// highlight on; the command itself goes back to the slot's first item
+	if ( inv_curItem >= 0 && INV_WarpsToCurrent( bind ) ) {
+		INV_CycleType();
+		return qtrue;
+	}
 	if ( !Q_stricmp( bind, "+attackleft" ) ) {
 		INV_Equip( INV_EQUIP_LEFT );
 		return qtrue;
@@ -549,7 +616,7 @@ static void INV_WarpInv_f( void ) {
 	}
 	for ( t = 0 ; t < inv_numTypes ; t++ ) {
 		if ( !Q_stricmp( inv_types[t].name, Cmd_Argv( 1 ) ) ) {
-			INV_SelectType( t );
+			INV_SelectType( t );		// 0x4080a0
 			return;
 		}
 	}
@@ -782,8 +849,8 @@ void INV_DrawHudModel( int slot, float x, float y, float w, float h, float alpha
 =================
 INV_DrawScreen
 
-The whole inventory: a row for each slot, its button at the left and the
-items the player has beside it.
+The whole inventory: a row for each slot, its button at the left and its
+items' frames beside it, the ones the player has showing their model.
 =================
 */
 static void INV_DrawScreen( void ) {
@@ -814,10 +881,9 @@ static void INV_DrawScreen( void ) {
 		for ( i = 0 ; i < type->numItems ; i++ ) {
 			const invItem_t	*item = &type->items[i];
 
-			if ( !INV_Owned( item ) ) {
-				continue;
-			}
-			INV_DrawFrame( item, x, y, fw, fh, t == inv_curType && i == inv_curItem, qtrue );
+			// every item's frame, as the bar has, so the highlight shows
+			// on one the player lacks
+			INV_DrawFrame( item, x, y, fw, fh, t == inv_curType && i == inv_curItem, INV_Owned( item ) );
 			if ( t == inv_curType && i == inv_curItem ) {
 				URC_DrawText( INV_FONT, x, y + fh + 1, item->name, white );
 			}
