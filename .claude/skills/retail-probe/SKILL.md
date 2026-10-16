@@ -165,7 +165,10 @@ a walk, jump and stop, while every speed, the jump velocity and gravity agree. B
 calling a position difference of that size a bug, rerun ours with
 `-Extra "+set sv_fps 40"` (or through the real client): if it lands inside retail's
 spread, it was the cadence. Per-frame event counts in the summary double at 40, for the
-same reason.
+same reason. Use 40 only for that position check: the game does some damage and
+charging once per server frame (burning, repeating explosions, crushing, water refills),
+so at 40 they happen twice as often; see "`sv_fps`: keep retail's 20" in
+`docs/known-differences.md`.
 
 For a projectile or other spawned entity, the telling fields are `Origin` and
 `Velocity` relative to the player's `Origin`, then `Movetype`, `Solidtype` and

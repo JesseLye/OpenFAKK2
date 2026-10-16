@@ -116,6 +116,31 @@ here; the client's are under "Commands and cvars the retail engine has" below.
 | `paused` | 0 | 0 | Was ioquake3's `cl_paused`, renamed; `sv_paused` stays, read-only |
 | `cl_run` | 0 | 0 | Was 1 (Quake III's). Registered at `0x422626` with "0", `CVAR_ARCHIVE`; the run button (`0x41e540`) is set when `in_speed.active == (cl_run == 0)`. Julie walks with `+forward` alone until the player turns "always run" on; the shipped `default.cfg` binds only `SHIFT +speed` and sets no `cl_run` |
 
+### `sv_fps`: keep retail's 20
+
+`sv_fps` is 20 on both engines: the server advances the game world in 50 ms frames and
+sends a snapshot after each, while the client draws at its own rate, interpolating other
+entities between snapshots and predicting the player's own movement every frame. The
+game's balance assumes 20. Much of Ritual's game code scales with the rate, as
+`FRAMETIME` is `level.fixedframetime`, `1 / sv_fps` (`g_public.h:180`, `level.cpp:459`),
+and player movement runs per input command, not per server frame. But some of it acts
+once per server frame without scaling, so at another rate it changes the game:
+
+- burning: 0.05 damage a frame to the player, 0.1 to others, rescheduled each frame
+  (`Sentient`'s on-fire event, `sentient.cpp` near line 3886);
+- explosions that damage again every `FRAMETIME` (`weaputils.cpp:1854`, `2290`);
+- `MOD_CRUSH_EVERY_FRAME` crushing damage (`sentient.cpp`);
+- a water supply's charging, posted every frame (`misc.cpp:3701`);
+- a vehicle's spin, damped by `avelocity *= 0.05` each frame (`vehicle.cpp:938`);
+- server frame commands marked `every` in TIKI definitions.
+
+At 40 these happen twice as often: twice the burn and crush damage, faster refills,
+harder damping. Keep 20 for play and for every comparison with retail. The harness's
+`sv_fps 40` (the retail-probe skill, "Read the result") is a diagnostic for the headless
+test player's movement cadence only, never for anything involving damage, fire, refills
+or timing. If other entities' motion ever looks choppy, smooth it on the client rather
+than raising the simulation rate.
+
 ## Commands and cvars the retail engine has
 
 Compared on 2026-10-15 by running `cmdlist` and `cvarlist` on `zoo` in the retail client
