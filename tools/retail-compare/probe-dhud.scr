@@ -1,0 +1,53 @@
+// Records the suite's HUD demo (demos/probe-dhud.dm3) on training, after its entry
+// cinematic, in one take from the player's view: probe-flash's gauge changes (health
+// and water to 60, then to 30; each flash lasts 750 ms), probe-ammofl's shotgun shot
+// (the ammo bars' flash), and probe-pot's targeting reticle (a pot floated with
+// +autoaim ahead of her and the hand gun in her right hand). The "demo-hud" check plays
+// it at 20 frames a second and keeps the frames around each (the times after "record"
+// are noted below); made on retail by refresh-retail.ps1. record needs
+// g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 25
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+$player health 100
+$player waterpower 100
+wait 3
+// probe-pot's turn, which also points the shot away from the trainer by the wall
+// (hitting her fails the level)
+stuffcmd "+left"
+wait 0.2
+stuffcmd "-left"
+wait 0.5
+stuffcmd "record probe-dhud"
+// 1.0: one shotgun shot, at full health
+wait 1
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 3.1: health and water to 60
+wait 2
+$player health 60
+$player waterpower 60
+// 5.1: to 30
+wait 2
+$player health 30
+$player waterpower 30
+// 7.1: the pot ahead, and the hand gun
+wait 2
+spawn script_model model obj_pot1.tik origin "1311 951 140" targetname tgt
+wait 0.1
+$tgt anim idle
+$tgt flags +autoaim
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+// 10.9 and 14.9: the reticle on the pot
+wait 8.3
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

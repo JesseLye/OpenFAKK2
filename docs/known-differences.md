@@ -2338,8 +2338,16 @@ is off while it records). `demo <name>` (`0x420610`) plays `demos/<name>`, or
 Retail's widths limit ours as they limit retail: 16-bit `eFlags` and `parent`, 10-bit
 frames, 8-bit sound indexes, shorts in the player's arrays, 1023-character configstrings.
 
-The test suite plays two retail demos frame by frame on both games (`demo-zoo`,
-`demo-swamp1`; `tools/suite/README.md`, "Demos"): the same snapshots on both, so what
+`cl_demoSeed` (default 0, not archived) is not retail's: when it is set, `demo` seeds the
+random numbers with it before the client game module loads (`CL_PlayDemo_f`), so a
+playback draws the same random effects every time. The client game module's `rand()`
+shares the engine's C runtime, whose state is per thread, so the one seed covers it. The
+test suite plays its demos with it; retail has nothing like it, and draws its own.
+
+The test suite plays retail demos frame by frame on both games (`demo-zoo`,
+`demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`, `demo-melee`,
+`demo-hud`;
+`tools/suite/README.md`, "Demos"): the same snapshots on both, so what
 differs is the client side. Most frames differ by under 2% of their pixels. The first
 differences they show, not yet investigated:
 
@@ -2352,6 +2360,19 @@ differences they show, not yet investigated:
 - In swamp1's cinematic Julie's head is turned differently (up on retail, ahead on ours)
   and her face is lit warmer on ours (`demo-swamp1` frames 10 to 13).
 - Textures in close-up look blurrier on ours: the creeper's skin and a tree's bark.
+- The weapon HUD on the first frame of a playback: retail draws the panel's frame with no
+  weapon picture in it, ours the shotgun picture and its ammo bar without the frame
+  (`demo-crosshair` frame 1, 4.45 points); from the next frame on both draw both.
+- The uzi's flame burst. `demo-muzzle` plays at 20 frames a second, so the uzi's flashes
+  fall on every other frame, the same frames on both games: those frames differ by 3.4
+  to 4.6 points, the frames between them by 1 to 1.6. The burst is the same size on both
+  but its ragged outline differs (frames 46 to 56, 92 to 100); whether that is the
+  emitter's random rotation, which no two games share, or a shape ours gets wrong, is
+  not yet known.
+- Frames full of random effects differ most, from the same effects drawn at other
+  angles and sizes: the chaingun's flame burst beside the barrel (`demo-flashes` frames
+  39 to 45, 13 points) and a rocket's explosion close up, its light streaks at other
+  angles (`demo-flashes` 323 to 325 and `demo-guns` 378 to 385, 14 to 34 points).
 
 Still ours: the client-to-server messages (ioquake3's user commands and client commands,
 now in retail's bits) and the netchan header, which demos do not hold and were not read;

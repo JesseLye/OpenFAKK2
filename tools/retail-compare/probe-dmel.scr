@@ -1,0 +1,94 @@
+// Records the suite's melee demo (demos/probe-dmel.dm3) on zoo, in one take from the
+// player's view: probe-pfade's centre print fading in (750 ms on retail, 0x419480), then
+// probe-fx-melee's weapons (the electric sword's blade beam and swipe, the axe's and the
+// chain sword's swipes, a thrown flashbang, a gas pod from the gas sling) and
+// probe-sword's swings (the green sword, the fire sword). The "demo-melee" check plays
+// it at 20 frames a second and keeps the frames around each (the times after "record"
+// are noted below); made on retail by refresh-retail.ps1. record needs
+// g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "give weapon_elecsword.tik"
+wait 0.5
+stuffcmd "use ElecSword right"
+wait 2.5
+stuffcmd "record probe-dmel"
+// 0.5: the print's fade-in
+wait 0.5
+centerprint "FADE MMMM WWWW"
+// 5.5: the electric sword, once the print has gone
+wait 5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 7.1: the axe
+wait 1.5
+stuffcmd "give weapon_axe.tik"
+wait 0.5
+stuffcmd "use Axe dual"
+// 10.1: one swing
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 11.7: the chain sword
+wait 1.5
+stuffcmd "give weapon_chainsword.tik"
+wait 0.5
+stuffcmd "use ChainSword dual"
+// 14.7: one swing
+wait 2.5
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 16.3: the flashbang
+wait 1.5
+stuffcmd "give weapon_flashbang.tik"
+wait 0.5
+stuffcmd "use Flashbang right"
+// 19.3: the throw; on retail, as in probe-fx-melee, she still holds the chain sword
+// and nothing is thrown
+wait 2.5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 22.4: the gas sling
+wait 3
+stuffcmd "give weapon_sling_gas.tik"
+wait 0.5
+$player ammo "Gas Pod" 5
+wait 0.5
+stuffcmd "use GasSling dual"
+// 25.9: drawn back 1 s, released at 26.9; the pod's cloud
+wait 2.5
+stuffcmd "+attackleft"
+wait 1
+stuffcmd "-attackleft"
+// 28.9: the green sword
+wait 2
+stuffcmd "give weapon_sword.tik"
+wait 0.5
+stuffcmd "use GreenSword right"
+// 31.4: one swing
+wait 2
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 33.0: the fire sword
+wait 1.5
+stuffcmd "give weapon_firesword.tik"
+wait 0.5
+stuffcmd "use FireSword right"
+// 35.5: one swing
+wait 2
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 36.6
+wait 1
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

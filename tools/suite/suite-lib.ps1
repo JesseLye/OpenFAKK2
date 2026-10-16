@@ -103,6 +103,11 @@ function Get-CheckInputHash($Check) {
     $sha = [Security.Cryptography.SHA1]::Create()
     $bytes = New-Object System.Collections.Generic.List[byte]
     foreach ($f in $files) { $bytes.AddRange([IO.File]::ReadAllBytes($f)) }
+    # a demo check that keeps windows of frames: retail's frames were kept by them
+    $keep = @(Get-Prop $Check 'keep' @())
+    if ($Check.kind -eq 'demo' -and $keep.Count) {
+        $bytes.AddRange([Text.Encoding]::UTF8.GetBytes("$(Get-Prop $Check 'avidemo' 2)/$(Get-Prop $Check 'every' 1)/$($keep -join ',')"))
+    }
     ([BitConverter]::ToString($sha.ComputeHash($bytes.ToArray())) -replace '-', '').Substring(0, 12)
 }
 
@@ -126,8 +131,10 @@ function Get-CheckDemos($Check) {
 # Plays a demo on either game with cl_avidemo: every frame is 1/$Rate s of the demo and
 # takes a screenshot, on both engines (retail's CL_Frame 0x421f45), so frame n is the
 # same moment on both; nextdemo quits at the end. Keeps every $Every-th shot in $Out as
-# shot-<frame>.tga, and the console log as game.log.
-function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [string]$Demo, [string]$Out, [int]$Rate, [int]$Every, [int]$Secs, [string]$Extra, [string]$Bin) {
+# shot-<frame>.tga, and the console log as game.log; with $Keep ("a-b", seconds of the
+# demo: frame n is n/$Rate s), only the frames in those windows.
+function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [string]$Demo, [string]$Out, [int]$Rate, [int]$Every, [int]$Secs, [string]$Extra, [string]$Bin, [string[]]$Keep = @()) {
+    $windows = @(foreach ($w in $Keep) { if ($w -match '^\s*([\d.]+)\s*-\s*([\d.]+)\s*$') { , @([double]$Matches[1], [double]$Matches[2]) } else { throw "demo keep window '$w' is not 'from-to' in seconds" } })
     $retailDir = Join-Path $Sandbox 'retail'
     $fakk = if ($Side -eq 'ours') { $TestFakk } else { Join-Path $retailDir 'fakk' }
     New-Item -ItemType Directory -Force (Join-Path $fakk 'demos') | Out-Null
@@ -139,8 +146,9 @@ function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [stri
     # 640x480 on both, as capture.ps1 runs them, so shots pair; kept short for retail, which
     # drops the end of a long command line
     $play = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 $Extra +set cl_avidemo $Rate +set nextdemo quit +demo suite"
-    if ($Side -eq 'ours') { $exe = Join-Path $(if ($Bin) { $Bin } else { $EngineBin }) 'openfakk2.exe'; $wd = Split-Path $exe; $play = "$OursHomeArgs +set in_nograb 1 +set developer 0 $play" }
+    if ($Side -eq 'ours') { $exe = Join-Path $(if ($Bin) { $Bin } else { $EngineBin }) 'openfakk2.exe'; $wd = Split-Path $exe; $play = "$OursHomeArgs +set in_nograb 1 +set developer 0 +set cl_demoSeed 1 $play" }
     else { $exe = "$retailDir\fakk2.exe"; $wd = $retailDir }
+    if (-not (Test-Path $exe)) { throw "no client at $exe (build it, or pass -Bin)" }
     $p = $null
     try {
         $p = Start-HarnessGame -Side $Side -Exe $exe -WorkDir $wd -Arguments $play -What "suite demo $Side"
@@ -150,7 +158,9 @@ function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [stri
     Copy-IfThere $console "$Out\game.log" | Out-Null
     $n = 0; $kept = 0
     Get-ChildItem $shotDir -File -Filter 'shot*' -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
-        if ($n % $Every -eq 0) { Copy-Item $_.FullName (Join-Path $Out "shot-$n.tga"); $kept++ }
+        $t = $n / $Rate
+        $inWindow = -not $windows.Count -or @($windows | Where-Object { $t -ge $_[0] -and $t -le $_[1] }).Count
+        if ($inWindow -and $n % $Every -eq 0) { Copy-Item $_.FullName (Join-Path $Out "shot-$n.tga"); $kept++ }
         $n++
     }
     "$Side`: demo played, $state; $n frames, $kept shots kept"
@@ -443,7 +453,7 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
         'demo' {
             # retail: the probe records demos/<probe>.dm3 and quits; the demo is kept in the
             # reference and both games play that one (ours from the reference)
-            $rate = [int](Get-Prop $Check 'avidemo' 2); $every = [int](Get-Prop $Check 'every' 1)
+            $rate = [int](Get-Prop $Check 'avidemo' 2); $every = [int](Get-Prop $Check 'every' 1); $keep = @(Get-Prop $Check 'keep' @())
             $play = if ($secs) { $secs } else { 120 }
             if ($Side -eq 'retail') {
                 $recorded = Join-Path $fakk "demos\$probe.dm3"
@@ -452,12 +462,12 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
                 # nothing kept without a demo, so refresh-retail.ps1 leaves the old reference
                 if (-not (Copy-IfThere $recorded "$Out\demo.dm3")) { $output += "no demo: the probe did not record demos/$probe.dm3 (see $LogDir\client-retail-$tag-$probe.log)"; break }
                 Copy-IfThere (Join-Path $LogDir "client-retail-$tag-$probe.log") "$Out\record.log" | Out-Null
-                $output += Invoke-DemoPlayback retail "$Out\demo.dm3" $Out $rate $every $play "$extra $sideExtra".Trim() ''
+                $output += Invoke-DemoPlayback retail "$Out\demo.dm3" $Out $rate $every $play "$extra $sideExtra".Trim() '' $keep
             }
             else {
                 $demo = (Get-CheckDemos $Check | Select-Object -First 1).file
                 if (-not (Test-Path $demo)) { throw "no retail demo at $demo (tools\suite\refresh-retail.ps1 -Only $($Check.name))" }
-                $output = Invoke-DemoPlayback ours $demo $Out $rate $every $play "$extra $sideExtra".Trim() $Bin
+                $output = Invoke-DemoPlayback ours $demo $Out $rate $every $play "$extra $sideExtra".Trim() $Bin $keep
             }
         }
         'timedemo' {

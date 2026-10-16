@@ -1,0 +1,124 @@
+// Records the suite's weapon effects demo (demos/probe-dgun.dm3): the scenes of
+// probe-fx-guns, probe-fx-range, probe-shotgun and probe-rocket on zoo, in one take
+// from the player's view. Aiming a little down, she fires the chaingun, the uzi and the
+// hand gun (flashes, tracers, impact puffs, holes), the crossbow (a charged bolt that
+// explodes and leaves a blast mark), the flamethrower and the soul sucker's beam; then
+// turns a little right and aims lower for the shotgun's blast and grenade, and lower
+// again for a rocket that hits the floor ahead. The pitch +lookdown reaches varies with
+// frame timing, but the demo holds the one retail reached. The "demo-guns" check plays
+// it at 10 frames a second and keeps the frames around each firing (the times after
+// "record" are noted below); made on retail by refresh-retail.ps1. record needs
+// g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "+lookdown"
+wait 0.15
+stuffcmd "-lookdown"
+stuffcmd "give weapon_chaingun.tik"
+wait 0.5
+stuffcmd "use Chaingun dual"
+wait 2.5
+stuffcmd "record probe-dgun"
+// 0.5: the chaingun, 0.8 s
+wait 0.5
+stuffcmd "+attackleft"
+wait 0.8
+stuffcmd "-attackleft"
+// 2.3: the uzi
+wait 1
+stuffcmd "give weapon_uzi.tik"
+wait 0.5
+stuffcmd "use Uzi right"
+// 5.3: 0.4 s
+wait 2.5
+stuffcmd "+attackright"
+wait 0.4
+stuffcmd "-attackright"
+// 6.5: the hand gun
+wait 0.8
+stuffcmd "give weapon_gun.tik"
+wait 0.5
+stuffcmd "use HandGun right"
+// 9.5: one shot
+wait 2.5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 10.4: the crossbow
+wait 0.8
+stuffcmd "give weapon_cbow.tik"
+wait 0.5
+stuffcmd "use Crossbow right"
+// 13.4: charged 1.2 s, released at 14.6
+wait 2.5
+stuffcmd "+attackright"
+wait 1.2
+stuffcmd "-attackright"
+// 16.6: the flamethrower
+wait 2
+stuffcmd "give weapon_flamethrower.tik"
+wait 0.5
+stuffcmd "use Flamethrower dual"
+// 19.6: 1 s
+wait 2.5
+stuffcmd "+attackleft"
+wait 1
+stuffcmd "-attackleft"
+// 21.4: the soul sucker
+wait 0.8
+stuffcmd "give weapon_soulsucker.tik"
+wait 0.5
+stuffcmd "use Soulsucker dual"
+// 24.4: 1 s
+wait 2.5
+stuffcmd "+attackleft"
+wait 1
+stuffcmd "-attackleft"
+// 25.9: the shotgun, from full health (its grenade and the rocket go off near her)
+wait 0.5
+$player health 100
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+// 28.9: turn a little right, aim lower
+wait 2.5
+stuffcmd "+right"
+wait 0.2
+stuffcmd "-right"
+stuffcmd "+lookdown"
+wait 0.1
+stuffcmd "-lookdown"
+// 29.5: the blast
+wait 0.3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 31.6: the grenade, which goes off about 2.15 s later
+wait 2
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+// 34.7: the rocket launcher
+wait 3
+$player health 100
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+// 37.2: aim lower again
+wait 2
+stuffcmd "+lookdown"
+wait 0.15
+stuffcmd "-lookdown"
+// 37.65: one rocket; the explosion and its blast mark
+wait 0.3
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+// 40.75
+wait 3
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end
