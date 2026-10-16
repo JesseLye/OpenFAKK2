@@ -2345,7 +2345,8 @@ shares the engine's C runtime, whose state is per thread, so the one seed covers
 test suite plays its demos with it; retail has nothing like it, and draws its own.
 
 The test suite plays retail demos frame by frame on both games (`demo-zoo`,
-`demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`;
+`demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`, `demo-melee`,
+`demo-hud`;
 `tools/suite/README.md`, "Demos"): the same snapshots on both, so what
 differs is the client side. Most frames differ by under 2% of their pixels. The first
 differences they show, not yet investigated:

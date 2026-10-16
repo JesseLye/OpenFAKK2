@@ -178,6 +178,18 @@ changing them makes it stale, as changing the probe does.
   `rocket` in one take: nine weapons fired at the floor ahead; 41 s at 10 frames a
   second, 156 kept. Those four stay as full-level checks of the whole game (their shots
   moved by up to 16 points); this one runs at standard.
+- `demo-melee` (`probe-dmel`): the scenes of `probe-pfade`, `probe-fx-melee` and
+  `probe-sword` on zoo in one take: a centre print's whole 750 ms fade-in, the electric
+  sword, axe and chain sword, a gas pod's cloud, the green and fire swords' swipes; 37 s
+  at 20 frames a second, 190 kept. As in `probe-fx-melee`, the flashbang is not thrown
+  on retail (she still holds the chain sword). `sword` and `pfade` are no longer checks;
+  `fx-melee` stays at the full level as a check of the whole game.
+- `demo-hud` (`probe-dhud`): the scenes of `probe-ammofl`, `probe-flash` and `probe-pot`
+  on training in one take: the ammo bars' and the health and water gauges' whole
+  flashes, frame by frame, and the targeting reticle on an autoaim pot; 16 s at 20
+  frames a second, 89 kept. Its shot is aimed away from the trainer by the wall, as
+  hitting her fails the level. `ammofl`, `flash` and `pot` (whose shots moved by up to 2
+  points) are no longer checks.
 - `timedemo` times `demo-zoo`'s and `demo-swamp1`'s demos, uncapped (1.2 ms a frame on
   2026-10-16), in place of a camera over an empty map.
 
