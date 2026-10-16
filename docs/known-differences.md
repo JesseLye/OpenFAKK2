@@ -601,7 +601,20 @@ Not read, done another way:
   player in fakkhouse (2026-10-15, `probe-exit.scr` through `probe-client.ps1`). Not
   followed: on arrival the retail game autosaves (`Saving game...training0000`).
 - **The console** has no `console` shader in FAKK2 (the retail console was a window);
-  it is drawn on a dark translucent sheet rather than the default shader's black.
+  it is drawn on a dark translucent sheet rather than the default shader's black. The
+  client no longer asks for one: retail's `CL_InitRenderer` (`0x40cee0`, called from
+  `CL_StartHunkUsers` `0x422130`) only begins the renderer's registration and hands on to
+  the interface, and `fakk2.exe` holds no `console` string. Asking had printed "Couldn't
+  find image file for shader console" at every map load.
+- **`r_uiFullScreen`** is gone. Quake III's engine set it to 1 outside a map so that
+  `r_vertexLight` would leave the menus' lightmaps alone; `fakk2.exe` has no such cvar
+  (nor do its game modules), and its shader finishing (`0x478ce1`) collapses the stages
+  for `r_vertexLight` or a Permedia 2 alone. The engine's `Cvar_Set` before the renderer
+  registered it had printed `cvar "r_uifullscreen" given initial values: "1" and "0"` at
+  every start.
+- **The console history** (`q3history` in the home directory, ioquake3's) is kept as a
+  convenience; retail has none. A missing file, as on a first start, is no longer
+  reported ("Couldn't read q3history").
 - **`in_nograb`** is not archived here (it is in Quake III), so a harness run that sets
   it does not leave the next normal run without a mouse.
 - **The health and water gauges** (`ui/healthhud.urc`): a `statbar_tileshader` is laid

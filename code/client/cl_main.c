@@ -1395,9 +1395,6 @@ void CL_Disconnect( qboolean showMainMenu ) {
 		return;
 	}
 
-	// shutting down the client so enter full screen ui mode
-	Cvar_Set("r_uiFullScreen", "1");
-
 	// the retail client ends its loading screen when an error drops the
 	// connection (0x4209b0); CL_MapLoading starts it again after this
 	URC_EndLoading();
@@ -2168,9 +2165,6 @@ void CL_DownloadsComplete( void ) {
 	if ( clc.state != CA_LOADING ) {
 		return;
 	}
-
-	// starting to load a map so we get out of full screen ui mode
-	Cvar_Set("r_uiFullScreen", "0");
 
 	// flush client memory and start loading stuff
 	// this will also (re)load the UI
@@ -3228,7 +3222,10 @@ void CL_InitRenderer( void ) {
 	// load character sets
 	cls.charSetShader = re.RegisterShader( "gfx/2d/bigchars" );
 	cls.whiteShader = re.RegisterShader( "white" );
-	cls.consoleShader = re.RegisterShader( "console" );
+	// no "console" shader: FAKK2 has none, and retail's CL_InitRenderer
+	// (fakk2.exe 0x40cee0) registers no shader at all; asking for it printed
+	// "Couldn't find image file for shader console" at every map load
+
 	g_console_field_width = cls.glconfig.vidWidth / g_smallchar_width - 2;
 	g_consoleField.widthInChars = g_console_field_width;
 }

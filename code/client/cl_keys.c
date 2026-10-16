@@ -1700,12 +1700,11 @@ void CL_LoadConsoleHistory( void )
 	int						i, numChars, numLines = 0;
 	fileHandle_t	f;
 
+	// ioquake3's, kept as a convenience; retail has no history file. None
+	// yet (a first start) is no fault, so nothing is printed for it
 	consoleSaveBufferSize = FS_FOpenFileRead( CONSOLE_HISTORY_FILE, &f, qfalse );
 	if( !f )
-	{
-		Com_Printf( "Couldn't read %s.\n", CONSOLE_HISTORY_FILE );
 		return;
-	}
 
 	if( consoleSaveBufferSize < MAX_CONSOLE_SAVE_BUFFER &&
 			FS_Read( consoleSaveBuffer, consoleSaveBufferSize, f ) == consoleSaveBufferSize )
