@@ -682,7 +682,27 @@ static void CL_CG_R_AddRefEntityToScene( refEntity_t *ent ) {
 	re.AddRefEntityToScene( ent );
 }
 
-static void CL_CG_R_RenderScene( refdef_t *fd ) {
+/*
+====================
+CL_CG_R_RenderScene
+
+Not retail's: a view of the world wider than 4:3 shows more to the sides
+(Hor+) instead of losing the top and bottom. The module keeps the horizontal
+field of view it is given (the player state's fov, 90 by default) and
+derives the vertical one from the view's shape, which frames the picture as
+retail does only at 4:3. Here both half-angle tangents are scaled by the
+view's width over a 4:3 view's of the same height, so the vertical field of
+view is the one a 4:3 view of the module's horizontal one has, and the
+horizontal one fills the width. Scaling the tangents rather than deriving
+fov_y again from fov_x keeps the module's underwater warp, which moves the
+two apart. Views 4:3 or narrower, and scenes without the world, are left as
+they are; cl_widescreenFov 0 keeps retail's crop.
+====================
+*/
+static void CL_CG_R_RenderScene( const refdef_t *fd ) {
+	refdef_t	wide;
+	float		scale;
+
 	if ( cl_showRefEnts && cl_showRefEnts->string[0] ) {
 		vec3_t	angles;
 
@@ -691,7 +711,18 @@ static void CL_CG_R_RenderScene( refdef_t *fd ) {
 			fd->vieworg[0], fd->vieworg[1], fd->vieworg[2], angles[YAW], angles[PITCH], fd->fov_x,
 			fd->sky_portal ? " skyportal" : "" );
 	}
-	re.RenderScene( fd );
+	if ( !cl_widescreenFov->integer || ( fd->rdflags & RDF_NOWORLDMODEL )
+		|| fd->height <= 0 || fd->width * 3 <= fd->height * 4 ) {
+		re.RenderScene( fd );
+		return;
+	}
+
+	// the refdef is the module's own (cg.refdef): widen a copy
+	wide = *fd;
+	scale = ( fd->width * 3.0f ) / ( fd->height * 4.0f );
+	wide.fov_x = atan( tan( DEG2RAD( fd->fov_x * 0.5f ) ) * scale ) * 360 / M_PI;
+	wide.fov_y = atan( tan( DEG2RAD( fd->fov_y * 0.5f ) ) * scale ) * 360 / M_PI;
+	re.RenderScene( &wide );
 }
 
 static void CL_CG_R_AddRefSpriteToScene( refEntity_t *ent ) {
