@@ -30,6 +30,10 @@ cvar_t		*cl_debuggraph;
 cvar_t		*cl_graphheight;
 cvar_t		*cl_graphscale;
 cvar_t		*cl_graphshift;
+cvar_t		*scr_keepAspect;
+
+// the screenshot a saveshot takes at the end of the frame it draws
+static char		scr_saveShotCmd[MAX_STRING_CHARS];
 
 /*
 ================
@@ -51,6 +55,73 @@ void SCR_DrawNamedPic( float x, float y, float width, float height, const char *
 
 /*
 ================
+SCR_Layout640
+
+How the 640x480 layer lies on the window: its scale each way and where its
+left edge is, in window pixels. FAKK2 stretches it over the whole window;
+on a window wider than 4:3, scr_keepAspect keeps its shape instead, scaled
+by the height and centred, so the window reaches past it on both sides
+(SCR_ScreenLeft640). A 4:3 or narrower window is stretched as before.
+================
+*/
+static void SCR_Layout640( float *xscale, float *yscale, float *xoffset ) {
+	*xscale = cls.glconfig.vidWidth / 640.0f;
+	*yscale = cls.glconfig.vidHeight / 480.0f;
+	*xoffset = 0;
+	if ( scr_keepAspect && scr_keepAspect->integer &&
+		cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
+		*xscale = *yscale;
+		*xoffset = ( cls.glconfig.vidWidth - 640 * *xscale ) * 0.5f;
+	}
+}
+
+/*
+================
+SCR_ScreenLeft640, SCR_ScreenRight640
+
+The window's left and right edges in 640x480 units: 0 and 640, or past
+them on a wide window. What covers the window, or is anchored to its
+sides, is placed between these. A saved game's picture is the 4:3 middle
+of a wide window (SCR_SaveShot_f), so the frame it draws is laid out as
+on a 4:3 one, the HUD in that middle's corners.
+================
+*/
+float SCR_ScreenLeft640( void ) {
+	float	xscale, yscale, xoffset;
+
+	if ( scr_saveShotCmd[0] ) {
+		return 0;
+	}
+	SCR_Layout640( &xscale, &yscale, &xoffset );
+	return xscale > 0 ? -xoffset / xscale : 0;
+}
+
+float SCR_ScreenRight640( void ) {
+	return 640 - SCR_ScreenLeft640();
+}
+
+/*
+================
+SCR_AdjustTo640
+
+A point in window pixels in 640x480 units (the cursor), as the inverse of
+SCR_AdjustFrom640.
+================
+*/
+void SCR_AdjustTo640( float *x, float *y ) {
+	float	xscale, yscale, xoffset;
+
+	SCR_Layout640( &xscale, &yscale, &xoffset );
+	if ( xscale > 0 ) {
+		*x = ( *x - xoffset ) / xscale;
+	}
+	if ( yscale > 0 ) {
+		*y /= yscale;
+	}
+}
+
+/*
+================
 SCR_AdjustFrom640
 
 Adjusted for resolution and screen aspect ratio
@@ -59,19 +130,12 @@ Adjusted for resolution and screen aspect ratio
 void SCR_AdjustFrom640( float *x, float *y, float *w, float *h ) {
 	float	xscale;
 	float	yscale;
+	float	xoffset;
 
-#if 0
-		// adjust for wide screens
-		if ( cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
-			*x += 0.5 * ( cls.glconfig.vidWidth - ( cls.glconfig.vidHeight * 640 / 480 ) );
-		}
-#endif
-
-	// scale for screen sizes
-	xscale = cls.glconfig.vidWidth / 640.0;
-	yscale = cls.glconfig.vidHeight / 480.0;
+	// scale for screen sizes, keeping the shape on wide screens
+	SCR_Layout640( &xscale, &yscale, &xoffset );
 	if ( x ) {
-		*x *= xscale;
+		*x = *x * xscale + xoffset;
 	}
 	if ( y ) {
 		*y *= yscale;
@@ -448,9 +512,6 @@ void SCR_DrawDebugGraph (void)
 
 //=============================================================================
 
-// the screenshot a saveshot takes at the end of the frame it draws
-static char		scr_saveShotCmd[MAX_STRING_CHARS];
-
 /*
 ==================
 SCR_SaveShot_f
@@ -459,14 +520,22 @@ FAKK2: "saveshot <file> <width> <height>", which the server runs when it saves
 a game (sv_save.c), as the retail client's (0x423130): the screen is drawn
 again without the menus or the console and the renderer's screenshot
 command takes it, scaled to the size given. Retail runs the screenshot after
-the frame; here it is queued inside it, ahead of the buffer swap.
+the frame; here it is queued inside it, ahead of the buffer swap. On a wide
+window kept at 4:3 (scr_keepAspect) the picture is the 4:3 middle of it,
+which the load and save menu shows in its 4:3 box unsqueezed.
 ==================
 */
 static void SCR_SaveShot_f( void ) {
+	float	x = 0, w = 640;
+
 	if ( !cls.rendererStarted ) {
 		return;
 	}
 	Q_strncpyz( scr_saveShotCmd, va( "screenshot %s", Cmd_Args() ), sizeof( scr_saveShotCmd ) );
+	SCR_AdjustFrom640( &x, NULL, &w, NULL );
+	if ( x > 0 && Cmd_Argc() == 4 ) {
+		Q_strcat( scr_saveShotCmd, sizeof( scr_saveShotCmd ), va( " %d %d", (int)( x + 0.5f ), (int)( w + 0.5f ) ) );
+	}
 	URC_SetSaveShot( qtrue );
 	SCR_UpdateScreen();
 	URC_SetSaveShot( qfalse );
@@ -485,6 +554,9 @@ void SCR_Init( void ) {
 	cl_graphheight = Cvar_Get ("graphheight", "32", CVAR_CHEAT);
 	cl_graphscale = Cvar_Get ("graphscale", "1", CVAR_CHEAT);
 	cl_graphshift = Cvar_Get ("graphshift", "0", CVAR_CHEAT);
+	// OpenFAKK2's: the HUD, menus and prints keep their 4:3 shape on a wide
+	// window (0 stretches them over it, as retail)
+	scr_keepAspect = Cvar_Get ("scr_keepAspect", "1", CVAR_ARCHIVE);
 
 	Cmd_AddCommand( "saveshot", SCR_SaveShot_f );
 
@@ -514,7 +586,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	// wide aspect ratio screens need to have the sides cleared
 	// unless they are displaying game renderings
-	if ( uiFullscreen || clc.state < CA_LOADING ) {
+	if ( uiFullscreen || clc.state < CA_LOADING || clc.state == CA_CINEMATIC ) {
 		if ( cls.glconfig.vidWidth * 480 > cls.glconfig.vidHeight * 640 ) {
 			re.SetColor( g_color_table[0] );
 			re.DrawBox( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight );

@@ -679,9 +679,9 @@ void Con_DrawSolidConsole( float frac ) {
 	if (lines > cls.glconfig.vidHeight )
 		lines = cls.glconfig.vidHeight;
 
-	// on wide screens, we will center the text
+	// the text runs the window's whole width (its line length is the
+	// window's), so it is not moved in on wide screens
 	con.xadjust = 0;
-	SCR_AdjustFrom640( &con.xadjust, NULL, NULL, NULL );
 
 	// draw the background
 	y = frac * SCREEN_HEIGHT;
@@ -692,14 +692,14 @@ void Con_DrawSolidConsole( float frac ) {
 		// dark translucent sheet, rather than the default shader's black
 		vec4_t	back = { 0.05f, 0.05f, 0.05f, 0.85f };
 
-		SCR_FillRect( 0, 0, SCREEN_WIDTH, y, back );
+		SCR_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), y, back );
 	}
 
 	color[0] = 1;
 	color[1] = 0;
 	color[2] = 0;
 	color[3] = 1;
-	SCR_FillRect( 0, y, SCREEN_WIDTH, 2, color );
+	SCR_FillRect( SCR_ScreenLeft640(), y, SCR_ScreenRight640() - SCR_ScreenLeft640(), 2, color );
 
 
 	// draw the version number

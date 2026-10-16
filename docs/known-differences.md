@@ -1937,6 +1937,32 @@ What is implemented, and on what basis:
   (`probe-menu`: retail's bar is still over the menu 4 s after it opened and gone by
   12 s). OpenFAKK2 closes the bar when a menu is pushed and does not draw it while a
   menu is up, so the main menu comes up clear.
+- **The 2D layer on a wide window (deliberate, beyond 4:3 only).** Retail lays out the
+  HUD, menus, prints and inventory in 640x480 units and stretches them over the window,
+  so on a 16:9 one everything 2D is a third too wide. With `scr_keepAspect` (archived,
+  default 1; 0 stretches as retail) a window wider than 4:3 keeps the 640x480 layer's
+  shape: it is scaled by the height and centred (`SCR_AdjustFrom640`), the cursor goes
+  back through the inverse (`SCR_AdjustTo640`), and the window's edges lie past 0 and
+  640 (`SCR_ScreenLeft640`, `SCR_ScreenRight640`). Where each piece goes comes from the
+  `.urc` files: a menu whose `align` names `left` or `right` (`healthhud`, `weaphud`,
+  `dualweaphud`, `bosshud`, `damage`) is put at that side of the window, and one with
+  no horizontal alignment (every full-screen menu: `main`, `loadsave`, `options`,
+  `controls`, ...) stays in the 4:3 frame in the middle. A menu's `bgfill` covers the
+  whole window, so the full-screen menus have black sides: every one of them fills with
+  `bgfill 0 0 0 1`, and their 640x480 pictures are not stretched or repeated to fill the
+  sides. The script's fades and letterbox, the console's sheet and the full-screen
+  inventory's backdrop cover the whole window; the inventory bar keeps to its side of the
+  window, the fps counter to the window's left edge. Centre and location prints stay in
+  the 4:3 frame, a location print's x counting from that frame's left. A saved game's
+  picture (`saveshot`) is the 4:3 middle of the window, drawn for that frame with the HUD
+  in the middle's corners, so the load and save menu shows it unsqueezed; the renderer's
+  `screenshot <path> <w> <h>` takes a source column for it (`<x> <srcwidth>`). The
+  loading screen and the intro were already drawn at their pictures' pixel size, as
+  retail does, and the client game module draws in window pixels, so neither changes. A
+  4:3 window, or a narrower one (5:4), is laid out exactly as before. Checked at
+  1280x720 with `probe-hud`, `probe-printpos`, `capture-menus.ps1 -OursExtra` and a
+  posted-mouse run over the main menu (the cursor over CONTROLS lights it up, and the
+  click uses the same hit test).
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for

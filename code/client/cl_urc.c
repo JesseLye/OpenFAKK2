@@ -164,6 +164,7 @@ typedef struct {
 	vec4_t		bgfill;
 	qboolean	fullscreen;
 	int			alignH;				// 0 left, 1 centre, 2 right
+	qboolean	hasAlignH;			// "align" named one: anchored to the window's side when it is wider than 4:3
 	int			alignV;				// 0 top, 1 centre, 2 bottom
 	float		fadein;
 	int			firstWidget, numWidgets;
@@ -295,6 +296,7 @@ static qhandle_t	urc_sliderThumb, urc_sliderThumbSel, urc_arrowLeft, urc_arrowLe
 static int			urc_sliderPress = -1;	// the slider whose arrow is held: -1, else its index * 2 + right
 
 // what draws are cut to: the frame of the widget being drawn, in 640x480 units
+// (the whole window outside one, which reaches past 0 and 640 on a wide one)
 static float		urc_clip[4] = { 0, 0, 640, 480 };	// x0 y0 x1 y1
 
 static void URC_PlaySound( const char *name );
@@ -629,12 +631,16 @@ static void URC_ParseAlign( urcMenu_t *menu, char args[][MAX_QPATH], int n ) {
 	int		i;
 
 	for ( i = 0 ; i < n ; i++ ) {
-		if ( !Q_stricmp( args[i], "left" ) ) menu->alignH = 0;
-		else if ( !Q_stricmp( args[i], "right" ) ) menu->alignH = 2;
-		else if ( !Q_stricmp( args[i], "centerx" ) || !Q_stricmp( args[i], "center" ) ) menu->alignH = 1;
-		else if ( !Q_stricmp( args[i], "top" ) ) menu->alignV = 0;
+		if ( !Q_stricmp( args[i], "top" ) ) menu->alignV = 0;
 		else if ( !Q_stricmp( args[i], "bottom" ) ) menu->alignV = 2;
 		else if ( !Q_stricmp( args[i], "centery" ) ) menu->alignV = 1;
+		else {
+			if ( !Q_stricmp( args[i], "left" ) ) menu->alignH = 0;
+			else if ( !Q_stricmp( args[i], "right" ) ) menu->alignH = 2;
+			else if ( !Q_stricmp( args[i], "centerx" ) || !Q_stricmp( args[i], "center" ) ) menu->alignH = 1;
+			else continue;
+			menu->hasAlignH = qtrue;
+		}
 	}
 }
 
@@ -2174,23 +2180,32 @@ static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, float 
 =================
 URC_MenuOrigin, URC_WidgetRect
 
-Where a menu and its widgets are this frame, in 640x480 units.
+Where a menu and its widgets are this frame, in 640x480 units. On a window
+wider than 4:3 (scr_keepAspect) the screen reaches past 0 and 640: a menu
+aligned left or right goes to that side of the window (the HUD to its
+corners), and one with no horizontal alignment (the full-screen menus)
+stays in the 4:3 frame in the middle. A menu slides in from off the
+window's edge.
 =================
 */
 static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float *oy ) {
-	float	dx, dy;
+	float	dx, dy, left = 0, right = 640;
 
+	if ( menu->hasAlignH ) {
+		left = SCR_ScreenLeft640();
+		right = SCR_ScreenRight640();
+	}
 	switch ( menu->alignH ) {
 	case 1: *ox = ( 640 - menu->width ) * 0.5f; break;
-	case 2: *ox = 640 - menu->width; break;
-	default: *ox = 0; break;
+	case 2: *ox = right - menu->width; break;
+	default: *ox = left; break;
 	}
 	switch ( menu->alignV ) {
 	case 1: *oy = ( 480 - menu->height ) * 0.5f; break;
 	case 2: *oy = 480 - menu->height; break;
 	default: *oy = 0; break;
 	}
-	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, 640, 480, &dx, &dy );
+	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, &dx, &dy );
 	*ox += dx;
 	*oy += dy;
 }
@@ -2637,7 +2652,9 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop ) {
 
 	elapsed = cls.realtime - menu->showTime;
 	if ( menu->hasBgfill ) {
-		URC_FillRect( 0, 0, 640, 480, menu->bgfill );
+		// the whole window: a full-screen menu on a wide one has its colour
+		// (black in every shipped menu) at the sides
+		URC_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, menu->bgfill );
 	}
 	URC_MenuOrigin( menu, elapsed, &ox, &oy );
 	alpha = URC_FadeAlpha( menu->fadein, elapsed );
@@ -3201,20 +3218,23 @@ retail.
 static void URC_DrawFade( void ) {
 	const playerState_t	*ps = &cl.snap.ps;
 	vec4_t				color;
-	float				frac;
+	float				frac, left, width;
 
 	if ( clc.state != CA_ACTIVE || !cl.snap.valid ) {
 		return;
 	}
+	// both cover the whole window, wide or not
+	left = SCR_ScreenLeft640();
+	width = SCR_ScreenRight640() - left;
 	if ( ps->blend[3] > 0 ) {
 		Vector4Copy( ps->blend, color );
 		if ( color[3] > 1 ) {
 			color[3] = 1;
 		}
 		if ( ps->stats[URC_STAT_ADDFADE] && urc_addFadeShader ) {
-			URC_DrawPicST( 0, 0, 640, 480, 0, 0, 1, 1, urc_addFadeShader, color );
+			URC_DrawPicST( left, 0, width, 480, 0, 0, 1, 1, urc_addFadeShader, color );
 		} else {
-			URC_FillRect( 0, 0, 640, 480, color );
+			URC_FillRect( left, 0, width, 480, color );
 		}
 	}
 	frac = ps->stats[URC_STAT_LETTERBOX] / (float)URC_MAX_LETTERBOX_SIZE;
@@ -3224,8 +3244,8 @@ static void URC_DrawFade( void ) {
 		if ( h > 240 ) {
 			h = 240;
 		}
-		URC_FillRect( 0, 0, 640, h, colorBlack );
-		URC_FillRect( 0, 480 - h, 640, h, colorBlack );
+		URC_FillRect( left, 0, width, h, colorBlack );
+		URC_FillRect( left, 480 - h, width, h, colorBlack );
 	}
 }
 
@@ -3251,7 +3271,7 @@ static void URC_DrawFps( void ) {
 	static int			nextWarning;
 	const urcFont_t		*font;
 	int					stats[6];
-	float				h;
+	float				h, x;
 
 	if ( !com_fps->integer ) {
 		return;
@@ -3278,10 +3298,11 @@ static void URC_DrawFps( void ) {
 	}
 	font = URC_LoadFont( "facfont-20" );		// the root window's (a retail capture's lines are 20 apart)
 	h = URC_FontHeight( font );
-	URC_DrawString( font, h, 480 - 3 * h, va( "FPS %4.1f", com_fpsValue ),
+	x = SCR_ScreenLeft640() + h;		// in from the window's corner, wide or not
+	URC_DrawString( font, x, 480 - 3 * h, va( "FPS %4.1f", com_fpsValue ),
 		com_fpsValue > 23.94f ? white : com_fpsValue > 18.0f ? yellow : red );
-	URC_DrawString( font, h, 480 - 2 * h, va( "wt%5d wv%5d cl%d", stats[3], stats[4], stats[5] ), white );
-	URC_DrawString( font, h, 480 - h, va( "t%5d v%5d Mtex%5.2f", stats[0], stats[1], stats[2] * 1e-6f ), white );
+	URC_DrawString( font, x, 480 - 2 * h, va( "wt%5d wv%5d cl%d", stats[3], stats[4], stats[5] ), white );
+	URC_DrawString( font, x, 480 - h, va( "t%5d v%5d Mtex%5.2f", stats[0], stats[1], stats[2] * 1e-6f ), white );
 }
 
 /*
@@ -3864,7 +3885,7 @@ void URC_Draw( void ) {
 	if ( !urc_initialised ) {
 		return;
 	}
-	Vector4Set( urc_clip, 0, 0, 640, 480 );
+	Vector4Set( urc_clip, SCR_ScreenLeft640(), 0, SCR_ScreenRight640(), 480 );
 
 	// leaving the menu for a map drops the menus, as the retail client's
 	// map load does; disconnecting brings the main menu back
@@ -4070,8 +4091,8 @@ static void URC_PopupRect( int index, float rect[4] ) {
 	rect[3] = w->numPopups * URC_FontHeight( font ) + 2 * URC_POPUP_PAD;
 	rect[0] = head[0];
 	rect[1] = head[1] + head[3];
-	if ( rect[0] + rect[2] > 640 ) {
-		rect[0] = 640 - rect[2];
+	if ( rect[0] + rect[2] > SCR_ScreenRight640() ) {
+		rect[0] = SCR_ScreenRight640() - rect[2];
 	}
 	if ( rect[1] + rect[3] > 480 ) {
 		rect[1] = head[1] - rect[3];
@@ -4344,8 +4365,9 @@ void CL_MouseAbsEvent( int x, int y ) {
 	float	rect[4];
 
 	if ( cls.glconfig.vidWidth > 0 && cls.glconfig.vidHeight > 0 ) {
-		urc_cursorX = x * 640.0f / cls.glconfig.vidWidth;
-		urc_cursorY = y * 480.0f / cls.glconfig.vidHeight;
+		urc_cursorX = x;
+		urc_cursorY = y;
+		SCR_AdjustTo640( &urc_cursorX, &urc_cursorY );		// as the menus are drawn
 	}
 	if ( urc_dragSlider >= 0 && URC_TopWidgetRect( urc_dragSlider, rect ) ) {
 		URC_SliderSet( &urc_widgets[urc_dragSlider], rect );
