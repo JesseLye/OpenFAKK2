@@ -1,0 +1,20 @@
+// The sun's full-screen blend, looked at squarely: a script camera on training,
+// first with no sun and then with r_sunflare placed 200 units straight ahead of
+// it, so the second shot carries the blend at its strongest. Run it in a window
+// wider than 4:3 (-Mode -1 -Extra "+set r_customwidth 960 +set r_customheight 540"):
+// the blend must cover the whole view, not a 4:3 box in its middle.
+probe:
+waitforplayer
+wait 25
+spawn Camera targetname probecam origin "-16 2620 200" angles "8 270 0"
+wait .2
+cuecamera $probecam
+wait 1
+stuffcmd "screenshot"
+wait 4
+stuffcmd "set r_sunflare \"-16 2422 172\""
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

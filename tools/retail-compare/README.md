@@ -275,6 +275,10 @@ depth tested and then with `r_debuglines_depthmask 1`. `probe-llines` frames Jul
 `zoo` with `r_light_lines 1` and `r_light_sun_line 1`, then `r_light_nolight 1`.
 `probe-skel` draws Julie's skeleton on `zoo` (`r_showskel 1`), then sets `r_place_sunflare 1`
 and prints `r_sunflare`, the point it wrote, to the log.
+`probe-sun` points a script camera on `training` at a sun placed with `r_sunflare` 200
+units ahead, without and then with it, for the sun's full-screen blend; run it at a wide
+`r_mode -1` (`-Extra "+set r_customwidth 960 +set r_customheight 540"`), where the blend
+must reach the window's sides.
 `probe-lod` frames Julie and a spawned statue on `zoo` with `r_showlod 1` (each model's
 kept and total triangles as figures over it) at `r_lodscale` 5 and 0.5, then the meshes
 at 0.1; `probe-lodsoup` shoots a swamp tree baked into `swamp1` at `r_lodscale` 5 and

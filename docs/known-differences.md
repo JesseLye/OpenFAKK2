@@ -2453,7 +2453,12 @@ beyond 4:3; at 4:3 and narrower nothing changes.
   sized in the view's -1..1 screen space (`LF_DrawQuad`), which beyond 4:3 would stretch
   them across with the window; there a quad's width is measured against a 4:3 view of the
   same height, so a flare keeps its 4:3 shape and size. This applies whatever
-  `cl_widescreenFov` is.
+  `cl_widescreenFov` is. The sun's full-screen blend is not a flare and covers the
+  whole view (`LF_DrawFullscreen`), as retail's does at any shape: drawn through
+  `LF_DrawQuad` it had been a white 4:3 box in the middle of a wide window.
+  `probe-sun` at 960x540, the light the blend adds per sixth of the width, left to
+  right: retail 65 88 107 106 84 63, ours 68 89 113 112 85 67 (before, the outer sixths
+  got 19 and 17, the flare's glow alone).
 
 Checked with `probe-lensflare` (a script camera on `training`'s four targets, without and
 with their flares) at `r_mode -1` 960x540 and 720x540: the middle 720 columns of the
