@@ -43,6 +43,9 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 
 #include "client.h"
 
+#include <sys/stat.h>
+#include <time.h>
+
 // the SDK's bg_public.h values the HUD menus read (code/fakk/fgame)
 #define URC_STAT_BOSSHEALTH		13
 #define URC_STAT_CINEMATIC		14
@@ -56,6 +59,7 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 #define URC_MAX_WIDGETS		1024
 #define URC_MAX_FONTS		16
 #define URC_MAX_STACK		16
+#define URC_MAX_ARG			256		// a key's argument: a stuffcommand or a pulldown's command can be long
 #define URC_FONT_CHARS		256
 #define URC_FONT_GLYPHS		256
 #define URC_FONT_TEXWIDTH	256.0f
@@ -123,6 +127,7 @@ typedef struct {
 		char	value[32];
 		char	text[64];
 	}			linkStrings[16];
+	char		linkFormat[64];		// "linkformat <text>" (OpenFAKK2's): the label's text with %s for the value
 	// sliders: "setrange <min> <max>", "stepsize <s>", "slidertype float|int"
 	float		rangeMin, rangeMax, stepSize;
 	qboolean	sliderInt;
@@ -135,6 +140,7 @@ typedef struct {
 		char	text[64];
 		char	command[128];
 	}			popups[16];
+	qboolean	videoModes;			// "popupsource videomodes" (OpenFAKK2's): the list is the window sizes (URC_BuildModeList)
 	char		bindFile[MAX_QPATH];	// FakkBindList: "filename ui/bind.scr"
 	int			playerstat;			// -1 none
 	int			maxplayerstat;		// -1 none
@@ -602,7 +608,7 @@ URC_LineArgs
 The rest of the current line as tokens.
 =================
 */
-static int URC_LineArgs( char **p, char args[][MAX_QPATH], int maxArgs ) {
+static int URC_LineArgs( char **p, char args[][URC_MAX_ARG], int maxArgs ) {
 	int		n = 0;
 
 	while ( 1 ) {
@@ -612,14 +618,14 @@ static int URC_LineArgs( char **p, char args[][MAX_QPATH], int maxArgs ) {
 			break;
 		}
 		if ( n < maxArgs ) {
-			Q_strncpyz( args[n], tok, MAX_QPATH );
+			Q_strncpyz( args[n], tok, URC_MAX_ARG );
 		}
 		n++;
 	}
 	return n < maxArgs ? n : maxArgs;
 }
 
-static void URC_ParseColor( char args[][MAX_QPATH], int n, vec4_t color ) {
+static void URC_ParseColor( char args[][URC_MAX_ARG], int n, vec4_t color ) {
 	int		i;
 
 	for ( i = 0 ; i < 4 ; i++ ) {
@@ -627,7 +633,7 @@ static void URC_ParseColor( char args[][MAX_QPATH], int n, vec4_t color ) {
 	}
 }
 
-static void URC_ParseAlign( urcMenu_t *menu, char args[][MAX_QPATH], int n ) {
+static void URC_ParseAlign( urcMenu_t *menu, char args[][URC_MAX_ARG], int n ) {
 	int		i;
 
 	for ( i = 0 ; i < n ; i++ ) {
@@ -662,6 +668,8 @@ static qboolean URC_IgnoredKey( const char *key ) {
 	return qfalse;
 }
 
+static void URC_ParseWidgetKeys( urcWidget_t *w, char **p, const char *file );
+
 /*
 =================
 URC_ParseWidget
@@ -671,10 +679,7 @@ After "resource <Class>": the { key args... } block.
 */
 static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, const char *file ) {
 	urcWidget_t	*w;
-	char		args[8][MAX_QPATH];
-	char		key[64];
 	char		*tok;
-	int			n;
 
 	tok = COM_Parse( p );
 	if ( tok[0] != '{' ) {
@@ -712,6 +717,22 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 	w->rangeMin = 0;
 	w->rangeMax = 1;
 	w->stepSize = 0;
+	URC_ParseWidgetKeys( w, p, file );
+}
+
+/*
+=================
+URC_ParseWidgetKeys
+
+A resource block's keys after its "{", up to its "}": for a new widget,
+or for one an additions file changes.
+=================
+*/
+static void URC_ParseWidgetKeys( urcWidget_t *w, char **p, const char *file ) {
+	char		args[8][URC_MAX_ARG];
+	char		key[64];
+	char		*tok;
+	int			n;
 
 	while ( 1 ) {
 		tok = COM_Parse( p );
@@ -771,6 +792,8 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 				Q_strncpyz( w->linkStrings[w->numLinkStrings].text, args[1], sizeof( w->linkStrings[0].text ) );
 				w->numLinkStrings++;
 			}
+		} else if ( !Q_stricmp( tok, "linkformat" ) && n ) {
+			Q_strncpyz( w->linkFormat, args[0], sizeof( w->linkFormat ) );
 		} else if ( !Q_stricmp( tok, "setrange" ) && n >= 2 ) {
 			w->rangeMin = atof( args[0] );
 			w->rangeMax = atof( args[1] );
@@ -788,6 +811,8 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 				Q_strncpyz( w->popups[w->numPopups].command, args[3], sizeof( w->popups[0].command ) );
 				w->numPopups++;
 			}
+		} else if ( !Q_stricmp( tok, "popupsource" ) && n ) {
+			w->videoModes = !Q_stricmp( args[0], "videomodes" );
 		} else if ( !Q_stricmp( tok, "filename" ) && n ) {
 			Q_strncpyz( w->bindFile, args[0], sizeof( w->bindFile ) );
 		} else if ( !Q_stricmp( tok, "clicksound" ) && n ) {
@@ -831,7 +856,7 @@ static void URC_ParseWidget( urcMenu_t *menu, char **p, const char *className, c
 	}
 }
 
-static void URC_ParseMenuBody( urcMenu_t *menu, char *text, const char *file, qboolean included );
+static void URC_ParseMenuBody( urcMenu_t *menu, char **p, const char *file, qboolean included );
 
 /*
 =================
@@ -840,33 +865,33 @@ URC_ParseMenuBody
 Menu-level keys and resource blocks up to "end.".
 =================
 */
-static void URC_ParseMenuBody( urcMenu_t *menu, char *text, const char *file, qboolean included ) {
-	char	*p = text;
+static void URC_ParseMenuBody( urcMenu_t *menu, char **p, const char *file, qboolean included ) {
 	char	*tok;
 	char	key[64];
-	char	args[8][MAX_QPATH];
+	char	args[8][URC_MAX_ARG];
 	int		n;
 
 	while ( 1 ) {
-		tok = COM_Parse( &p );
+		tok = COM_Parse( p );
 		if ( !tok[0] || !Q_stricmp( tok, "end." ) || !Q_stricmp( tok, "end" ) ) {
 			return;
 		}
 		if ( !Q_stricmp( tok, "resource" ) ) {
 			char	className[64];
 
-			Q_strncpyz( className, COM_Parse( &p ), sizeof( className ) );
-			URC_ParseWidget( menu, &p, className, file );
+			Q_strncpyz( className, COM_Parse( p ), sizeof( className ) );
+			URC_ParseWidget( menu, p, className, file );
 			continue;
 		}
 		Q_strncpyz( key, tok, sizeof( key ) );		// the parser's buffer is about to be reused
 		tok = key;
-		n = URC_LineArgs( &p, args, 8 );
+		n = URC_LineArgs( p, args, 8 );
 		if ( !Q_stricmp( tok, "include" ) && n ) {
-			char	*inc;
+			char	*inc, *incp;
 
 			if ( FS_ReadFile( args[0], (void **)&inc ) > 0 ) {
-				URC_ParseMenuBody( menu, inc, args[0], qtrue );
+				incp = inc;
+				URC_ParseMenuBody( menu, &incp, args[0], qtrue );
 				FS_FreeFile( inc );
 			} else {
 				Com_Printf( S_COLOR_YELLOW "WARNING: %s: include %s not found\n", file, args[0] );
@@ -893,29 +918,24 @@ static void URC_ParseMenuBody( urcMenu_t *menu, char *text, const char *file, qb
 
 /*
 =================
-URC_LoadMenuFile
+URC_LoadMenuText
 
 ui/<file>.urc: "menu <name> <width> <height> <direction> <time>" then
 the body. A menu is found by the name in the file, not the file name.
 =================
 */
-static urcMenu_t *URC_LoadMenuFile( const char *path ) {
+static urcMenu_t *URC_LoadMenuText( const char *path, char *buf ) {
 	urcMenu_t	*menu;
-	char		*buf, *p, *tok;
+	char		*p, *tok;
 	int			i;
 
-	if ( FS_ReadFile( path, (void **)&buf ) <= 0 ) {
-		return NULL;
-	}
 	p = buf;
 	tok = COM_Parse( &p );
 	if ( Q_stricmp( tok, "menu" ) ) {
 		Com_Printf( S_COLOR_YELLOW "WARNING: %s does not begin with menu\n", path );
-		FS_FreeFile( buf );
 		return NULL;
 	}
 	if ( urc_numMenus == URC_MAX_MENUS ) {
-		FS_FreeFile( buf );
 		return NULL;
 	}
 	menu = &urc_menus[urc_numMenus];
@@ -924,7 +944,6 @@ static urcMenu_t *URC_LoadMenuFile( const char *path ) {
 	for ( i = 0 ; i < urc_numMenus ; i++ ) {
 		if ( !Q_stricmp( urc_menus[i].name, menu->name ) ) {
 			Com_DPrintf( "%s: menu %s already loaded from %s\n", path, menu->name, urc_menus[i].file );
-			FS_FreeFile( buf );
 			return &urc_menus[i];
 		}
 	}
@@ -936,9 +955,20 @@ static urcMenu_t *URC_LoadMenuFile( const char *path ) {
 	menu->dirTime = atof( COM_ParseExt( &p, qfalse ) );
 	Vector4Set( menu->bgcolor, 0, 0, 0, 0 );
 	menu->firstWidget = urc_numWidgets;
-	URC_ParseMenuBody( menu, p, path, qfalse );
-	FS_FreeFile( buf );
+	URC_ParseMenuBody( menu, &p, path, qfalse );
 	Com_DPrintf( "urc: %s: menu %s, %d widgets\n", path, menu->name, menu->numWidgets );
+	return menu;
+}
+
+static urcMenu_t *URC_LoadMenuFile( const char *path ) {
+	urcMenu_t	*menu;
+	char		*buf;
+
+	if ( FS_ReadFile( path, (void **)&buf ) <= 0 ) {
+		return NULL;
+	}
+	menu = URC_LoadMenuText( path, buf );
+	FS_FreeFile( buf );
 	return menu;
 }
 
@@ -951,6 +981,127 @@ static urcMenu_t *URC_FindMenu( const char *name ) {
 		}
 	}
 	return NULL;
+}
+
+/*
+=================
+URC_LoadAdditions
+
+OpenFAKK2's own grammar, for what it adds to the game's menus without
+shipping changed copies of Ritual's files, any number of:
+
+  "addto <menu>", then resources up to "end.": widgets added to it. A
+  menu's widgets are kept together, so the new ones are moved in after
+  its last and the menus loaded after it move up.
+
+  "change <menu> <widget>", then a { key args... } block: keys read over
+  that widget's, as if its own block ended with them. The widget is the
+  first whose name, or else title, is <widget>.
+=================
+*/
+static void URC_ChangeWidget( const char *path, char **p ) {
+	char		menuName[64], widgetName[64];
+	urcMenu_t	*menu;
+	urcWidget_t	*w = NULL;
+	int			i;
+
+	Q_strncpyz( menuName, COM_Parse( p ), sizeof( menuName ) );
+	Q_strncpyz( widgetName, COM_Parse( p ), sizeof( widgetName ) );
+	if ( COM_Parse( p )[0] != '{' ) {
+		Com_Printf( S_COLOR_YELLOW "WARNING: %s: expected { after change %s %s\n", path, menuName, widgetName );
+		return;
+	}
+	menu = URC_FindMenu( menuName );
+	for ( i = 0 ; menu && i < menu->numWidgets && !w ; i++ ) {
+		if ( !Q_stricmp( urc_widgets[menu->firstWidget + i].name, widgetName ) ) {
+			w = &urc_widgets[menu->firstWidget + i];
+		}
+	}
+	for ( i = 0 ; menu && i < menu->numWidgets && !w ; i++ ) {
+		if ( !Q_stricmp( urc_widgets[menu->firstWidget + i].title, widgetName ) ) {
+			w = &urc_widgets[menu->firstWidget + i];
+		}
+	}
+	if ( !w ) {
+		// a widget the game data lacks: its keys are read and dropped
+		SkipBracedSection( p, 1 );
+		return;
+	}
+	URC_ParseWidgetKeys( w, p, path );
+}
+
+static void URC_LoadAdditions( const char *path, char *buf ) {
+	urcMenu_t	*menu;
+	urcWidget_t	*added;
+	char		*p = buf, *tok;
+	int			oldEnd, insertAt, count, i;
+
+	while ( 1 ) {
+		tok = COM_Parse( &p );
+		if ( !tok[0] ) {
+			return;
+		}
+		if ( !Q_stricmp( tok, "change" ) ) {
+			URC_ChangeWidget( path, &p );
+			continue;
+		}
+		if ( Q_stricmp( tok, "addto" ) ) {
+			Com_Printf( S_COLOR_YELLOW "WARNING: %s: expected addto or change, found %s\n", path, tok );
+			return;
+		}
+		menu = URC_FindMenu( COM_Parse( &p ) );
+		if ( !menu ) {
+			// a menu the game data lacks: its additions are read and dropped
+			urcMenu_t	scratch;
+
+			Com_Memset( &scratch, 0, sizeof( scratch ) );
+			oldEnd = urc_numWidgets;
+			URC_ParseMenuBody( &scratch, &p, path, qtrue );
+			urc_numWidgets = oldEnd;
+			continue;
+		}
+		oldEnd = urc_numWidgets;
+		insertAt = menu->firstWidget + menu->numWidgets;
+		URC_ParseMenuBody( menu, &p, path, qtrue );
+		count = urc_numWidgets - oldEnd;
+		if ( !count || insertAt == oldEnd ) {
+			continue;
+		}
+		added = Z_Malloc( count * sizeof( *added ) );
+		Com_Memcpy( added, &urc_widgets[oldEnd], count * sizeof( *added ) );
+		memmove( &urc_widgets[insertAt + count], &urc_widgets[insertAt], ( oldEnd - insertAt ) * sizeof( *added ) );
+		Com_Memcpy( &urc_widgets[insertAt], added, count * sizeof( *added ) );
+		Z_Free( added );
+		for ( i = 0 ; i < urc_numMenus ; i++ ) {
+			if ( &urc_menus[i] != menu && urc_menus[i].firstWidget >= insertAt ) {
+				urc_menus[i].firstWidget += count;
+			}
+		}
+	}
+}
+
+// code/client/urc/*.urc, built in (cmake/client.cmake)
+extern const char *urc_builtin_openfakk2;
+extern const char *urc_builtin_additions;
+
+/*
+=================
+URC_LoadBuiltinMenus
+
+OpenFAKK2's options menu, after the game's files (so a ui/*.urc of the
+same menu name takes its place), and the button the video and audio menu
+gains for it.
+=================
+*/
+static void URC_LoadBuiltinMenus( void ) {
+	char	*buf;
+
+	buf = CopyString( urc_builtin_openfakk2 );
+	URC_LoadMenuText( "openfakk2.urc (built in)", buf );
+	Z_Free( buf );
+	buf = CopyString( urc_builtin_additions );
+	URC_LoadAdditions( "additions.urc (built in)", buf );
+	Z_Free( buf );
 }
 
 /*
@@ -1410,7 +1561,7 @@ static void URC_LoadBindList( const char *file ) {
 	urcBindList_t	*bl = &urc_bindList;
 	char			*buf, *p, *tok;
 	char			key[64];
-	char			args[8][MAX_QPATH];
+	char			args[8][URC_MAX_ARG];
 	int				n, i;
 
 	if ( bl->loaded && !Q_stricmp( bl->file, file ) ) {
@@ -2331,25 +2482,47 @@ static int URC_PlayerStat( int stat ) {
 
 /*
 =================
+URC_LinkValue
+
+A widget's cvar's value: for a latched cvar, the value it takes at the
+next restart, so a choice shows before Apply's restart applies it, as
+the UI's cvar reader returns it (fakk2.exe 0x40cba0).
+=================
+*/
+static const char *URC_LinkValue( const urcWidget_t *w ) {
+	const char	*latched = Cvar_LatchedString( w->linkcvar );
+
+	return latched ? latched : Cvar_VariableString( w->linkcvar );
+}
+
+/*
+=================
 URC_LabelText
 
 What a label shows: its cvar's value, through its linkstrings, or its
-title (UILabel::Draw, 0x4b0eb0).
+title (UILabel::Draw, 0x4b0eb0); with a "linkformat", the value put into
+that text in place of its %s.
 =================
 */
 static const char *URC_LabelText( const urcWidget_t *w ) {
-	const char	*text = w->title;
+	static char	formatted[256];
+	const char	*text = w->title, *at;
 	int			i;
 
 	if ( !w->linkcvar[0] ) {
 		return text;
 	}
-	text = Cvar_VariableString( w->linkcvar );
+	text = URC_LinkValue( w );
 	for ( i = 0 ; i < w->numLinkStrings ; i++ ) {
 		if ( !Q_stricmp( w->linkStrings[i].value, text ) ||
 			( atof( w->linkStrings[i].value ) == atof( text ) && Q_isanumber( text ) ) ) {
-			return w->linkStrings[i].text;
+			text = w->linkStrings[i].text;
+			break;
 		}
+	}
+	if ( w->linkFormat[0] && ( at = strstr( w->linkFormat, "%s" ) ) != NULL ) {
+		Com_sprintf( formatted, sizeof( formatted ), "%.*s%s%s", (int)( at - w->linkFormat ), w->linkFormat, text, at + 2 );
+		return formatted;
 	}
 	return text;
 }
@@ -2376,7 +2549,7 @@ static float URC_SliderFrac( const urcWidget_t *w ) {
 	if ( !w->linkcvar[0] || w->rangeMax <= w->rangeMin ) {
 		return 0;
 	}
-	frac = ( Cvar_VariableValue( w->linkcvar ) - w->rangeMin ) / ( w->rangeMax - w->rangeMin );
+	frac = ( atof( URC_LinkValue( w ) ) - w->rangeMin ) / ( w->rangeMax - w->rangeMin );
 	if ( frac < 0 ) frac = 0;
 	if ( frac > 1 ) frac = 1;
 	return frac;
@@ -2423,7 +2596,7 @@ static void URC_DrawCheckBox( const urcWidget_t *w, const float r[4], float alph
 
 	Vector4Copy( w->fgcolor, color );
 	color[3] *= alpha;
-	box = ( w->linkcvar[0] && Cvar_VariableValue( w->linkcvar ) ) ? w->checkedShader : w->uncheckedShader;
+	box = ( w->linkcvar[0] && atof( URC_LinkValue( w ) ) ) ? w->checkedShader : w->uncheckedShader;
 	if ( box ) {
 		URC_DrawPicST( r[0] + size, r[1] + ( r[3] - size ) * 0.5f, size, size, 0, 0, 1, 1, box, color );
 	}
@@ -2713,9 +2886,10 @@ MENU STACK AND HUD
 =================
 URC_SnapshotCvars
 
-What ui_checkrestart compares against: each linked cvar's value as the
-menu comes up (0x4a3a30, from the window manager's push, show and force,
-0x4a2e90, 0x4a3020, 0x4a3260).
+What ui_checkrestart compares against and "popmenu 1" puts back: each
+linked cvar's value as the menu comes up (0x4a3a30, from the window
+manager's push, show and force, 0x4a2e90, 0x4a3020, 0x4a3260), read as the
+UI reads cvars, a latched one's coming value (0x40cba0).
 =================
 */
 static void URC_SnapshotCvars( urcMenu_t *menu ) {
@@ -2725,7 +2899,34 @@ static void URC_SnapshotCvars( urcMenu_t *menu ) {
 		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
 
 		if ( w->linkcvar[0] ) {
-			Q_strncpyz( w->linkSnapshot, Cvar_VariableString( w->linkcvar ), sizeof( w->linkSnapshot ) );
+			Q_strncpyz( w->linkSnapshot, URC_LinkValue( w ), sizeof( w->linkSnapshot ) );
+		}
+	}
+}
+
+/*
+=================
+URC_RestoreCvars
+
+"popmenu 1", the menus' Back (0x4a3420, 0x4a3c40): every cvar a widget of
+the menu on top links to goes back to its value as the menu came up, set
+as the UI sets cvars (0x40ccb0: Cvar_Set2, not forced), so a choice made
+on the page and not applied is undone, latched or not.
+=================
+*/
+static void URC_RestoreCvars( void ) {
+	urcMenu_t	*menu;
+	int			i;
+
+	if ( !urc_stackDepth ) {
+		return;
+	}
+	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
+
+		if ( w->linkcvar[0] && strcmp( URC_LinkValue( w ), w->linkSnapshot ) ) {
+			Cvar_SetLatched( w->linkcvar, w->linkSnapshot );
 		}
 	}
 }
@@ -2762,6 +2963,51 @@ static void URC_UpdateCatcher( void ) {
 	} else {
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_UI );
 		Cvar_Set( "ui_newvidmode", "-1" );
+	}
+}
+
+/*
+=================
+URC_UpdateOptionCvars
+
+What the menus show for settings spread over several latched cvars, from
+the values they take at the next restart: the window size for the video
+menu's resolution (r_mode, r_customwidth and r_customheight at -1, the
+desktop's at -2), and OpenFAKK2's options menu's anisotropic filter.
+=================
+*/
+static const char *URC_PendingString( const char *name ) {
+	const char	*latched = Cvar_LatchedString( name );
+
+	return latched ? latched : Cvar_VariableString( name );
+}
+
+static void URC_SetIfChanged( const char *name, const char *value ) {
+	if ( strcmp( Cvar_VariableString( name ), value ) ) {
+		Cvar_Set( name, value );
+	}
+}
+
+static void URC_UpdateOptionCvars( void ) {
+	// the renderer's r_vidModes (tr_init.c)
+	static const int	modes[][2] = {
+		{ 320, 240 }, { 400, 300 }, { 512, 384 }, { 640, 480 }, { 800, 600 }, { 960, 720 },
+		{ 1024, 768 }, { 1152, 864 }, { 1280, 1024 }, { 1600, 1200 }, { 2048, 1536 }, { 856, 480 }
+	};
+	int		mode = atoi( URC_PendingString( "r_mode" ) );
+
+	if ( mode == -1 ) {
+		URC_SetIfChanged( "ui_resolution", va( "%d x %d", atoi( URC_PendingString( "r_customwidth" ) ),
+			atoi( URC_PendingString( "r_customheight" ) ) ) );
+	} else if ( mode >= 0 && mode < (int)ARRAY_LEN( modes ) ) {
+		URC_SetIfChanged( "ui_resolution", va( "%d x %d", modes[mode][0], modes[mode][1] ) );
+	} else {
+		URC_SetIfChanged( "ui_resolution", "Desktop" );
+	}
+	if ( atoi( URC_PendingString( "r_ext_texture_filter_anisotropic" ) ) ) {
+		URC_SetIfChanged( "ui_anisotropy", va( "%dx", atoi( URC_PendingString( "r_ext_max_anisotropy" ) ) ) );
+	} else {
+		URC_SetIfChanged( "ui_anisotropy", "Off" );
 	}
 }
 
@@ -3381,7 +3627,9 @@ its title bar and back.
 
 typedef enum {
 	WIN_DIALOG,
-	WIN_TESTLIST
+	WIN_TESTLIST,
+	WIN_NOTEPAD,
+	WIN_FILEPICKER
 } urcWindowKind_t;
 
 typedef enum {
@@ -3404,6 +3652,7 @@ typedef struct {
 	int				top, selected;
 	urcScrollPart_t	held;
 	float			grab;
+	void			*data;				// a notepad's or a file picker's (Z_Malloc), freed with the window
 } urcWindow_t;
 
 static urcWindow_t		urc_windows[URC_MAX_WINDOWS];	// bottom to top
@@ -3516,10 +3765,13 @@ static urcWindow_t *URC_NewWindow( urcWindowKind_t kind, const char *title, floa
 	return win;
 }
 
+static void URC_FreeWindowData( urcWindow_t *win );
+
 static void URC_CloseWindow( int index ) {
 	if ( index < 0 || index >= urc_numWindows ) {
 		return;
 	}
+	URC_FreeWindowData( &urc_windows[index] );
 	memmove( &urc_windows[index], &urc_windows[index + 1], ( urc_numWindows - index - 1 ) * sizeof( urc_windows[0] ) );
 	urc_numWindows--;
 	if ( urc_activeWindow == index ) {
@@ -3531,7 +3783,9 @@ static void URC_CloseWindow( int index ) {
 }
 
 static void URC_CloseAllWindows( void ) {
-	urc_numWindows = 0;
+	while ( urc_numWindows ) {
+		URC_FreeWindowData( &urc_windows[--urc_numWindows] );
+	}
 	urc_activeWindow = urc_windowPress = urc_windowDrag = -1;
 }
 
@@ -3696,6 +3950,1471 @@ static void URC_TestListClick( urcWindow_t *win ) {
 	URC_TestListClamp( win );
 }
 
+/*
+=================
+The notepad
+
+notepad [file] (fakk2.exe 0x40c550, 0x4a7d20): a UINotepad, a floating
+window at 100, 100, 450 by 300 in 0.1 grey, titled "<file> - Notepad"
+(0x4a9dd0), that opens the file through the game's file system
+(0x4a8180; nothing opens, and nothing is said, when it cannot be read).
+Its client frame (Create, 0x4a8200; laid out at 0x4a8ac0) holds a menu
+bar at the top, a UIStatusBar 20 tall at the bottom and between them a
+UINotepadEdit, a UIMultiLineEdit in verdana-14, black on white:
+
+  File: Open (Ctrl-O), Save (Ctrl-S), Save As...(Ctrl-A), a separator,
+        Close (Ctrl-W)
+  Edit: Copy (Ctrl-C), Cut (Ctrl-X), Paste (Ctrl-V), a separator,
+        Find (Ctrl-F), Go to line... (Ctrl-G)
+
+The shortcuts are the control characters (0x4a8fd0, the table 0x4fcdb0).
+The status bar (drawn at 0x4a8b70) shows "Line %d, column %d", black on
+the window's grey; a prompt white on half-transparent dark red (red at
+half, 0x4d53dc), what is typed after it: "Goto line (tab cancels): ",
+"Find text (tab cancels): " (the last text found already there),
+"Save As (tab cancels): " and "Save <file>? (yes/no/cancel) " ("Y"
+there); and for 3 seconds a message in red. While a prompt is up the
+characters are its (0x4a9090): backspace, enter, escape or tab cancels,
+printable ones are added (the yes/no/cancel prompt keeps one). Enter on
+a line number selects that line or says "Line '<n>' doesn't exist."; on a
+text, finds it from after the caret, ignoring case, wrapping to the top
+once (0x4a96c0), and selects it, the prompt staying for the next, or says
+"Text: '<text>' could not be found."; on a name, saves to it. Save
+(0x4a9bf0) without a name asks for one; it writes through the file system
+and says "Saved <file>". Close (0x4a9f30) asks the yes/no/cancel question
+when the text changed since it was opened or saved: n closes, y saves
+and closes. Open lists files in a File Picker (below).
+
+The edit (UIMultiLineEdit, drawn at 0x4b7530): lines from the scroll
+bar's first, at the left edge; the selection white on dark blue (0, 0,
+0.5); the caret, while the window is active, a 2 pixel bar the font's
+height, shown for the second half of every 750 ms. Printable characters
+and tab are typed over the selection, backspace and enter work on it
+(0x4b8770). A click in it places the caret and cancels a prompt
+(0x4a9aa0), a drag selects.
+
+The edit's keys (UIMultiLineEdit, 0x4b80e0) work on the caret's line and
+column: up and down keep the column; left and right go on over a line's
+end; home and end go to the line's ends, with control to the text's;
+page up and down go first to the top or bottom line shown, then a page;
+the wheel scrolls 2 lines. Shift held keeps the selection's other end,
+or the caret's move takes it along. Backspace with nothing selected
+selects the character before and deletes it; delete with nothing
+selected only selects the character after (a second delete deletes it);
+shift with delete copies first. With something selected, control and
+insert copy, shift and insert paste. Copy and paste are the system's
+clipboard (0x458560, 0x4584e0); a paste is typed, character by
+character, through the notepad (0x4b8e10). A click (0x4b7ec0) puts the
+caret and the selection's other end at the character it is on, a drag
+moves the caret, scrolling every quarter second while it is beyond the
+text shown (0x4b7f80, 0x4b7fe0). The window's close box is Close
+(floatingwindow_close_pressed, 0x4a12cb), and the status bar's corner is
+a UIWindowSizer (0x4bce40) that resizes the window, to at least 32 by 16.
+=================
+*/
+#define URC_NP_X				100
+#define URC_NP_Y				100
+#define URC_NP_W				450
+#define URC_NP_H				300
+#define URC_NP_BAR_H			18			// the menu bar: verdana-14 and 2 above and below
+#define URC_NP_STATUS_H			20			// 0x4d5fa8
+#define URC_NP_FONT				"verdana-14"
+#define URC_NP_STATUS_FONT		"verdana-12"
+#define URC_NP_MESSAGE_TIME		3000		// 0xbb8
+#define URC_NP_GRIP				16			// UIWindowSizer, the status bar's bottom right 16 by 16 (0x4bce40)
+#define URC_NP_MIN_W			32			// 0x4bcbff
+#define URC_NP_MIN_H			16
+#define URC_NP_SEPARATOR_H		8			// UIPopupMenu's item height for a separator (0x4bfab0)
+#define URC_NP_SCROLL_TIME		250			// a drag past the text scrolls again after (0x4b7fe0)
+#define URC_NP_POPUP_PAD		4			// UIPopupMenu's, as the pulldowns' lists (URC_DrawPopup)
+
+typedef enum {
+	NP_EDIT, NP_GOTO, NP_FIND, NP_SAVEAS, NP_MESSAGE, NP_ASKSAVE		// 0x1b8: 0 to 5
+} urcNotepadMode_t;
+
+typedef enum {
+	NPC_NONE, NPC_OPEN, NPC_SAVE, NPC_SAVEAS, NPC_CLOSE, NPC_COPY, NPC_CUT, NPC_PASTE, NPC_FIND, NPC_GOTO
+} urcNotepadCmd_t;
+
+typedef struct {
+	char				*text;				// lines joined by \n
+	int					len, size;
+	int					cursor, anchor;		// the caret and the selection's other end
+	int					top;				// the first line shown
+	qboolean			modified;			// the edit's 0x196
+	char				file[MAX_QPATH];
+	urcNotepadMode_t	mode;
+	char				input[256];
+	char				message[320];
+	int					messageEnd;
+	char				lastFind[256];
+	int					menu;				// the menu bar's open menu: -1, 0 File, 1 Edit
+	qboolean			selecting, resizing;
+	int					scrollTime;			// a drag's next scroll, 0 none
+	urcScrollPart_t		held;
+	float				grab[2];
+} urcNotepad_t;
+
+typedef struct {
+	const char		*text;			// "" a separator
+	urcNotepadCmd_t	cmd;
+} urcNotepadItem_t;
+
+static const char				*urc_npMenuTitles[2] = { "File", "Edit" };
+static const urcNotepadItem_t	urc_npMenus[2][6] = {
+	{ { "Open (Ctrl-O)", NPC_OPEN }, { "Save (Ctrl-S)", NPC_SAVE }, { "Save As...(Ctrl-A)", NPC_SAVEAS },
+	  { "", NPC_NONE }, { "Close (Ctrl-W)", NPC_CLOSE }, { NULL, NPC_NONE } },
+	{ { "Copy (Ctrl-C)", NPC_COPY }, { "Cut (Ctrl-X)", NPC_CUT }, { "Paste (Ctrl-V)", NPC_PASTE },
+	  { "", NPC_NONE }, { "Find (Ctrl-F)", NPC_FIND }, { "Go to line... (Ctrl-G)", NPC_GOTO } }
+};
+static const struct {
+	char			letter;
+	urcNotepadCmd_t	cmd;
+} urc_npShortcuts[] = {		// 0x4fcdb0
+	{ 'o', NPC_OPEN }, { 's', NPC_SAVE }, { 'a', NPC_SAVEAS }, { 'w', NPC_CLOSE }, { 'f', NPC_FIND },
+	{ 'g', NPC_GOTO }, { 'c', NPC_COPY }, { 'x', NPC_CUT }, { 'v', NPC_PASTE }
+};
+
+
+// the file picker (below)
+#define URC_PICKER_X	100
+#define URC_PICKER_Y	50
+#define URC_PICKER_W	400
+#define URC_PICKER_H	300
+
+typedef struct {
+	char		name[MAX_QPATH];
+	qboolean	dir;
+	char		date[24];			// "" when the file is not on the disk (in a pk3)
+	char		size[16];
+} urcPickEntry_t;
+
+typedef struct {
+	char			dir[MAX_QPATH];		// "" or ending in '/'
+	void			*owner;				// the notepad's data
+	urcPickEntry_t	*entries;
+	int				num;
+	int				clickTime, clickRow;
+	float			clickX, clickY;
+} urcPicker_t;
+
+static int URC_PickerRows( const float c[4] ) {
+	int		rows = (int)( ( c[3] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) );
+
+	return rows < 1 ? 1 : rows;
+}
+
+
+static void URC_OpenPicker( const char *dir, void *owner );
+
+// the text
+
+static int URC_NpLineStart( const urcNotepad_t *np, int pos ) {
+	while ( pos > 0 && np->text[pos - 1] != '\n' ) {
+		pos--;
+	}
+	return pos;
+}
+
+static int URC_NpLineEnd( const urcNotepad_t *np, int pos ) {
+	while ( pos < np->len && np->text[pos] != '\n' ) {
+		pos++;
+	}
+	return pos;
+}
+
+static int URC_NpLineOf( const urcNotepad_t *np, int pos ) {
+	int		i, line = 0;
+
+	for ( i = 0 ; i < pos && i < np->len ; i++ ) {
+		line += ( np->text[i] == '\n' );
+	}
+	return line;
+}
+
+static int URC_NpNumLines( const urcNotepad_t *np ) {
+	return URC_NpLineOf( np, np->len ) + 1;
+}
+
+// where a line begins, or -1 past the last
+static int URC_NpLinePos( const urcNotepad_t *np, int line ) {
+	int		pos = 0;
+
+	while ( line > 0 ) {
+		while ( pos < np->len && np->text[pos] != '\n' ) {
+			pos++;
+		}
+		if ( pos >= np->len ) {
+			return -1;
+		}
+		pos++;
+		line--;
+	}
+	return pos;
+}
+
+static void URC_NpReserve( urcNotepad_t *np, int extra ) {
+	char	*text;
+	int		size;
+
+	if ( np->len + extra + 1 <= np->size ) {
+		return;
+	}
+	size = ( np->len + extra + 1 ) * 2;
+	if ( size < 1024 ) {
+		size = 1024;
+	}
+	text = Z_Malloc( size );
+	if ( np->text ) {
+		Com_Memcpy( text, np->text, np->len );
+		Z_Free( np->text );
+	}
+	np->text = text;
+	np->size = size;
+	np->text[np->len] = 0;
+}
+
+static qboolean URC_NpDeleteSelection( urcNotepad_t *np ) {
+	int		a = np->cursor < np->anchor ? np->cursor : np->anchor;
+	int		b = np->cursor < np->anchor ? np->anchor : np->cursor;
+
+	if ( a == b ) {
+		return qfalse;
+	}
+	memmove( np->text + a, np->text + b, np->len - b + 1 );
+	np->len -= b - a;
+	np->cursor = np->anchor = a;
+	np->modified = qtrue;
+	return qtrue;
+}
+
+// over the selection, at the caret; carriage returns are dropped
+static void URC_NpInsert( urcNotepad_t *np, const char *s, int n ) {
+	int		i, j;
+
+	URC_NpDeleteSelection( np );
+	URC_NpReserve( np, n );
+	memmove( np->text + np->cursor + n, np->text + np->cursor, np->len - np->cursor + 1 );
+	for ( i = j = 0 ; i < n ; i++ ) {
+		if ( s[i] != '\r' ) {
+			np->text[np->cursor + j++] = s[i];
+		}
+	}
+	if ( j < n ) {
+		memmove( np->text + np->cursor + j, np->text + np->cursor + n, np->len - np->cursor + 1 );
+	}
+	np->len += j;
+	np->cursor += j;
+	np->anchor = np->cursor;
+	np->modified = qtrue;
+}
+
+static void URC_NpSetText( urcNotepad_t *np, const char *s ) {
+	np->len = 0;
+	np->cursor = np->anchor = np->top = 0;
+	URC_NpInsert( np, s, strlen( s ) );
+	np->cursor = np->anchor = 0;
+	np->modified = qfalse;
+}
+
+// the selection as a new string (Z_Malloc), or NULL
+static char *URC_NpSelection( const urcNotepad_t *np ) {
+	int		a = np->cursor < np->anchor ? np->cursor : np->anchor;
+	int		b = np->cursor < np->anchor ? np->anchor : np->cursor;
+	char	*s;
+
+	if ( a == b ) {
+		return NULL;
+	}
+	s = Z_Malloc( b - a + 1 );
+	Com_Memcpy( s, np->text + a, b - a );
+	s[b - a] = 0;
+	return s;
+}
+
+// the window's parts
+
+static void URC_NpRects( const urcWindow_t *win, float bar[4], float edit[4], float status[4] ) {
+	float	c[4];
+
+	URC_WindowClient( win, c );
+	Vector4Set( bar, c[0], c[1], c[2], URC_NP_BAR_H );
+	Vector4Set( status, c[0], c[1] + c[3] - URC_NP_STATUS_H, c[2], URC_NP_STATUS_H );
+	Vector4Set( edit, c[0], c[1] + URC_NP_BAR_H, c[2], c[3] - URC_NP_BAR_H - URC_NP_STATUS_H );
+}
+
+static int URC_NpRows( const float edit[4] ) {
+	int		rows = (int)( edit[3] / URC_FontHeight( URC_LoadFont( URC_NP_FONT ) ) );
+
+	return rows < 1 ? 1 : rows;
+}
+
+// a menu bar title, 4 either side of its text
+static void URC_NpTitleRect( const float bar[4], int menu, float r[4] ) {
+	urcFont_t	*font = URC_LoadFont( URC_NP_FONT );
+	float		x = bar[0];
+	int			i;
+
+	for ( i = 0 ; i < menu ; i++ ) {
+		x += URC_StringWidth( font, urc_npMenuTitles[i] ) + 8;
+	}
+	Vector4Set( r, x, bar[1], URC_StringWidth( font, urc_npMenuTitles[menu] ) + 8, bar[3] );
+}
+
+static int URC_NpNumItems( int menu ) {
+	int		n = 0;
+
+	while ( n < 6 && urc_npMenus[menu][n].text ) {
+		n++;
+	}
+	return n;
+}
+
+// an open menu's list: as UIPopupMenu's (URC_PopupRect), below its title
+static void URC_NpMenuRect( const float bar[4], int menu, float r[4] ) {
+	urcFont_t	*font = URC_LoadFont( URC_POPUP_FONT );
+	float		title[4], width = 0;
+	int			i;
+
+	URC_NpTitleRect( bar, menu, title );
+	for ( i = 0 ; i < URC_NpNumItems( menu ) ; i++ ) {
+		float	w = URC_StringWidth( font, urc_npMenus[menu][i].text );
+
+		if ( w > width ) {
+			width = w;
+		}
+	}
+	Vector4Set( r, title[0], bar[1] + bar[3], width + 24, 2 * URC_NP_POPUP_PAD );
+	for ( i = 0 ; i < URC_NpNumItems( menu ) ; i++ ) {
+		r[3] += urc_npMenus[menu][i].text[0] ? URC_FontHeight( font ) : URC_NP_SEPARATOR_H;
+	}
+}
+
+// the item of an open menu at a height, or -1
+static int URC_NpMenuItemAt( const float r[4], int menu, float y ) {
+	float	h, top = r[1] + URC_NP_POPUP_PAD;
+	int		i;
+
+	for ( i = 0 ; i < URC_NpNumItems( menu ) ; i++, top += h ) {
+		h = urc_npMenus[menu][i].text[0] ? URC_FontHeight( URC_LoadFont( URC_POPUP_FONT ) ) : URC_NP_SEPARATOR_H;
+		if ( y >= top && y < top + h ) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+// the size grip: the status bar's bottom right corner
+static void URC_NpGripRect( const float status[4], float r[4] ) {
+	Vector4Set( r, status[0] + status[2] - URC_NP_GRIP, status[1] + status[3] - URC_NP_GRIP, URC_NP_GRIP, URC_NP_GRIP );
+}
+
+static void URC_NpClampTop( urcNotepad_t *np, const float edit[4] ) {
+	int		rows = URC_NpRows( edit ), lines = URC_NpNumLines( np );
+
+	if ( np->top > lines - rows ) {
+		np->top = lines - rows;
+	}
+	if ( np->top < 0 ) {
+		np->top = 0;
+	}
+}
+
+static void URC_NpShowCaret( urcNotepad_t *np, const urcWindow_t *win ) {
+	float	bar[4], edit[4], status[4];
+	int		line = URC_NpLineOf( np, np->cursor ), rows;
+
+	URC_NpRects( win, bar, edit, status );
+	rows = URC_NpRows( edit );
+	if ( line < np->top ) {
+		np->top = line;
+	} else if ( line >= np->top + rows ) {
+		np->top = line - rows + 1;
+	}
+	URC_NpClampTop( np, edit );
+}
+
+// a position as the edit's line and column, and back, the line kept in
+// the text and the column in the line (0x4b8080)
+static void URC_NpLineCol( const urcNotepad_t *np, int pos, int *line, int *col ) {
+	*line = URC_NpLineOf( np, pos );
+	*col = pos - URC_NpLineStart( np, pos );
+}
+
+static int URC_NpPos( const urcNotepad_t *np, int line, int col ) {
+	int		pos, end;
+
+	if ( line >= URC_NpNumLines( np ) ) {
+		line = URC_NpNumLines( np ) - 1;
+	}
+	if ( line < 0 ) {
+		line = 0;
+	}
+	pos = URC_NpLinePos( np, line );
+	end = URC_NpLineEnd( np, pos );
+	if ( col > end - pos ) {
+		col = end - pos;
+	}
+	if ( col < 0 ) {
+		col = 0;
+	}
+	return pos + col;
+}
+
+/*
+=================
+URC_NpPosAt
+
+The position at a point in the edit (0x4b7dc0): the line the point's
+height falls in, counted from the first shown and cut toward zero; along
+it, the characters up to the one the point is on, less that one when the
+point is on its left half, unless the line ran out first.
+=================
+*/
+static int URC_NpPosAt( const urcNotepad_t *np, const float edit[4], float x, float y ) {
+	urcFont_t	*font = URC_LoadFont( URC_NP_FONT );
+	int			line = (int)( ( y - edit[1] ) / URC_FontHeight( font ) + np->top );
+	int			pos, end, i = 0;
+	float		w = 0, cw = 0;
+
+	if ( line >= URC_NpNumLines( np ) ) {
+		line = URC_NpNumLines( np ) - 1;
+	}
+	if ( line < 0 ) {
+		return 0;
+	}
+	pos = URC_NpLinePos( np, line );
+	end = URC_NpLineEnd( np, pos );
+	x -= edit[0];
+	while ( pos + i < end && w < x ) {
+		cw = URC_CharWidth( font, np->text[pos + i] );
+		w += cw;
+		i++;
+	}
+	if ( pos + i < end && i && w - cw * 0.5f >= x ) {
+		i--;
+	}
+	return pos + i;
+}
+
+// the x of a position within its line
+static float URC_NpPosX( const urcNotepad_t *np, int pos ) {
+	urcFont_t	*font = URC_LoadFont( URC_NP_FONT );
+	int			i = URC_NpLineStart( np, pos );
+	float		w = 0;
+
+	for ( ; i < pos ; i++ ) {
+		w += URC_CharWidth( font, np->text[i] );
+	}
+	return w;
+}
+
+static void URC_NpSetTitle( urcWindow_t *win, const urcNotepad_t *np ) {
+	Com_sprintf( win->title, sizeof( win->title ), "%s - Notepad", np->file );		// 0x4a9dd0, " - Notepad"
+}
+
+static void URC_NpMessage( urcNotepad_t *np, const char *text ) {		// 0x4a8ee0
+	np->mode = NP_MESSAGE;
+	np->messageEnd = cls.realtime + URC_NP_MESSAGE_TIME;
+	Q_strncpyz( np->message, text, sizeof( np->message ) );
+}
+
+static void URC_NpPrompt( urcNotepad_t *np, urcNotepadMode_t mode, const char *input ) {
+	np->mode = mode;
+	Q_strncpyz( np->input, input, sizeof( np->input ) );
+}
+
+static qboolean URC_NpOpen( urcWindow_t *win, const char *path ) {		// 0x4a8180
+	urcNotepad_t	*np = win->data;
+	char			*buf;
+
+	if ( !path || !path[0] || FS_ReadFile( path, (void **)&buf ) < 0 || !buf ) {
+		return qfalse;
+	}
+	Q_strncpyz( np->file, path, sizeof( np->file ) );
+	URC_NpSetTitle( win, np );
+	URC_NpSetText( np, buf );
+	FS_FreeFile( buf );
+	return qtrue;
+}
+
+static void URC_NpSave( urcNotepad_t *np ) {		// 0x4a9bf0
+	if ( !np->file[0] ) {
+		URC_NpPrompt( np, NP_SAVEAS, "" );
+		return;
+	}
+	np->modified = qfalse;
+	FS_WriteFile( np->file, np->text ? np->text : "", np->len );
+	URC_NpMessage( np, va( "Saved %s", np->file ) );
+}
+
+// selects a line by its number, from 1 (0x4a9650)
+static qboolean URC_NpGotoLine( urcWindow_t *win, int line ) {
+	urcNotepad_t	*np = win->data;
+	int				pos;
+
+	if ( line < 1 || ( pos = URC_NpLinePos( np, line - 1 ) ) < 0 ) {
+		return qfalse;
+	}
+	np->cursor = pos;
+	np->anchor = URC_NpLineEnd( np, pos );
+	URC_NpShowCaret( np, win );
+	return qtrue;
+}
+
+// from skip after the caret to the end, then from the top, ignoring case (0x4a96c0)
+static qboolean URC_NpFind( urcWindow_t *win, const char *text, int skip ) {
+	urcNotepad_t	*np = win->data;
+	int				n = strlen( text ), start = np->cursor + skip, pass, i;
+
+	if ( !n ) {
+		return qfalse;
+	}
+	for ( pass = 0 ; pass < 2 ; pass++ ) {
+		for ( i = pass ? 0 : start ; i + n <= np->len ; i++ ) {
+			if ( !Q_stricmpn( np->text + i, text, n ) ) {
+				np->cursor = i;
+				np->anchor = i + n;
+				URC_NpShowCaret( np, win );
+				return qtrue;
+			}
+		}
+	}
+	return qfalse;
+}
+
+// the selection to the system's clipboard (0x4b8b60)
+static void URC_NpCopy( const urcNotepad_t *np ) {
+	char	*s = URC_NpSelection( np );
+
+	if ( s ) {
+		Sys_SetClipboardText( s );
+		Z_Free( s );
+	}
+}
+
+static qboolean URC_NotepadChar( int index, int c );
+
+// the system's clipboard typed into the notepad, a newline as enter, over
+// the selection (0x4b8e10)
+static void URC_NpPaste( int index ) {
+	char	*text = Sys_GetClipboardText(), *s;
+
+	URC_NpDeleteSelection( urc_windows[index].data );
+	if ( !text ) {
+		return;
+	}
+	for ( s = text ; *s && index < urc_numWindows && urc_windows[index].kind == WIN_NOTEPAD ; s++ ) {
+		URC_NotepadChar( index, *s == '\n' ? 13 : (unsigned char)*s );
+	}
+	Z_Free( text );
+}
+
+static void URC_NpCommand( int index, urcNotepadCmd_t cmd ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcNotepad_t	*np = win->data;
+	char			dir[MAX_QPATH];
+
+	switch ( cmd ) {
+	case NPC_OPEN:		// 0x4a9d40: a file picker where the file is
+		Q_strncpyz( dir, np->file, sizeof( dir ) );
+		*( strrchr( dir, '/' ) ? strrchr( dir, '/' ) + 1 : dir ) = 0;
+		URC_OpenPicker( dir, np );
+		break;
+	case NPC_SAVE:
+		URC_NpSave( np );
+		break;
+	case NPC_SAVEAS:	// 0x4a9ad0
+		URC_NpPrompt( np, NP_SAVEAS, "" );
+		break;
+	case NPC_CLOSE:		// 0x4a9f30
+		if ( np->modified ) {
+			URC_NpPrompt( np, NP_ASKSAVE, "Y" );
+		} else {
+			URC_CloseWindow( index );
+		}
+		break;
+	case NPC_COPY:		// 0x4aa220
+		URC_NpCopy( np );
+		break;
+	case NPC_CUT:		// 0x4aa240
+		URC_NpCopy( np );
+		URC_NpDeleteSelection( np );
+		break;
+	case NPC_PASTE:		// 0x4aa230
+		URC_NpPaste( index );
+		break;
+	case NPC_FIND:		// 0x4aa080
+		URC_NpPrompt( np, NP_FIND, np->lastFind );
+		break;
+	case NPC_GOTO:		// 0x4aa100
+		URC_NpPrompt( np, NP_GOTO, "" );
+		break;
+	default:
+		break;
+	}
+}
+
+// enter in a prompt (0x4a927e)
+static void URC_NpEnter( int index ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcNotepad_t	*np = win->data;
+	char			c;
+
+	switch ( np->mode ) {
+	case NP_GOTO:
+		if ( !np->input[0] ) {
+			np->mode = NP_EDIT;
+		} else if ( URC_NpGotoLine( win, atoi( np->input ) ) ) {
+			np->mode = NP_EDIT;
+		} else {
+			URC_NpMessage( np, va( "Line '%s' doesn't exist.", np->input ) );
+		}
+		break;
+	case NP_FIND:
+		if ( !np->input[0] ) {
+			np->mode = NP_EDIT;
+			break;
+		}
+		if ( !URC_NpFind( win, np->input, 1 ) ) {
+			URC_NpMessage( np, va( "Text: '%s' could not be found.", np->input ) );
+		}
+		Q_strncpyz( np->lastFind, np->input, sizeof( np->lastFind ) );
+		break;
+	case NP_SAVEAS:
+		np->mode = NP_EDIT;
+		if ( np->input[0] ) {
+			Q_strncpyz( np->file, np->input, sizeof( np->file ) );
+			URC_NpSetTitle( win, np );
+			URC_NpSave( np );
+		}
+		break;
+	case NP_ASKSAVE:
+		np->mode = NP_EDIT;
+		c = tolower( np->input[0] ? np->input[0] : 'q' );
+		if ( c == 'y' ) {
+			URC_NpSave( np );
+			URC_CloseWindow( index );
+		} else if ( c == 'n' ) {
+			URC_CloseWindow( index );
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+=================
+URC_NotepadChar
+
+A character for the active notepad (0x4a9620, 0x4a9090, 0x4b8770);
+returns whether it took it.
+=================
+*/
+static qboolean URC_NotepadChar( int index, int c ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcNotepad_t	*np = win->data;
+	int				i, n;
+	char			ch;
+
+	if ( c >= 1 && c <= 26 ) {
+		for ( i = 0 ; i < (int)ARRAY_LEN( urc_npShortcuts ) ; i++ ) {
+			if ( urc_npShortcuts[i].letter == c + 0x60 ) {
+				np->menu = -1;
+				URC_NpCommand( index, urc_npShortcuts[i].cmd );
+				return qtrue;
+			}
+		}
+	}
+	if ( np->mode != NP_EDIT && np->mode != NP_MESSAGE ) {
+		n = strlen( np->input );
+		if ( c == 8 ) {
+			if ( n ) {
+				np->input[n - 1] = 0;
+			}
+		} else if ( c == 13 ) {
+			URC_NpEnter( index );
+		} else if ( c == 27 || c == 9 ) {
+			np->mode = NP_EDIT;
+		} else if ( c >= 0x20 && c < 0x7f ) {
+			if ( np->mode == NP_ASKSAVE ) {
+				n = 0;
+			}
+			if ( n < (int)sizeof( np->input ) - 1 ) {
+				np->input[n] = c;
+				np->input[n + 1] = 0;
+			}
+		}
+		return qtrue;
+	}
+
+	// the edit (0x4b8770)
+	if ( c == 8 ) {
+		if ( np->cursor == np->anchor && np->cursor > 0 ) {
+			np->cursor--;		// shift and left
+		}
+		URC_NpDeleteSelection( np );
+	} else if ( c == 13 ) {
+		URC_NpInsert( np, "\n", 1 );
+	} else if ( c == 9 || ( c >= 0x20 && c < 0x7f ) ) {
+		ch = c;
+		URC_NpInsert( np, &ch, 1 );
+	} else {
+		return qfalse;
+	}
+	URC_NpShowCaret( np, win );
+	return qtrue;
+}
+
+/*
+=================
+URC_NotepadKey
+
+The keys that are not characters, for the active notepad; returns
+whether it took the key.
+=================
+*/
+static qboolean URC_NotepadKey( int index, int key ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcNotepad_t	*np = win->data;
+	float			bar[4], edit[4], status[4];
+	int				line, col, page, numLines = URC_NpNumLines( np );
+	qboolean		shift = keys[K_SHIFT].down, ctrl = keys[K_CTRL].down, empty = np->cursor == np->anchor;
+
+	if ( key >= K_MOUSE1 && key <= K_MOUSE5 ) {
+		return qfalse;
+	}
+	switch ( key ) {
+	case K_ENTER:
+	case K_KP_ENTER:
+		return URC_NotepadChar( index, 13 );
+	case K_TAB:
+		return URC_NotepadChar( index, 9 );
+	case K_ESCAPE:
+		if ( np->menu >= 0 ) {
+			np->menu = -1;
+			return qtrue;
+		}
+		return np->mode != NP_EDIT && np->mode != NP_MESSAGE && URC_NotepadChar( index, 27 );
+	case K_MWHEELUP:
+	case K_MWHEELDOWN:
+		return qfalse;		// the window's wheel (URC_NotepadWheel)
+	default:
+		break;
+	}
+
+	URC_NpRects( win, bar, edit, status );
+	page = URC_NpRows( edit );
+	URC_NpLineCol( np, np->cursor, &line, &col );
+	switch ( key ) {
+	case K_UPARROW:
+	case K_KP_UPARROW:
+		line--;
+		break;
+	case K_DOWNARROW:
+	case K_KP_DOWNARROW:
+		line++;
+		break;
+	case K_LEFTARROW:
+	case K_KP_LEFTARROW:
+		if ( --col < 0 ) {
+			line--;
+			col = 999999;		// 0xf423f
+			if ( line < 0 ) {
+				col = 0;
+			}
+		}
+		break;
+	case K_RIGHTARROW:
+	case K_KP_RIGHTARROW:
+		if ( URC_NpPos( np, line, col + 1 ) == np->cursor ) {
+			col = 0;
+			if ( ++line >= numLines ) {
+				line = numLines - 1;
+				col = 999999;
+			}
+		} else {
+			col++;
+		}
+		break;
+	case K_HOME:
+	case K_KP_HOME:
+		col = 0;
+		if ( ctrl ) {
+			line = 0;
+		}
+		break;
+	case K_END:
+	case K_KP_END:
+		col = 999999;
+		if ( ctrl ) {
+			line = numLines;
+		}
+		break;
+	case K_PGUP:
+	case K_KP_PGUP:
+		line = line == np->top ? line - page : np->top;
+		break;
+	case K_PGDN:
+	case K_KP_PGDN:
+		line = line == np->top + page - 1 ? line + page : np->top + page - 1;
+		break;
+	case K_INS:
+	case K_KP_INS:
+		if ( !empty ) {
+			if ( ctrl ) {
+				URC_NpCopy( np );
+			} else if ( shift ) {
+				URC_NpPaste( index );
+			}
+		}
+		return qtrue;
+	case K_DEL:
+	case K_KP_DEL:
+		if ( empty ) {
+			// selects the character after, as shift and right would
+			if ( URC_NpPos( np, line, col + 1 ) == np->cursor ) {
+				col = 0;
+				if ( ++line >= numLines ) {
+					line = numLines - 1;
+					col = 999999;
+				}
+			} else {
+				col++;
+			}
+			np->cursor = URC_NpPos( np, line, col );
+			URC_NpShowCaret( np, win );
+			return qtrue;
+		}
+		if ( shift ) {
+			URC_NpCopy( np );
+		}
+		URC_NpDeleteSelection( np );
+		URC_NpShowCaret( np, win );
+		return qtrue;
+	default:
+		// the characters come as character events
+		return qtrue;
+	}
+	np->cursor = URC_NpPos( np, line, col );
+	if ( !shift ) {
+		np->anchor = np->cursor;
+	}
+	URC_NpShowCaret( np, win );
+	return qtrue;
+}
+
+static void URC_NotepadWheel( urcWindow_t *win, int delta ) {
+	float	bar[4], edit[4], status[4];
+
+	if ( win->kind == WIN_NOTEPAD ) {
+		urcNotepad_t	*np = win->data;
+
+		URC_NpRects( win, bar, edit, status );
+		np->top += 2 * delta;		// 0x4b820c, 0x4b822f
+		URC_NpClampTop( np, edit );
+	} else if ( win->kind == WIN_FILEPICKER ) {
+		win->top += delta;
+	}
+}
+
+static void URC_PickerMouseDown( int index );
+static void URC_PickerMouseUp( urcWindow_t *win );
+
+static void URC_NotepadMouseDown( int index ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcNotepad_t	*np = win->data;
+	float			bar[4], edit[4], status[4], r[4];
+	urcNotepadCmd_t	cmd;
+	int				menu, item;
+
+	URC_NpRects( win, bar, edit, status );
+
+	// an open menu takes the click: an item, or it closes
+	if ( np->menu >= 0 ) {
+		menu = np->menu;
+		np->menu = -1;
+		URC_NpMenuRect( bar, menu, r );
+		if ( URC_PointIn( r, urc_cursorX, urc_cursorY ) ) {
+			item = URC_NpMenuItemAt( r, menu, urc_cursorY );
+			if ( item >= 0 && ( cmd = urc_npMenus[menu][item].cmd ) != NPC_NONE ) {
+				URC_NpCommand( index, cmd );
+			}
+			return;
+		}
+		URC_NpTitleRect( bar, menu, r );
+		if ( URC_PointIn( r, urc_cursorX, urc_cursorY ) ) {
+			return;		// its title shuts it
+		}
+	}
+	for ( menu = 0 ; menu < 2 ; menu++ ) {
+		URC_NpTitleRect( bar, menu, r );
+		if ( URC_PointIn( r, urc_cursorX, urc_cursorY ) ) {
+			np->menu = menu;
+			return;
+		}
+	}
+	URC_NpGripRect( status, r );
+	if ( URC_PointIn( r, urc_cursorX, urc_cursorY ) ) {
+		np->resizing = qtrue;
+		np->grab[0] = win->rect[0] + win->rect[2] - urc_cursorX;
+		np->grab[1] = win->rect[1] + win->rect[3] - urc_cursorY;
+		return;
+	}
+	if ( !URC_PointIn( edit, urc_cursorX, urc_cursorY ) ) {
+		return;
+	}
+
+	// the edit: its scroll bar, or the caret (a prompt goes, 0x4a9aa0)
+	np->held = URC_ScrollPart( edit, URC_NpNumLines( np ), URC_NpRows( edit ), np->top, urc_cursorX, urc_cursorY );
+	switch ( np->held ) {
+	case SCROLL_UP: np->top--; break;
+	case SCROLL_DOWN: np->top++; break;
+	case SCROLL_PAGEUP: np->top -= URC_NpRows( edit ); break;
+	case SCROLL_PAGEDOWN: np->top += URC_NpRows( edit ); break;
+	case SCROLL_THUMB:
+		{
+			float	sr[4], ty, th;
+
+			URC_ScrollRect( edit, sr );
+			URC_ScrollThumb( sr, URC_NpNumLines( np ), URC_NpRows( edit ), np->top, &ty, &th );
+			np->grab[1] = urc_cursorY - ( sr[1] + ty );
+		}
+		break;
+	default:
+		if ( np->mode != NP_MESSAGE ) {
+			np->mode = NP_EDIT;
+		}
+		np->cursor = np->anchor = URC_NpPosAt( np, edit, urc_cursorX, urc_cursorY );
+		URC_NpShowCaret( np, win );
+		np->selecting = qtrue;
+		np->scrollTime = 0;
+		break;
+	}
+	URC_NpClampTop( np, edit );
+}
+
+static void URC_NotepadMouseMove( urcWindow_t *win ) {
+	urcNotepad_t	*np = win->data;
+	float			bar[4], edit[4], status[4];
+
+	if ( win->kind == WIN_FILEPICKER ) {
+		if ( win->held == SCROLL_THUMB ) {
+			urcPicker_t	*pk = win->data;
+			float		c[4];
+
+			URC_WindowClient( win, c );
+			win->top = URC_ScrollTopAt( c, pk->num, URC_PickerRows( c ), urc_cursorY - win->grab );
+		}
+		return;
+	}
+	if ( win->kind != WIN_NOTEPAD ) {
+		return;
+	}
+	if ( np->resizing ) {
+		win->rect[2] = urc_cursorX + np->grab[0] - win->rect[0];
+		win->rect[3] = urc_cursorY + np->grab[1] - win->rect[1];
+		if ( win->rect[2] < URC_NP_MIN_W ) win->rect[2] = URC_NP_MIN_W;
+		if ( win->rect[3] < URC_NP_MIN_H ) win->rect[3] = URC_NP_MIN_H;
+		return;
+	}
+	URC_NpRects( win, bar, edit, status );
+	if ( np->selecting ) {
+		// the caret follows; past the text shown, the next scroll is now
+		np->cursor = URC_NpPosAt( np, edit, urc_cursorX, urc_cursorY );
+		if ( !np->scrollTime ) {
+			np->scrollTime = cls.realtime;
+		}
+	} else if ( np->held == SCROLL_THUMB ) {
+		np->top = URC_ScrollTopAt( edit, URC_NpNumLines( np ), URC_NpRows( edit ), urc_cursorY - np->grab[1] );
+		URC_NpClampTop( np, edit );
+	}
+}
+
+static void URC_NotepadMouseUp( urcWindow_t *win ) {
+	if ( win->kind == WIN_FILEPICKER ) {
+		URC_PickerMouseUp( win );
+	} else if ( win->kind == WIN_NOTEPAD ) {
+		urcNotepad_t	*np = win->data;
+
+		if ( np->selecting ) {
+			URC_NpShowCaret( np, win );		// 0x4b7f30
+		}
+		np->selecting = np->resizing = qfalse;
+		np->scrollTime = 0;
+		np->held = SCROLL_NONE;
+	}
+}
+
+// the width of the text from one position to another on a line
+static float URC_NpRangeWidth( const urcNotepad_t *np, urcFont_t *font, int from, int to ) {
+	float	w = 0;
+
+	for ( ; from < to ; from++ ) {
+		w += URC_CharWidth( font, np->text[from] );
+	}
+	return w;
+}
+
+// a line of the text, its selected part white on dark blue (0x4b7530)
+static void URC_NpDrawLine( const urcNotepad_t *np, urcFont_t *font, float x, float y, int start, int end, const vec4_t color ) {
+	static const vec4_t	selFill = { 0, 0, 0.5f, 1 };
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	char				buf[1024];
+	int					a = np->cursor < np->anchor ? np->cursor : np->anchor;
+	int					b = np->cursor < np->anchor ? np->anchor : np->cursor;
+	int					from, to, n;
+	float				x0;
+
+	if ( end - start > (int)sizeof( buf ) - 1 ) {
+		end = start + sizeof( buf ) - 1;
+	}
+	n = end - start;
+	Com_Memcpy( buf, np->text + start, n );
+	buf[n] = 0;
+	URC_DrawString( font, x, y, buf, color );
+
+	from = a > start ? a : start;
+	to = b < end ? b : end;
+	if ( from >= to ) {
+		return;
+	}
+	x0 = x + URC_NpRangeWidth( np, font, start, from );
+	URC_FillRect( x0, y, URC_NpRangeWidth( np, font, from, to ), URC_FontHeight( font ), selFill );
+	buf[to - start] = 0;
+	URC_DrawString( font, x0, y, buf + ( from - start ), white );
+}
+
+static void URC_DrawNotepad( const urcWindow_t *win, int index ) {
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	black = { 0, 0, 0, 1 };
+	static const vec4_t	red = { 1, 0, 0, 1 };
+	static const vec4_t	promptFill = { 0.5f, 0, 0, 0.5f };		// red at half, 0x4d53dc
+	static const vec4_t	statusEdge = { 0.5f, 0.5f, 0.5f, 1 };
+	urcNotepad_t		*np = win->data;
+	urcFont_t			*font = URC_LoadFont( URC_NP_FONT );
+	urcFont_t			*small = URC_LoadFont( URC_NP_STATUS_FONT );
+	float				bar[4], edit[4], status[4], r[4], saved[4], text[4], fh = URC_FontHeight( font ), y;
+	int					rows, line, pos, end, i, menu;
+	const char			*s;
+	vec4_t				colors[4];
+
+	URC_NpRects( win, bar, edit, status );
+
+	// a drag past the text shown scrolls toward the cursor every quarter
+	// second while the text moves (0x4b7fe0)
+	if ( np->selecting && np->scrollTime && cls.realtime >= np->scrollTime ) {
+		int		top = np->top;
+
+		np->cursor = URC_NpPosAt( np, edit, urc_cursorX, urc_cursorY );
+		URC_NpShowCaret( np, win );
+		np->scrollTime = np->top != top ? cls.realtime + URC_NP_SCROLL_TIME : 0;
+	}
+	URC_NpClampTop( np, edit );
+	rows = URC_NpRows( edit );
+
+	// the menu bar (UIPulldownMenu, 0x4be190): its titles black on the
+	// window's grey at 4, 2; the open one's white on black
+	for ( menu = 0 ; menu < 2 ; menu++ ) {
+		URC_NpTitleRect( bar, menu, r );
+		if ( menu == np->menu ) {
+			URC_Box( r[0], r[1], r[2], r[3], black, 1 );
+		}
+		URC_DrawString( font, r[0] + 4, r[1] + 2, urc_npMenuTitles[menu], menu == np->menu ? white : black );
+	}
+
+	// the edit
+	Vector4Copy( edit, text );
+	text[2] -= URC_SCROLL_WIDTH;
+	URC_PushClip( text, saved );
+	URC_Box( edit[0], edit[1], edit[2], edit[3], white, 1 );
+	pos = URC_NpLinePos( np, np->top );
+	for ( line = np->top, y = edit[1] ; pos >= 0 && line < np->top + rows + 1 ; line++, y += fh ) {
+		end = URC_NpLineEnd( np, pos );
+		URC_NpDrawLine( np, font, edit[0], y, pos, end, black );
+		if ( index == urc_activeWindow && np->cursor >= pos && np->cursor <= end && cls.realtime % 750 >= 375 ) {
+			URC_FillRect( edit[0] + URC_NpPosX( np, np->cursor ), y, 2, fh, black );
+		}
+		if ( end >= np->len ) {
+			break;
+		}
+		pos = end + 1;
+	}
+	URC_PopClip( saved );
+	URC_DrawScrollBar( edit, URC_NpNumLines( np ), rows, np->top, np->held, 1 );
+
+	// the status bar
+	if ( np->mode == NP_MESSAGE && cls.realtime > np->messageEnd ) {
+		np->mode = NP_EDIT;
+	}
+	URC_Box( status[0], status[1], status[2], 1, statusEdge, 1 );
+	Vector4Set( r, status[0], status[1] + 1, status[2], status[3] - 1 );
+	switch ( np->mode ) {
+	case NP_EDIT:
+		line = URC_NpLineOf( np, np->cursor );
+		s = va( "Line %d, column %d", line + 1, np->cursor - URC_NpLineStart( np, np->cursor ) + 1 );
+		URC_PrintJustified( small, r, URC_JUSTIFY_LEFT, URC_JUSTIFY_MIDDLE, s, black );
+		break;
+	case NP_MESSAGE:
+		URC_PrintJustified( small, r, URC_JUSTIFY_LEFT, URC_JUSTIFY_MIDDLE, np->message, red );
+		break;
+	default:
+		URC_Box( r[0], r[1], r[2], r[3], promptFill, 1 );
+		s = np->mode == NP_GOTO ? "Goto line (tab cancels): " :
+			np->mode == NP_FIND ? "Find text (tab cancels): " :
+			np->mode == NP_SAVEAS ? "Save As (tab cancels): " : va( "Save %s? (yes/no/cancel) ", np->file );
+		URC_PrintJustified( small, r, URC_JUSTIFY_LEFT, URC_JUSTIFY_MIDDLE, va( "%s%s", s, np->input ), white );
+		break;
+	}
+	// the size grip (marlett's two halves of it)
+	// (UIWindowSizer, 0x4bc940: marlett's "o" white, then "p" black; placed
+	// as a capture has them, 4 in from the corner)
+	URC_NpGripRect( status, r );
+	r[0] -= 4;
+	r[1] -= 4;
+	URC_PrintJustified( URC_LoadFont( URC_BOX_FONT ), r, URC_JUSTIFY_RIGHT, URC_JUSTIFY_BOTTOM, "o", white );
+	URC_PrintJustified( URC_LoadFont( URC_BOX_FONT ), r, URC_JUSTIFY_RIGHT, URC_JUSTIFY_BOTTOM, "p", black );
+
+	// an open menu, as UIPopupMenu draws its list (URC_DrawPopup)
+	if ( np->menu >= 0 ) {
+		urcFont_t	*pf = URC_LoadFont( URC_POPUP_FONT );
+		float		ph = URC_FontHeight( pf );
+
+		URC_NpMenuRect( bar, np->menu, r );
+		URC_Box( r[0], r[1], r[2], r[3], white, 1 );
+		URC_BorderColors( white, colors );
+		URC_Draw3DBox( r, qfalse, colors, 1 );
+		for ( i = 0, y = r[1] + URC_NP_POPUP_PAD ; i < URC_NpNumItems( np->menu ) ; i++ ) {
+			if ( !urc_npMenus[np->menu][i].text[0] ) {
+				// a separator (0x4bf687): a line in the text's colour, 8 in
+				// from each side, 4 down its 8
+				URC_Box( r[0] + 8, y + 4, r[2] - 16, 1, black, 1 );
+				y += URC_NP_SEPARATOR_H;
+				continue;
+			}
+			URC_DrawString( pf, r[0] + URC_NP_POPUP_PAD, y, urc_npMenus[np->menu][i].text, black );
+			y += ph;
+		}
+	}
+}
+
+static void URC_Notepad_f( void ) {
+	static const vec4_t	color = { 0.1f, 0.1f, 0.1f, 1 };		// 0x4a8239
+	urcWindow_t			*win;
+	urcNotepad_t		*np;
+
+	win = URC_NewWindow( WIN_NOTEPAD, "", URC_NP_X, URC_NP_Y, URC_NP_W, URC_NP_H, color );
+	if ( !win ) {
+		return;
+	}
+	np = win->data = Z_Malloc( sizeof( *np ) );
+	np->menu = -1;
+	URC_NpSetText( np, "" );
+	URC_NpSetTitle( win, np );
+	if ( Cmd_Argc() > 1 ) {
+		URC_NpOpen( win, Cmd_Argv( 1 ) );
+	}
+	URC_ActivateWindow( win - urc_windows );		// it comes up active (0x4a7f24)
+}
+
+/*
+=================
+The file picker
+
+FilePickerClass (0x412b40), which the notepad's Open brings up with every
+file (UIPickFileClass, ".*"): a floating window at 100, 50, 400 by 300 in
+0.1 grey titled with its directory, a UIListCtrl over its client frame in
+verdana-12, black on white, with the columns "File Name" 175, "Date" 125
+and "Size" 100 wide: ".." when the directory is not the one it began in,
+the directories as "[name]" (not those whose name begins with '.'), then
+the files (0x4133c0). A file's date and size, and a directory's date, are
+the disk's (0x432bc0, _findfirst on the game directory's path): month,
+day, year and the hour of a 12 hour clock with "a" or "p"; a file in a
+pk3 has neither. A row is opened by a second click on it within half a
+second and 2 pixels (listbase_item_doubleclicked, 0x4ad4a0; a single click
+does nothing here, 0x413db0): ".." lists the directory above, "[name]"
+that directory, and a file goes to the notepad that asked and the picker
+goes (0x413fa0, 0x415bf0). The title is the directory.
+
+Not retail's: the disk is looked at in the home directory first, then
+the install, as the file system reads.
+=================
+*/
+static int URC_ComparePickNames( const void *a, const void *b ) {
+	return Q_stricmp( *(const char **)a, *(const char **)b );
+}
+
+// a file's or directory's date, and a file's size, from the disk (0x432bc0)
+static void URC_PickerStat( urcPickEntry_t *e, const char *path ) {
+	static const char	*bases[2] = { "fs_homepath", "fs_basepath" };
+	struct stat			st;
+	struct tm			*t;
+	int					i;
+
+	e->date[0] = e->size[0] = 0;
+	for ( i = 0 ; i < 2 ; i++ ) {
+		const char	*os = FS_BuildOSPath( Cvar_VariableString( bases[i] ), FS_GetCurrentGameDir(), path );
+
+		if ( stat( os, &st ) == 0 && ( t = localtime( &st.st_mtime ) ) != NULL ) {
+			Com_sprintf( e->date, sizeof( e->date ), "%2d/%02d/%04d %2d:%02d%c", t->tm_mon + 1, t->tm_mday,
+				t->tm_year + 1900, t->tm_hour % 12, t->tm_min, t->tm_hour < 12 ? 'a' : 'p' );
+			if ( !e->dir ) {
+				Com_sprintf( e->size, sizeof( e->size ), "%d", (int)st.st_size );
+			}
+			return;
+		}
+	}
+}
+
+static void URC_PickerList( urcWindow_t *win ) {
+	urcPicker_t	*pk = win->data;
+	char		**dirs, **files, path[MAX_QPATH];
+	int			numDirs, numFiles, i, n = 0;
+
+	if ( pk->entries ) {
+		Z_Free( pk->entries );
+	}
+	dirs = FS_ListFiles( pk->dir, "/", &numDirs );
+	files = FS_ListFiles( pk->dir, "", &numFiles );
+	qsort( dirs, numDirs, sizeof( char * ), URC_ComparePickNames );
+	qsort( files, numFiles, sizeof( char * ), URC_ComparePickNames );
+	pk->entries = Z_Malloc( ( numDirs + numFiles + 1 ) * sizeof( urcPickEntry_t ) );
+	if ( pk->dir[0] ) {
+		Q_strncpyz( pk->entries[n].name, "..", sizeof( pk->entries[n].name ) );
+		pk->entries[n++].dir = qtrue;
+	}
+	// the file system lists the pk3s' directories at every depth, ending
+	// in '/': the directory's own, once each
+	for ( i = 0 ; i < numDirs ; i++ ) {
+		char	name[MAX_QPATH];
+		int		len;
+
+		Q_strncpyz( name, dirs[i], sizeof( name ) );
+		len = strlen( name );
+		if ( len && name[len - 1] == '/' ) {
+			name[--len] = 0;
+		}
+		if ( !len || strchr( name, '/' ) || name[0] == '.' ||
+			( n && pk->entries[n - 1].dir && !Q_stricmp( pk->entries[n - 1].name, name ) ) ) {
+			continue;
+		}
+		Q_strncpyz( pk->entries[n].name, name, sizeof( pk->entries[n].name ) );
+		pk->entries[n].dir = qtrue;
+		Com_sprintf( path, sizeof( path ), "%s%s", pk->dir, name );
+		URC_PickerStat( &pk->entries[n++], path );
+	}
+	for ( i = 0 ; i < numFiles ; i++ ) {
+		if ( !files[i][0] || strchr( files[i], '/' ) ) {
+			continue;		// a pk3's entry for the directory itself has no name
+		}
+		Q_strncpyz( pk->entries[n].name, files[i], sizeof( pk->entries[n].name ) );
+		pk->entries[n].dir = qfalse;
+		Com_sprintf( path, sizeof( path ), "%s%s", pk->dir, files[i] );
+		URC_PickerStat( &pk->entries[n++], path );
+	}
+	pk->num = n;
+	FS_FreeFileList( dirs );
+	FS_FreeFileList( files );
+	win->top = win->selected = 0;
+	Q_strncpyz( win->title, pk->dir, sizeof( win->title ) );
+}
+
+static void URC_OpenPicker( const char *dir, void *owner ) {
+	static const vec4_t	color = { 0.1f, 0.1f, 0.1f, 1 };
+	urcWindow_t			*win;
+	urcPicker_t			*pk;
+
+	win = URC_NewWindow( WIN_FILEPICKER, "File Picker", URC_PICKER_X, URC_PICKER_Y, URC_PICKER_W, URC_PICKER_H, color );
+	if ( !win ) {
+		return;
+	}
+	pk = win->data = Z_Malloc( sizeof( *pk ) );
+	Q_strncpyz( pk->dir, dir, sizeof( pk->dir ) );
+	pk->owner = owner;
+	pk->clickRow = -1;
+	URC_PickerList( win );
+	URC_ActivateWindow( win - urc_windows );
+}
+
+static void URC_PickerClamp( urcWindow_t *win ) {
+	urcPicker_t	*pk = win->data;
+	float		c[4];
+	int			rows;
+
+	URC_WindowClient( win, c );
+	rows = URC_PickerRows( c );
+	if ( win->top > pk->num - rows ) {
+		win->top = pk->num - rows;
+	}
+	if ( win->top < 0 ) {
+		win->top = 0;
+	}
+}
+
+// a row opened: a directory is listed, a file goes to its notepad
+static void URC_PickerOpen( int index, int row ) {
+	urcWindow_t		*win = &urc_windows[index];
+	urcPicker_t		*pk = win->data;
+	urcPickEntry_t	*e = &pk->entries[row];
+	char			path[MAX_QPATH], *slash;
+	void			*owner = pk->owner;
+	int				i;
+
+	if ( e->dir ) {
+		if ( !strcmp( e->name, ".." ) ) {
+			pk->dir[strlen( pk->dir ) - 1] = 0;
+			slash = strrchr( pk->dir, '/' );
+			*( slash ? slash + 1 : pk->dir ) = 0;
+		} else {
+			Q_strcat( pk->dir, sizeof( pk->dir ), va( "%s/", e->name ) );
+		}
+		URC_PickerList( win );
+		return;
+	}
+	Com_sprintf( path, sizeof( path ), "%s%s", pk->dir, e->name );
+	for ( i = 0 ; i < urc_numWindows ; i++ ) {
+		if ( urc_windows[i].kind == WIN_NOTEPAD && urc_windows[i].data == owner ) {
+			URC_NpOpen( &urc_windows[i], path );		// the "openfile" event (0x4a9d60)
+			break;
+		}
+	}
+	URC_CloseWindow( index );
+	for ( i = 0 ; i < urc_numWindows ; i++ ) {
+		if ( urc_windows[i].data == owner ) {
+			URC_ActivateWindow( i );
+			break;
+		}
+	}
+}
+
+static void URC_PickerMouseDown( int index ) {
+	urcWindow_t	*win = &urc_windows[index];
+	urcPicker_t	*pk = win->data;
+	float		c[4];
+	int			rows, row;
+
+	URC_WindowClient( win, c );
+	rows = URC_PickerRows( c );
+	win->held = URC_ScrollPart( c, pk->num, rows, win->top, urc_cursorX, urc_cursorY );
+	switch ( win->held ) {
+	case SCROLL_UP: win->top--; break;
+	case SCROLL_DOWN: win->top++; break;
+	case SCROLL_PAGEUP: win->top -= rows; break;
+	case SCROLL_PAGEDOWN: win->top += rows; break;
+	case SCROLL_THUMB:
+		{
+			float	sr[4], ty, th;
+
+			URC_ScrollRect( c, sr );
+			URC_ScrollThumb( sr, pk->num, rows, win->top, &ty, &th );
+			win->grab = urc_cursorY - ( sr[1] + ty );
+		}
+		break;
+	default:
+		if ( urc_cursorY >= c[1] + URC_SAVE_HEADER ) {
+			row = win->top + (int)( ( urc_cursorY - c[1] - URC_SAVE_HEADER ) / URC_FontHeight( URC_LoadFont( URC_DEFAULT_FONT ) ) );
+			if ( row >= 0 && row < pk->num ) {
+				if ( row == pk->clickRow && cls.realtime - pk->clickTime < 500 &&
+					fabs( urc_cursorX - pk->clickX ) <= 2 && fabs( urc_cursorY - pk->clickY ) <= 2 ) {
+					pk->clickRow = -1;
+					URC_PickerOpen( index, row );
+					return;
+				}
+				win->selected = row + 1;
+				pk->clickRow = row;
+				pk->clickTime = cls.realtime;
+				pk->clickX = urc_cursorX;
+				pk->clickY = urc_cursorY;
+			}
+		}
+		break;
+	}
+	URC_PickerClamp( win );
+}
+
+static void URC_PickerMouseUp( urcWindow_t *win ) {
+	win->held = SCROLL_NONE;
+}
+
+static void URC_DrawPicker( const urcWindow_t *win, int index ) {
+	static const char	*titles[3] = { "File Name", "Date", "Size" };
+	static const int	widths[3] = { 175, 125, 100 };		// 0x412c64
+	static const vec4_t	headerFill = { 0.3f, 0.3f, 0.3f, 1 };
+	static const vec4_t	white = { 1, 1, 1, 1 };
+	static const vec4_t	black = { 0, 0, 0, 1 };
+	urcPicker_t			*pk = win->data;
+	urcFont_t			*font = URC_LoadFont( URC_DEFAULT_FONT );
+	float				c[4], r[4], saved[4], x, y, rowH = URC_FontHeight( font );
+	int					col, i;
+
+	URC_WindowClient( win, c );
+	URC_PickerClamp( (urcWindow_t *)win );
+	URC_PushClip( c, saved );
+	URC_Box( c[0], c[1], c[2], c[3], white, 1 );
+	x = 0;
+	for ( col = 0 ; col < 3 ; col++ ) {
+		Vector4Set( r, c[0] + x, c[1], widths[col] + 1, URC_SAVE_HEADER );
+		URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+		URC_DrawString( font, r[0] + 2, r[1] + 2, titles[col], white );
+		x += widths[col];
+	}
+	if ( x < c[2] ) {
+		Vector4Set( r, c[0] + x, c[1], c[2] - x + 1, URC_SAVE_HEADER );
+		URC_DrawBorder( r, headerFill, white, 1, 3, 1 );
+	}
+	for ( i = win->top, y = URC_SAVE_HEADER ; i < pk->num && y <= c[3] ; i++, y += rowH ) {
+		const urcPickEntry_t	*e = &pk->entries[i];
+
+		// the list's selected row is drawn white on black's inverse, as the
+		// load list's (UIListCtrl), which on this black on white list is no change
+		URC_Box( c[0], c[1] + y, c[2], rowH, white, 1 );
+		URC_DrawString( font, c[0], c[1] + y, e->dir && strcmp( e->name, ".." ) ? va( "[%s]", e->name ) : e->name, black );
+		URC_DrawString( font, c[0] + widths[0], c[1] + y, e->date, black );
+		URC_DrawString( font, c[0] + widths[0] + widths[1], c[1] + y, e->size, black );
+	}
+	URC_DrawScrollBar( c, pk->num, URC_PickerRows( c ), win->top, urc_windowPress == index ? win->held : SCROLL_NONE, 1 );
+	URC_PopClip( saved );
+}
+
+static void URC_FreeWindowData( urcWindow_t *win ) {
+	if ( !win->data ) {
+		return;
+	}
+	if ( win->kind == WIN_NOTEPAD ) {
+		urcNotepad_t	*np = win->data;
+
+		if ( np->text ) {
+			Z_Free( np->text );
+		}
+	} else if ( win->kind == WIN_FILEPICKER ) {
+		urcPicker_t		*pk = win->data;
+
+		if ( pk->entries ) {
+			Z_Free( pk->entries );
+		}
+	}
+	Z_Free( win->data );
+	win->data = NULL;
+}
+
+// the keys and characters for the active notepad
+static qboolean URC_NotepadTakesKey( int key ) {
+	if ( urc_activeWindow < 0 || urc_activeWindow >= urc_numWindows ||
+		urc_windows[urc_activeWindow].kind != WIN_NOTEPAD || urc_windows[urc_activeWindow].minimized ) {
+		return qfalse;
+	}
+	return URC_NotepadKey( urc_activeWindow, key );
+}
+
+void URC_CharEvent( int c ) {
+	if ( !urc_initialised || urc_activeWindow < 0 || urc_activeWindow >= urc_numWindows ||
+		urc_windows[urc_activeWindow].kind != WIN_NOTEPAD || urc_windows[urc_activeWindow].minimized ) {
+		return;
+	}
+	URC_NotepadChar( urc_activeWindow, c );
+}
+
 static void URC_DrawWindow( int index ) {
 	static const vec4_t	white = { 1, 1, 1, 1 };
 	static const vec4_t	black = { 0, 0, 0, 1 };
@@ -3742,6 +5461,12 @@ static void URC_DrawWindow( int index ) {
 		case WIN_TESTLIST:
 			URC_DrawTestList( win, index );
 			break;
+		case WIN_NOTEPAD:
+			URC_DrawNotepad( win, index );
+			break;
+		case WIN_FILEPICKER:
+			URC_DrawPicker( win, index );
+			break;
 		}
 	}
 	URC_PopClip( saved );
@@ -3776,6 +5501,8 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 		if ( urc_windows[i].kind == WIN_TESTLIST && !urc_windows[i].minimized ) {
 			urc_windows[i].top += key == K_MWHEELUP ? -1 : 1;
 			URC_TestListClamp( &urc_windows[i] );
+		} else if ( !urc_windows[i].minimized ) {
+			URC_NotepadWheel( &urc_windows[i], key == K_MWHEELUP ? -1 : 1 );
 		}
 		return qtrue;
 	}
@@ -3785,6 +5512,11 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 	if ( !down ) {
 		i = urc_windowPress;
 		urc_windowDrag = urc_windowPress = -1;
+		if ( i >= 0 && i < urc_numWindows && urc_windowPressPart == WINPART_CLIENT &&
+			( urc_windows[i].kind == WIN_NOTEPAD || urc_windows[i].kind == WIN_FILEPICKER ) ) {
+			URC_NotepadMouseUp( &urc_windows[i] );
+			return qtrue;
+		}
 		if ( i >= 0 && i < urc_numWindows && urc_windows[i].held != SCROLL_NONE ) {
 			urc_windows[i].held = SCROLL_NONE;
 			return qtrue;
@@ -3800,8 +5532,15 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 			URC_CloseWindow( i );
 			break;
 		case WINPART_CANCEL:
-		case WINPART_CLOSE:
 			URC_CloseWindow( i );
+			break;
+		case WINPART_CLOSE:
+			// a notepad's asks to save first (floatingwindow_close_pressed)
+			if ( urc_windows[i].kind == WIN_NOTEPAD ) {
+				URC_NpCommand( i, NPC_CLOSE );
+			} else {
+				URC_CloseWindow( i );
+			}
 			break;
 		case WINPART_MINIMIZE:
 			urc_windows[i].minimized = !urc_windows[i].minimized;
@@ -3814,6 +5553,7 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 
 	i = URC_WindowAt( urc_cursorX, urc_cursorY );
 	if ( i < 0 ) {
+		urc_activeWindow = -1;		// a click elsewhere: the keys go back to the menus
 		return qfalse;
 	}
 	i = URC_ActivateWindow( i );
@@ -3838,6 +5578,14 @@ static qboolean URC_WindowKey( int key, qboolean down ) {
 				urc_windowPress = i;
 				urc_windowPressPart = part;
 			}
+		} else if ( urc_windows[i].kind == WIN_NOTEPAD ) {
+			urc_windowPress = i;
+			urc_windowPressPart = part;
+			URC_NotepadMouseDown( i );
+		} else if ( urc_windows[i].kind == WIN_FILEPICKER ) {
+			urc_windowPress = i;
+			urc_windowPressPart = part;
+			URC_PickerMouseDown( i );
 		}
 		break;
 	default:
@@ -3853,12 +5601,16 @@ static void URC_WindowMouseMove( void ) {
 		urc_windows[urc_windowDrag].rect[0] = urc_cursorX - urc_windowGrab[0];
 		urc_windows[urc_windowDrag].rect[1] = urc_cursorY - urc_windowGrab[1];
 	}
-	if ( urc_windowPress >= 0 && urc_windowPress < urc_numWindows && urc_windows[urc_windowPress].held == SCROLL_THUMB ) {
+	if ( urc_windowPress >= 0 && urc_windowPress < urc_numWindows && urc_windows[urc_windowPress].kind == WIN_TESTLIST &&
+		urc_windows[urc_windowPress].held == SCROLL_THUMB ) {
 		urcWindow_t	*win = &urc_windows[urc_windowPress];
 		float		c[4];
 
 		URC_WindowClient( win, c );
 		win->top = URC_ScrollTopAt( c, URC_TESTLIST_ROWS, URC_TestListPage( c ), urc_cursorY - win->grab );
+	}
+	if ( urc_windowPress >= 0 && urc_windowPress < urc_numWindows && urc_windowPressPart == WINPART_CLIENT ) {
+		URC_NotepadMouseMove( &urc_windows[urc_windowPress] );
 	}
 }
 
@@ -3950,6 +5702,7 @@ void URC_Draw( void ) {
 	// closes with the game active (the pause itself refuses without a local
 	// server, so the main menu of a game that is not running changes nothing)
 	if ( urc_stackDepth ) {
+		URC_UpdateOptionCvars();
 		if ( !urc_pausedByMenu ) {
 			if ( !cl_paused->integer ) {
 				Com_Pause();
@@ -4041,6 +5794,20 @@ void URC_Draw( void ) {
 
 /*
 =================
+URC_SetLinkCvar
+
+What a check box or slider writes to its cvar, set as the console's "set"
+sets it: a latched cvar waits for the restart Apply's ui_checkrestart
+finds it needs. Set outright (Cvar_Set), it changed at once and
+ui_checkrestart found nothing to restart for it.
+=================
+*/
+static void URC_SetLinkCvar( const urcWidget_t *w, const char *value ) {
+	Cvar_SetLatched( w->linkcvar, value );
+}
+
+/*
+=================
 URC_SliderSet, URC_SliderStep
 
 A slider's cvar from where the cursor is on the track, or a step from an
@@ -4052,9 +5819,9 @@ static void URC_SliderWrite( urcWidget_t *w, float value ) {
 	if ( value < w->rangeMin ) value = w->rangeMin;
 	if ( value > w->rangeMax ) value = w->rangeMax;
 	if ( w->sliderInt ) {
-		Cvar_Set( w->linkcvar, va( "%d", (int)value ) );
+		URC_SetLinkCvar( w, va( "%d", (int)value ) );
 	} else {
-		Cvar_Set( w->linkcvar, va( "%.3f", value ) );
+		URC_SetLinkCvar( w, va( "%.3f", value ) );
 	}
 }
 
@@ -4081,7 +5848,7 @@ static void URC_SliderStep( urcWidget_t *w, int dir ) {
 	if ( !w->linkcvar[0] || w->rangeMax <= w->rangeMin ) {
 		return;
 	}
-	URC_SliderWrite( w, Cvar_VariableValue( w->linkcvar ) + dir * step );
+	URC_SliderWrite( w, atof( URC_LinkValue( w ) ) + dir * step );
 }
 
 // the rect of a widget of the menu on top, this frame
@@ -4113,6 +5880,109 @@ item under the cursor (0x4bda90), so that one looks the same.
 */
 #define URC_POPUP_PAD		4
 
+/*
+=================
+URC_BuildModeList
+
+What a "popupsource videomodes" pulldown lists (OpenFAKK2's: retail's
+video menu lists r_mode 3 to 9, 4:3 and 5:4 only): the desktop's size,
+then every size the display reports (r_availableModes) and the common
+wide ones, at least 640x480, smallest first, each with its shape. As many
+as fit on the screen in verdana-14 are kept, the largest.
+=================
+*/
+#define URC_MAX_MODES		33		// ( 480 - 2 * URC_POPUP_PAD ) / 14
+
+typedef struct {
+	char	text[32];
+	char	command[96];
+} urcMode_t;
+
+static urcMode_t	urc_modes[URC_MAX_MODES];
+static int			urc_numModes;
+
+static int URC_CompareSizes( const void *a, const void *b ) {
+	const int	*x = a, *y = b;
+
+	return x[0] != y[0] ? x[0] - y[0] : x[1] - y[1];
+}
+
+static const char *URC_ShapeName( int w, int h ) {
+	static const struct {
+		float		ratio;
+		const char	*name;
+	} shapes[] = {
+		{ 4.0f / 3, "4:3" }, { 5.0f / 4, "5:4" }, { 16.0f / 9, "16:9" }, { 16.0f / 10, "16:10" }, { 21.0f / 9, "21:9" }, { 64.0f / 27, "21:9" }
+	};
+	float	r = (float)w / h;
+	int		i;
+
+	for ( i = 0 ; i < ARRAY_LEN( shapes ) ; i++ ) {
+		if ( fabs( r - shapes[i].ratio ) < 0.02f ) {
+			return shapes[i].name;
+		}
+	}
+	return NULL;
+}
+
+static void URC_BuildModeList( void ) {
+	// the wide sizes OpenFAKK2's options offered, and retail's list's
+	static const int	common[][2] = {
+		{ 1280, 720 }, { 1366, 768 }, { 1600, 900 }, { 1920, 1080 }, { 2560, 1440 }, { 3840, 2160 },
+		{ 1680, 1050 }, { 1920, 1200 }, { 2560, 1600 }, { 2560, 1080 }, { 3440, 1440 },
+		{ 640, 480 }, { 800, 600 }, { 1024, 768 }, { 1152, 864 }, { 1280, 1024 }, { 1600, 1200 }
+	};
+	int			sizes[128][2], numSizes = 0, first, i, j;
+	char		list[MAX_CVAR_VALUE_STRING], *p, *tok;
+
+	Q_strncpyz( list, Cvar_VariableString( "r_availableModes" ), sizeof( list ) );
+	for ( p = list ; ( tok = COM_ParseExt( &p, qfalse ) )[0] && numSizes < ARRAY_LEN( sizes ) ; ) {
+		if ( sscanf( tok, "%dx%d", &sizes[numSizes][0], &sizes[numSizes][1] ) == 2 ) {
+			numSizes++;
+		}
+	}
+	for ( i = 0 ; i < ARRAY_LEN( common ) && numSizes < ARRAY_LEN( sizes ) ; i++ ) {
+		sizes[numSizes][0] = common[i][0];
+		sizes[numSizes][1] = common[i][1];
+		numSizes++;
+	}
+	qsort( sizes, numSizes, sizeof( sizes[0] ), URC_CompareSizes );
+	for ( i = j = 0 ; i < numSizes ; i++ ) {
+		if ( sizes[i][0] < 640 || sizes[i][1] < 480 || ( j && sizes[i][0] == sizes[j - 1][0] && sizes[i][1] == sizes[j - 1][1] ) ) {
+			continue;
+		}
+		sizes[j][0] = sizes[i][0];
+		sizes[j][1] = sizes[i][1];
+		j++;
+	}
+	numSizes = j;
+
+	Q_strncpyz( urc_modes[0].text, "Desktop", sizeof( urc_modes[0].text ) );
+	Q_strncpyz( urc_modes[0].command, "set r_mode -2", sizeof( urc_modes[0].command ) );
+	urc_numModes = 1;
+	first = numSizes > URC_MAX_MODES - 1 ? numSizes - ( URC_MAX_MODES - 1 ) : 0;
+	for ( i = first ; i < numSizes ; i++ ) {
+		urcMode_t	*m = &urc_modes[urc_numModes++];
+		const char	*shape = URC_ShapeName( sizes[i][0], sizes[i][1] );
+
+		Com_sprintf( m->text, sizeof( m->text ), shape ? "%d x %d (%s)" : "%d x %d", sizes[i][0], sizes[i][1], shape );
+		Com_sprintf( m->command, sizeof( m->command ), "set r_mode -1; set r_customwidth %d; set r_customheight %d",
+			sizes[i][0], sizes[i][1] );
+	}
+}
+
+static int URC_PopupCount( const urcWidget_t *w ) {
+	return w->videoModes ? urc_numModes : w->numPopups;
+}
+
+static const char *URC_PopupText( const urcWidget_t *w, int i ) {
+	return w->videoModes ? urc_modes[i].text : w->popups[i].text;
+}
+
+static const char *URC_PopupCommand( const urcWidget_t *w, int i ) {
+	return w->videoModes ? urc_modes[i].command : w->popups[i].command;
+}
+
 static void URC_PopupRect( int index, float rect[4] ) {
 	const urcWidget_t	*w = &urc_widgets[index];
 	urcFont_t			*font = URC_LoadFont( URC_POPUP_FONT );
@@ -4120,15 +5990,15 @@ static void URC_PopupRect( int index, float rect[4] ) {
 	int					i;
 
 	URC_TopWidgetRect( index, head );
-	for ( i = 0 ; i < w->numPopups ; i++ ) {
-		float	tw = URC_TextBlockWidth( font, w->popups[i].text );
+	for ( i = 0 ; i < URC_PopupCount( w ) ; i++ ) {
+		float	tw = URC_TextBlockWidth( font, URC_PopupText( w, i ) );
 
 		if ( tw > width ) {
 			width = tw;
 		}
 	}
 	rect[2] = width + 24;
-	rect[3] = w->numPopups * URC_FontHeight( font ) + 2 * URC_POPUP_PAD;
+	rect[3] = URC_PopupCount( w ) * URC_FontHeight( font ) + 2 * URC_POPUP_PAD;
 	rect[0] = head[0];
 	rect[1] = head[1] + head[3];
 	if ( rect[0] + rect[2] > SCR_ScreenRight640() ) {
@@ -4150,7 +6020,7 @@ static int URC_PopupItemAt( const float rect[4] ) {
 		return -1;
 	}
 	i = (int)( ( urc_cursorY - rect[1] - URC_POPUP_PAD ) / URC_FontHeight( font ) );
-	return ( i >= 0 && i < urc_widgets[urc_popupWidget].numPopups ) ? i : -1;
+	return ( i >= 0 && i < URC_PopupCount( &urc_widgets[urc_popupWidget] ) ) ? i : -1;
 }
 
 static void URC_DrawPopup( void ) {
@@ -4175,11 +6045,11 @@ static void URC_DrawPopup( void ) {
 	URC_Draw3DBox( rect, qfalse, colors, 1 );
 	h = URC_FontHeight( font );
 	y = rect[1] + URC_POPUP_PAD;
-	for ( i = 0 ; i < w->numPopups ; i++, y += h ) {
+	for ( i = 0 ; i < URC_PopupCount( w ) ; i++, y += h ) {
 		if ( i == hover ) {
 			URC_Box( rect[0] + 2, y, rect[2] - 4, h, white, 1 );
 		}
-		URC_DrawString( font, rect[0] + URC_POPUP_PAD, y, w->popups[i].text, black );
+		URC_DrawString( font, rect[0] + URC_POPUP_PAD, y, URC_PopupText( w, i ), black );
 	}
 	URC_PopClip( saved );
 }
@@ -4259,6 +6129,10 @@ void URC_KeyEvent( int key, qboolean down ) {
 	if ( urc_numWindows && ( urc_stackDepth || cl_mouseShown ) && URC_WindowKey( key, down ) ) {
 		return;
 	}
+	// the keys of the active notepad's text and prompts
+	if ( down && URC_NotepadTakesKey( key ) ) {
+		return;
+	}
 	if ( !urc_stackDepth ) {
 		return;
 	}
@@ -4286,7 +6160,7 @@ void URC_KeyEvent( int key, qboolean down ) {
 			URC_PopupRect( urc_popupWidget, rect );
 			i = URC_PopupItemAt( rect );
 			if ( i >= 0 ) {
-				Cbuf_AddText( va( "%s\n", w->popups[i].command ) );
+				Cbuf_AddText( va( "%s\n", URC_PopupCommand( w, i ) ) );
 				URC_PlaySound( w->clickSound );
 			}
 		}
@@ -4323,9 +6197,9 @@ void URC_KeyEvent( int key, qboolean down ) {
 			case WC_CHECKBOX:
 				URC_PlaySound( w->clickSound );
 				if ( w->linkcvar[0] ) {
-					qboolean	on = Cvar_VariableValue( w->linkcvar ) == 0;
+					qboolean	on = atof( URC_LinkValue( w ) ) == 0;
 
-					Cvar_Set( w->linkcvar, on ? "1" : "0" );
+					URC_SetLinkCvar( w, on ? "1" : "0" );
 					if ( on && w->checkedCommand[0] ) {
 						Cbuf_AddText( va( "%s\n", w->checkedCommand ) );
 					} else if ( !on && w->uncheckedCommand[0] ) {
@@ -4347,7 +6221,10 @@ void URC_KeyEvent( int key, qboolean down ) {
 				break;
 			case WC_PULLDOWN:
 				URC_PlaySound( w->clickSound );
-				urc_popupWidget = w->numPopups ? i : -1;
+				if ( w->videoModes ) {
+					URC_BuildModeList();
+				}
+				urc_popupWidget = URC_PopupCount( w ) ? i : -1;
 				break;
 			case WC_BINDLIST:
 				urc_scrollWidget = i;
@@ -4469,7 +6346,12 @@ static void URC_PushMenu_f( void ) {
 	URC_PushMenu( Cmd_Argv( 1 ) );
 }
 
+// popmenu <restore_cvars> (0x40bbd0, 0x40b790): 1 puts back the cvars the
+// page changed (the Back buttons), 0 keeps them (Apply)
 static void URC_PopMenu_f( void ) {
+	if ( Cmd_Argc() > 1 && atoi( Cmd_Argv( 1 ) ) ) {
+		URC_RestoreCvars();
+	}
 	URC_PopMenu();
 }
 
@@ -4574,6 +6456,7 @@ static void URC_LoadAllMenus( void ) {
 	}
 	FS_FreeFileList( files );
 	Com_Printf( "%d menus from %d ui/*.urc files\n", urc_numMenus, numFiles );
+	URC_LoadBuiltinMenus();
 
 	urc_healthhud = URC_FindMenu( "healthhud" );
 	urc_weaphud = URC_FindMenu( "weaphud" );
@@ -4726,6 +6609,8 @@ void URC_Init( void ) {
 	Cvar_Get( "ui_newvidmode", "-1", 0 );			// UI_Init (0x40ea46); see URC_UpdateCatcher
 	Cvar_Get( "ui_console", "0", CVAR_ARCHIVE );		// UI_Init (0x40ea31, 0x40e9f0): the console and mini console
 	Cvar_Get( "ui_minicon", "0", CVAR_ARCHIVE );		// windows, which are not made here (ui_checkrestart)
+	Cvar_Get( "ui_resolution", "", 0 );				// OpenFAKK2's (URC_UpdateOptionCvars)
+	Cvar_Get( "ui_anisotropy", "", 0 );
 
 	urc_numFonts = 0;
 	urc_stackDepth = 0;
@@ -4753,6 +6638,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "ui_hud", URC_Hud_f );
 	Cmd_AddCommand( "dialog", URC_Dialog_f );
 	Cmd_AddCommand( "ui_testlist", URC_TestList_f );
+	Cmd_AddCommand( "notepad", URC_Notepad_f );		// UI_Init (0x40eb35)
 	Cmd_AddCommand( "ui_resetcvars", URC_ResetCvars_f );
 	Cmd_AddCommand( "ui_checkrestart", URC_CheckRestart_f );
 	if ( !urc_introCommands ) {
@@ -4793,6 +6679,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "widgetcommand" );
 	Cmd_RemoveCommand( "dialog" );
 	Cmd_RemoveCommand( "ui_testlist" );
+	Cmd_RemoveCommand( "notepad" );
 	Cmd_RemoveCommand( "ui_resetcvars" );
 	Cmd_RemoveCommand( "ui_checkrestart" );
 	URC_CloseAllWindows();		// their materials die with the renderer

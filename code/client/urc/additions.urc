@@ -1,0 +1,58 @@
+// What OpenFAKK2 adds to the game's own menus, built into the engine
+// (cmake/client.cmake), in OpenFAKK2's grammar (URC_LoadAdditions,
+// cl_urc.c), so Ritual's files stay as shipped:
+//   addto <menu>, then resources up to "end.": widgets added to that menu
+//   change <menu> <widget>, then { keys }: keys read over a widget's own
+
+// the video and audio menu's resolution lists the desktop's size and every
+// size the display has (retail's lists 640x480 to 1600x1200), and shows the
+// chosen one
+change "options" "reslist"
+{
+popupsource videomodes
+}
+change "options" "New Resolution"
+{
+linkcvar "ui_resolution"
+}
+
+addto "options"
+// what ui_checkrestart restarts for and ui_resetcvars resets, beside the
+// file's own hidden r_mode
+resource
+Label
+{
+title "Hidden"
+name "Default"
+rect 0 0 0 0
+fgcolor 0.00 0.00 0.00 0.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_customwidth"
+}
+resource
+Label
+{
+title "Hidden"
+name "Default"
+rect 0 0 0 0
+fgcolor 0.00 0.00 0.00 0.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_customheight"
+}
+// beside Back, the way to OpenFAKK2's options
+resource
+Button
+{
+title "OpenFAKK2 Options"
+name "openfakk2"
+rect 144 445 176 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "3D_BORDER"
+stuffcommand "pushmenu openfakk2"
+shader "textures/menu/text_back"
+clicksound sound/misc/menu/select.wav
+}
+end.

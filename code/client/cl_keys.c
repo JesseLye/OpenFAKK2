@@ -1800,6 +1800,8 @@ void CL_CharEvent( int key ) {
 	{
 		if ( uivm )
 			VM_Call( uivm, UI_KEY_EVENT, key | K_CHAR_FLAG, qtrue );
+		else
+			URC_CharEvent( key );		// FAKK2: typing in a notepad (cl_urc.c)
 	}
 	else if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE ) 
 	{

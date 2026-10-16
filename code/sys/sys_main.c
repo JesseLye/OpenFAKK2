@@ -168,6 +168,56 @@ char *Sys_GetClipboardData(void)
 #endif
 }
 
+/*
+==================
+Sys_GetClipboardText
+
+FAKK2's UI clipboard (fakk2.exe 0x4584e0): the whole text, carriage
+returns dropped, nothing when it is 4096 characters or longer. Z_Malloc'd.
+==================
+*/
+char *Sys_GetClipboardText( void )
+{
+#ifdef DEDICATED
+	return NULL;
+#else
+	char *data = NULL;
+	char *cliptext;
+
+	if ( ( cliptext = SDL_GetClipboardText() ) != NULL ) {
+		if ( strlen( cliptext ) < 0x1000 ) {
+			const char *s;
+			char *d;
+
+			d = data = Z_Malloc( strlen( cliptext ) + 1 );
+			for ( s = cliptext ; *s ; s++ ) {
+				if ( *s != '\r' ) {
+					*d++ = *s;
+				}
+			}
+			*d = 0;
+		}
+		SDL_free( cliptext );
+	}
+	return data;
+#endif
+}
+
+/*
+==================
+Sys_SetClipboardText
+
+FAKK2's UI copy (fakk2.exe 0x458560) puts the text on the system's
+clipboard; SDL turns its newlines into the platform's.
+==================
+*/
+void Sys_SetClipboardText( const char *text )
+{
+#ifndef DEDICATED
+	SDL_SetClipboardText( text );
+#endif
+}
+
 #ifdef DEDICATED
 #	define PID_FILENAME PRODUCT_NAME "_server.pid"
 #else

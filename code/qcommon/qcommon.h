@@ -1118,6 +1118,8 @@ char	*Sys_GetCurrentUser( void );
 void	QDECL Sys_Error( const char *error, ...) Q_NO_RETURN Q_PRINTF_FUNC(1, 2);
 void	Sys_Quit (void) Q_NO_RETURN;
 char	*Sys_GetClipboardData( void );	// note that this isn't journaled...
+char	*Sys_GetClipboardText( void );	// FAKK2: the UI's, every line (Z_Malloc'd)
+void	Sys_SetClipboardText( const char *text );
 
 void	Sys_Print( const char *msg );
 

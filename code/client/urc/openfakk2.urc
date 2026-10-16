@@ -1,0 +1,609 @@
+// OpenFAKK2's options: the settings OpenFAKK2 adds to the game, laid out as
+// Ritual's advanced options menu. Built into the engine (cmake/client.cmake);
+// a ui/*.urc with a menu of the same name takes its place. A label's
+// "linkformat" (OpenFAKK2's, cl_urc.c) puts its value into its text.
+menu "openfakk2" 640 480 NONE 0.5
+fullscreen 1
+bgcolor 1 1 1 1
+borderstyle NONE
+bgfill 0 0 0 1
+fadein 0.5
+
+include "ui/common.inc"
+
+resource
+Label
+{
+name "Default"
+rect 32 32 576 336
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/adv_back"
+}
+resource
+Label
+{
+name "Default"
+rect 0 336 64 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/F_T"
+}
+resource
+Label
+{
+name "Default"
+rect 576 336 64 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/F_U"
+}
+resource
+Label
+{
+name "Default"
+rect 576 0 64 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/F_K"
+}
+resource
+Label
+{
+name "Default"
+rect 0 0 64 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/F_I"
+}
+resource
+Label
+{
+name "Default"
+rect 64 368 512 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+tileshader "textures/menu/F_C"
+}
+resource
+Label
+{
+name "Default"
+rect 64 16 512 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+tileshader "textures/menu/F_B"
+}
+resource
+Label
+{
+name "Default"
+rect 16 64 16 272
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+tileshader "textures/menu/F_E"
+}
+resource
+Label
+{
+name "Default"
+rect 608 64 16 272
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+tileshader "textures/menu/F_F"
+}
+resource
+Button
+{
+name "Default"
+rect 12 378 256 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+stuffcommand "ui_checkrestart; popmenu 0"
+shader "textures/menu/B_apply"
+hovershader "textures/menu/B_apply_selected"
+clicksound sound/misc/menu/select.wav
+ordernumber 3
+}
+resource
+Button
+{
+name "Default"
+rect 372 378 256 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "RAISED"
+stuffcommand "ui_resetcvars"
+shader "textures/menu/b_default"
+hovershader "textures/menu/b_default_selected"
+clicksound sound/misc/menu/select.wav
+ordernumber 1
+}
+resource
+Button
+{
+name "Default"
+rect 0 441 128 32
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "raised"
+stuffcommand "popmenu 1"
+shader "textures/menu/b_back"
+hovershader "textures/menu/b_back_selected"
+clicksound sound/misc/menu/select.wav
+ordernumber 4
+}
+
+// the picture
+resource
+Label
+{
+name "Default"
+title "Anti-Aliasing"
+rect 52 36 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+}
+resource
+Label
+{
+name "Default"
+rect 52 52 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "r_ext_multisample"
+shader "textures/menu/blank2"
+linkstring 0 "Off"
+linkstring 2 "2x"
+linkstring 4 "4x"
+linkstring 8 "8x"
+}
+resource
+PulldownMenuContainer
+{
+title "list"
+name "list"
+rect 38 52 16 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+menushader "MENU" "textures/menu/pulldownarrow"
+selmenushader "MENU" "textures/menu/pulldownarrow_sel"
+addpopup "MENU" "Off" command "set r_ext_multisample 0"
+addpopup "MENU" "2x" command "set r_ext_multisample 2"
+addpopup "MENU" "4x" command "set r_ext_multisample 4"
+addpopup "MENU" "8x" command "set r_ext_multisample 8"
+}
+resource
+Label
+{
+name "Default"
+title "Anisotropic Filtering"
+rect 52 76 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+}
+resource
+Label
+{
+name "Default"
+rect 52 92 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "ui_anisotropy"
+shader "textures/menu/blank2"
+}
+resource
+PulldownMenuContainer
+{
+title "list"
+name "list"
+rect 38 92 16 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+menushader "MENU" "textures/menu/pulldownarrow"
+selmenushader "MENU" "textures/menu/pulldownarrow_sel"
+addpopup "MENU" "Off" command "set r_ext_texture_filter_anisotropic 0"
+addpopup "MENU" "2x" command "set r_ext_texture_filter_anisotropic 1; set r_ext_max_anisotropy 2"
+addpopup "MENU" "4x" command "set r_ext_texture_filter_anisotropic 1; set r_ext_max_anisotropy 4"
+addpopup "MENU" "8x" command "set r_ext_texture_filter_anisotropic 1; set r_ext_max_anisotropy 8"
+addpopup "MENU" "16x" command "set r_ext_texture_filter_anisotropic 1; set r_ext_max_anisotropy 16"
+}
+resource
+Label
+{
+title "Hidden"
+name "Default"
+rect 0 0 0 0
+fgcolor 0.00 0.00 0.00 0.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_ext_texture_filter_anisotropic"
+}
+resource
+Label
+{
+title "Hidden"
+name "Default"
+rect 0 0 0 0
+fgcolor 0.00 0.00 0.00 0.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_ext_max_anisotropy"
+}
+resource
+Label
+{
+name "Default"
+title "Frame Rate Limit"
+rect 52 116 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+}
+resource
+Label
+{
+name "Default"
+rect 52 132 184 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "com_maxfps"
+shader "textures/menu/blank2"
+linkstring 0 "None"
+}
+resource
+PulldownMenuContainer
+{
+title "list"
+name "list"
+rect 38 132 16 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+menushader "MENU" "textures/menu/pulldownarrow"
+selmenushader "MENU" "textures/menu/pulldownarrow_sel"
+addpopup "MENU" "60" command "set com_maxfps 60"
+addpopup "MENU" "85" command "set com_maxfps 85"
+addpopup "MENU" "120" command "set com_maxfps 120"
+addpopup "MENU" "144" command "set com_maxfps 144"
+addpopup "MENU" "165" command "set com_maxfps 165"
+addpopup "MENU" "240" command "set com_maxfps 240"
+addpopup "MENU" "None" command "set com_maxfps 0"
+}
+resource
+Label
+{
+name "Default"
+rect 60 160 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "fov"
+linkformat "Field of View: %s"
+}
+resource
+Slider
+{
+title "Field of View"
+name "Default"
+rect 44 176 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "fov"
+shader "textures/menu/slider"
+slidertype int
+setrange 60 130
+stepsize 5
+}
+resource
+Label
+{
+name "Default"
+rect 60 200 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "cl_hudScale"
+linkformat "HUD Size: %s"
+linkstring 0.25 "25%"
+linkstring 0.3 "30%"
+linkstring 0.35 "35%"
+linkstring 0.4 "40%"
+linkstring 0.45 "45%"
+linkstring 0.5 "50%"
+linkstring 0.55 "55%"
+linkstring 0.6 "60%"
+linkstring 0.65 "65%"
+linkstring 0.7 "70%"
+linkstring 0.75 "75%"
+linkstring 0.8 "80%"
+linkstring 0.85 "85%"
+linkstring 0.9 "90%"
+linkstring 0.95 "95%"
+linkstring 1 "100%"
+}
+resource
+Slider
+{
+title "HUD Size"
+name "Default"
+rect 44 216 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "cl_hudScale"
+shader "textures/menu/slider"
+slidertype float
+setrange 0.25 1
+stepsize 0.05
+}
+resource
+CheckBox
+{
+title "Widescreen View"
+name "Default"
+rect 60 244 176 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "cl_widescreenFov"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+CheckBox
+{
+title "Widescreen HUD"
+name "Default"
+rect 60 268 176 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "cl_widescreenHud"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+CheckBox
+{
+title "Vertical Sync"
+name "Default"
+rect 60 292 176 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_swapInterval"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+
+// a controller
+resource
+CheckBox
+{
+title "Use a Controller"
+name "Default"
+rect 264 36 184 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "in_gamepad"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+Label
+{
+name "Default"
+rect 276 68 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "pad_yawSpeed"
+linkformat "Turn Speed: %s"
+}
+resource
+Slider
+{
+title "Turn Speed"
+name "Default"
+rect 260 84 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "pad_yawSpeed"
+shader "textures/menu/slider"
+slidertype int
+setrange 50 500
+stepsize 10
+}
+resource
+Label
+{
+name "Default"
+rect 276 108 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "pad_pitchSpeed"
+linkformat "Look Speed: %s"
+}
+resource
+Slider
+{
+title "Look Speed"
+name "Default"
+rect 260 124 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "pad_pitchSpeed"
+shader "textures/menu/slider"
+slidertype int
+setrange 30 400
+stepsize 10
+}
+resource
+Label
+{
+name "Default"
+rect 276 148 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "pad_deadzoneLeft"
+linkformat "Move Dead Zone: %s"
+linkstring 0 "0%"
+linkstring 0.05 "5%"
+linkstring 0.1 "10%"
+linkstring 0.15 "15%"
+linkstring 0.2 "20%"
+linkstring 0.25 "25%"
+linkstring 0.3 "30%"
+linkstring 0.35 "35%"
+linkstring 0.4 "40%"
+linkstring 0.45 "45%"
+linkstring 0.5 "50%"
+}
+resource
+Slider
+{
+title "Move Dead Zone"
+name "Default"
+rect 260 164 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "pad_deadzoneLeft"
+shader "textures/menu/slider"
+slidertype float
+setrange 0 0.5
+stepsize 0.05
+}
+resource
+Label
+{
+name "Default"
+rect 276 188 160 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+shader "textures/menu/text_back"
+linkcvar "pad_deadzoneRight"
+linkformat "Look Dead Zone: %s"
+linkstring 0 "0%"
+linkstring 0.05 "5%"
+linkstring 0.1 "10%"
+linkstring 0.15 "15%"
+linkstring 0.2 "20%"
+linkstring 0.25 "25%"
+linkstring 0.3 "30%"
+linkstring 0.35 "35%"
+linkstring 0.4 "40%"
+linkstring 0.45 "45%"
+linkstring 0.5 "50%"
+}
+resource
+Slider
+{
+title "Look Dead Zone"
+name "Default"
+rect 260 204 192 16
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.50 0.50 0.50 0.00
+borderstyle "NONE"
+linkcvar "pad_deadzoneRight"
+shader "textures/menu/slider"
+slidertype float
+setrange 0 0.5
+stepsize 0.05
+}
+
+// sound and the rest
+resource
+CheckBox
+{
+title "OpenAL Sound"
+name "Default"
+rect 460 36 140 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "s_useOpenAL"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+CheckBox
+{
+title "3D Headphones"
+name "Default"
+rect 460 60 140 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "s_alHRTF"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+CheckBox
+{
+title "Borderless"
+name "Default"
+rect 460 92 140 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "r_noborder"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+resource
+CheckBox
+{
+title "Record Demos"
+name "Default"
+rect 460 124 140 24
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "cl_autoRecordDemo"
+shader "textures/menu/text_back"
+checked_shader "textures/menu/checkbox_checked"
+unchecked_shader "textures/menu/checkbox_unchecked"
+}
+end.
