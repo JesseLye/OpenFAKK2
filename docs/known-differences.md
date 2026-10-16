@@ -1870,6 +1870,13 @@ What is implemented, and on what basis:
   skeletal model's bones in place of its surfaces, once a frame: each bone's axes four
   units long in red, green and blue and a cyan line from its parent (`0x495db3`,
   `0x496042`); `probe-skel` gave Julie's skeleton pixel for pixel as retail's.
+  A custom shader on a TIKI model (the same surface loop of `0x4872d0`): a surface the
+  entity hides stays hidden, and the custom shader takes the place of every surface's
+  own unless the entity has `RF_CUSTOMSHADERPASS` (0x10000); then each surface draws
+  with its own shader and again with the custom one over it. The client game module
+  asks for that pass with `antisuckshader` when the player has `EF_ANTISBJUICE` (a juice
+  pond, the AntiSBJuice item); ours always replaced the surfaces' shaders, so the coated
+  Julie was the translucent slime alone, a faint outline (`demo-slime`).
 - **Ritual fonts** (`fonts/<name>.RitualFont`, the `.urc` interface's and the prints'
   text): `RitFont`, `height`, `aspect`, 256 `indirections` and up to 256 `locations`
   `{ x y w h }` in pixels of a 256-wide image `256/aspect` high, registered as
@@ -2526,7 +2533,7 @@ test suite plays its demos with it; retail has nothing like it, and draws its ow
 
 The test suite plays retail demos frame by frame on both games (`demo-zoo`,
 `demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`, `demo-melee`,
-`demo-hud`;
+`demo-hud`, `demo-slime`, `demo-flash`, `demo-invisible`;
 `tools/suite/README.md`, "Demos"): the same snapshots on both, so what
 differs is the client side. Most frames differ by under 2% of their pixels. The first
 differences they show, not yet investigated:
@@ -2549,6 +2556,14 @@ differences they show, not yet investigated:
   but its ragged outline differs (frames 46 to 56, 92 to 100); whether that is the
   emitter's random rotation, which no two games share, or a shape ours gets wrong, is
   not yet known.
+- While Julie is coated in the anti-Sucknblaugh juice, retail draws `zoo`'s sky (which
+  has no texture in the paks, so the default image's white grid) green, the slime's
+  colour; ours keeps it white (`demo-slime` frames 14 to 29). It looks like GL state
+  the coat leaves behind in retail's renderer. Not copied: it was seen only on a sky
+  drawn with the default image, and not looked for on a map whose sky has its texture.
+- The mound under `demo-invisible`'s grawlix: retail draws its outline in a few straight
+  segments, ours as a smooth curve, as if retail cut the curved surface into fewer
+  pieces. Not yet investigated.
 - Frames full of random effects differ most, from the same effects drawn at other
   angles and sizes: the chaingun's flame burst beside the barrel (`demo-flashes` frames
   39 to 45, 13 points) and a rocket's explosion close up, its light streaks at other

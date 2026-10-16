@@ -972,22 +972,26 @@ static int R_TikiCull( const tikiFrame_t *newFrame, const tikiFrame_t *oldFrame,
 R_TikiSurfaceShader
 
 The shader a surface draws with for this entity, or NULL to leave it out.
+A hidden surface stays hidden under a custom shader, which takes the place
+of the surface's own unless the entity asks for RF_CUSTOMSHADERPASS: then
+the surface draws as usual and the custom shader again over it
+(the surface loop of fakk2.exe 0x4872d0).
 ===============
 */
 static shader_t *R_TikiSurfaceShader( const tikiModel_t *tiki, const trRefEntity_t *ent, int surfaceNum ) {
 	shader_t	*sh;
 	int			flags, skin;
 
-	if ( ent->e.customShader ) {
+	if ( surfaceNum >= 0 && ( ent->e.surfaces[surfaceNum] & MDL_SURFACE_NODRAW ) ) {
+		return NULL;
+	}
+	if ( ent->e.customShader && !( ent->e.renderfx & RF_CUSTOMSHADERPASS ) ) {
 		return R_GetShaderByHandle( ent->e.customShader );
 	}
 	if ( surfaceNum < 0 ) {
 		return tr.defaultShader;
 	}
 	flags = ent->e.surfaces[surfaceNum];
-	if ( flags & MDL_SURFACE_NODRAW ) {
-		return NULL;
-	}
 	skin = flags & ( MDL_SURFACE_SKINOFFSET_BIT0 | MDL_SURFACE_SKINOFFSET_BIT1 );
 	sh = tiki->shaders[surfaceNum * TIKI_MODEL_MAX_SKINS + skin];
 	if ( !sh && skin ) {
@@ -1309,6 +1313,12 @@ void R_AddTikiSurfaces( trRefEntity_t *ent ) {
 		}
 
 		R_AddDrawSurf( surf, sh, 0, qfalse );
+
+		// the custom shader as a pass over the surface: the slime coat of
+		// the anti-Sucknblaugh juice (EF_ANTISBJUICE, cg_modelanim.c)
+		if ( ent->e.customShader && ( ent->e.renderfx & RF_CUSTOMSHADERPASS ) ) {
+			R_AddDrawSurf( surf, R_GetShaderByHandle( ent->e.customShader ), 0, qfalse );
+		}
 	}
 
 	if ( r_showlod->integer ) {

@@ -1,0 +1,29 @@
+// Records the suite's slime coat demo (demos/probe-dsb.dm3): Julie on zoo, where the
+// player starts at (-2352 1568 0) looking down +x, seen from a camera in front of her,
+// before, while and after she is coated in the anti-Sucknblaugh juice (the effects flag
+// a juice pond or the AntiSBJuice item sets, EF_ANTISBJUICE). The client game module
+// draws her with "antisuckshader" and RF_CUSTOMSHADERPASS: retail draws her skin and the
+// slime over it (fakk2.exe 0x4872d0), where the slime alone left only a faint outline of
+// her. The "demo-slime" check plays it at 4 frames a second; made on retail by
+// refresh-retail.ps1. record needs g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "camjulie" origin "-2250 1568 56" angles "10 180 0"
+stuffcmd "set g_syncronousClients 1"
+wait 1
+stuffcmd "record probe-dsb"
+wait 0.5
+cuecamera $camjulie
+// 1.5: Julie as she is
+wait 2
+// 3.5: coated
+$player effects +antisbjuice
+wait 4
+// 7.5: clean again
+$player effects -antisbjuice
+wait 1.5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

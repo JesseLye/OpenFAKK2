@@ -207,6 +207,15 @@ suite, and says how to turn one into a check.
   frames a second, 89 kept. Its shot is aimed away from the trainer by the wall, as
   hitting her fails the level. `ammofl`, `flash` and `pot` (whose shots moved by up to 2
   points) are no longer checks.
+- `demo-slime` (`probe-dsb`): Julie on zoo through a camera in front of her, before,
+  while and after she is coated in the anti-Sucknblaugh juice (the slime a juice pond
+  leaves); 8 s, 4 frames a second. Ours drew the slime in place of her skin, a faint
+  outline of her.
+- `demo-flash` (`probe-dhit`): on zoo, Julie hurt by slime and then lava, a creeper hurt
+  and then poisoned, each flashing green or red; then Gruff's smoking animation, whose
+  `entcolor` commands make his cigar tip glow; 22 s, 10 frames a second.
+- `demo-invisible` (`probe-dinv`): an Invisible Grawlix on fog beside the map's -300
+  light, the only kind of light that shows it; 6 s, 4 frames a second.
 - `timedemo` times `demo-zoo`'s and `demo-swamp1`'s demos, uncapped (1.2 ms a frame on
   2026-10-16), in place of a camera over an empty map.
 

@@ -1,0 +1,29 @@
+// Records the suite's Invisible Grawlix demo (demos/probe-dinv.dm3) on fog. An invisible
+// model (rendereffects +invisible: grawlix_invisible.tik, its "invis_" shaders additive
+// with rgbGen lightingDiffuse) is lit by no light but those of negative intensity, which
+// light nothing else (fakk2.exe 0x48e170, "Entity lights and the light cube" in
+// docs/known-differences.md): only fog and water have them. One is spawned, kept still
+// (ai_dumb, as fog.scr keeps its own), where the map's grawlix_ambush3 spawns one, 71 units
+// from fog's -300 light (104 1096 -664), and seen through a camera over the path node at
+// (344 920 -736). The "demo-invisible" check plays it at 4 frames a second; made on
+// retail by refresh-retail.ps1. record needs g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 3
+spawn Camera targetname "caminv" origin "344 920 -640" angles "12 140 0"
+spawn grawlix_invisible.tik origin "136 1096 -736" angles "0 0 0" targetname "inv1"
+wait 0.5
+$inv1 ai_dumb
+stuffcmd "set g_syncronousClients 1"
+wait 1
+stuffcmd "record probe-dinv"
+wait 0.5
+// fog may take the first camera for its intro: cue it twice
+cuecamera $caminv
+wait 0.5
+cuecamera $caminv
+wait 5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

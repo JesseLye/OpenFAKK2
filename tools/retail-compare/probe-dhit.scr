@@ -1,0 +1,51 @@
+// Records the suite's colour flash demo (demos/probe-dhit.dm3) on zoo, where the player
+// starts at (-2352 1568 0) looking down +x. A sentient that takes damage flashes red, or
+// green for gas, slime or poison (Sentient::SetOffsetColor: RF_LIGHTOFFSET and the colour
+// in constantLight, added to the model's light). Through a camera in front of Julie, she
+// is hurt by slime, then by lava: her pain state plays no animation for either
+// (julie_torso.st; a 20-point hit from the front throws her out of the picture), but she
+// walks on after the lava on both games, so it comes second. Through a camera in front of
+// a still creeper further down the corridor, it is hurt, then poisoned (it is immune to
+// slime and gas). Then through a camera on Gruff playing stand_smoke_out (an Actor plays
+// it only with its AI on): his cigar's tip ("cherry", rgbGen fromentity) glows with the
+// entcolor commands of frames 90 to 142. The "demo-flash" check plays it at 10 frames a
+// second; made on retail by refresh-retail.ps1. record needs g_syncronousClients
+// (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname "camjulie" origin "-2250 1568 56" angles "10 180 0"
+spawn Camera targetname "camcreeper" origin "-1790 1568 70" angles "10 180 0"
+spawn Camera targetname "camgruff" origin "-1480 1568 70" angles "5 180 0"
+spawn creeper.tik origin "-1950 1568 0" angles "0 0 0" targetname "cr1"
+spawn gruff.tik origin "-1600 1568 0" angles "0 0 0" targetname "gruff"
+wait 0.5
+$cr1 ai_off
+stuffcmd "set g_syncronousClients 1"
+wait 1
+stuffcmd "record probe-dhit"
+wait 0.5
+cuecamera $camjulie
+// 1.5: Julie hurt by slime
+wait 1
+$player hurt 40 slime
+// 3.5: Julie hurt by lava
+wait 2
+$player hurt 40 lava
+// 5.5: the creeper hurt
+wait 1.5
+cuecamera $camcreeper
+wait 0.5
+$cr1 hurt 40
+// 7.5: the creeper poisoned
+wait 2
+$cr1 hurt 40 poison
+// 9.5: Gruff smoking
+wait 2
+cuecamera $camgruff
+$gruff anim stand_smoke_out
+wait 13
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end
