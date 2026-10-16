@@ -18,21 +18,6 @@ from them may be committed; Ritual's licence does not allow copying them.
 
 ## Unexplained
 
-### Changing maps before the player enters
-
-Found by the test suite's `map-rush` check (2026-10-16), not yet investigated or fixed.
-The OpenFAKK2 client, given `map` commands 60 frames apart from a config (`map zoo`,
-`training`, `zoo`, `fakkhouse`, `homes1`, `creeperpens`, `zoo`), dies changing from
-`creeperpens` to `zoo`: the log ends at `==== ShutdownGame ====` right after
-`Going from CS_CONNECTED to CS_PRIMED`, so the level is changed while the client is still
-primed and the player has not entered. The process exits with `0xC0000028`
-(`STATUS_BAD_STACK`) and writes no crash report or `crash.dmp`; Sys_CrashReport's handler
-never ran. With or without sound, the same each time. It does not happen with 120 or more
-frames between the commands (the player in the level first; the suite's `restart` check),
-nor with `creeperpens` then `zoo` 60 frames apart in a fresh session, nor with eight
-changes between `zoo` and `training` 120 frames apart. Retail was not tried: its `wait`
-counts milliseconds, so the same config is not the same test.
-
 ### Idle animation variants picked differently
 
 On `zoo`, three actors that have two idle animations (`vymish_multi`, `vymish_ground`,
@@ -329,6 +314,30 @@ corresponding retail code has not been examined.
   are *not* flagged.)
 - **`pointbrushnum`** always returns 0.
 - **Tag and frame-bound scaling** (`load_scale * scale`, plus the setup origin).
+
+## The network channel and level changes
+
+Retail's `Netchan_Transmit` (`0x43ae20`) sends a message longer than a fragment as all
+its 1300-byte fragments at once. OpenFAKK2 keeps ioquake3's netchan, which sends one
+fragment at a time at the client's rate and queues the messages behind it, so a
+34 KB gamestate takes several frames to go out. Changing levels in that time used to
+let the rest of the old level's gamestate reach a local client after the new level had
+spawned: the client loaded the old map's clip map over the server's (`CM_LoadMap` with
+`clientload` set replaces a map loaded by the server, as retail's `0x426270` does), and
+the server's next trace failed with `CM_InlineModel: bad number`. The suite's `map-rush`
+check found it (map changes 60 frames apart, `creeperpens` with `homes1`'s clip map).
+`SV_SpawnServer` now drops what is still going out to each client
+(`SV_Netchan_DropPending`), which leaves nothing of the old level to arrive, as with
+retail. With changes that fast the client may still skip a level whose gamestate it
+had not finished receiving before the next one; it loads the next.
+
+That error then ended the process with `0xC0000028` (`STATUS_BAD_STACK`) and no crash
+report. `Com_Error` shuts the server down before it longjmps back to `Com_Frame`, as
+retail's (`0x42d340`) does, and the shutdown unloaded `gamex86.dll` while frames of it
+were still on the stack below the error: on x86 Windows the longjmp calls the
+exception handlers those frames registered, which were no longer there. The game and
+client game libraries are now unloaded once `Com_Frame` has caught the error
+(`Com_UnloadModule`), so an engine error raised inside either module drops to the menu.
 
 ## Model indexes
 

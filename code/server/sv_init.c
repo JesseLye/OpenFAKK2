@@ -432,6 +432,14 @@ void SV_SpawnServer( char *server, qboolean killBots, qboolean loadGame ) {
 	// a level change's pending autosave belongs to the level it left
 	SV_CancelAutoSave();
 
+	// and so does what is still going out to the clients: the rest of a
+	// gamestate sent shortly before must not reach a client after this one
+	for (i=0 ; svs.clients && i<sv_maxclients->integer ; i++) {
+		if (svs.clients[i].state != CS_FREE) {
+			SV_Netchan_DropPending( &svs.clients[i] );
+		}
+	}
+
 	// if not running a dedicated server CL_MapLoading will connect the client to the server
 	// also print some status stuff
 	CL_MapLoading();
