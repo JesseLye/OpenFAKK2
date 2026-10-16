@@ -2399,6 +2399,34 @@ What is implemented, and on what basis:
   the rest at the edges of the moving clouds. Also checked on `homes1`, in a window shot
   (`PrintWindow`, as the suite takes them), through `vid_restart` and in a save's picture.
 
+### What the renderer prints at a map load
+
+With `developer 1` (which Ritual's `autoexec.cfg` sets) every map load used to fill the
+console with red lines that retail does not print. They follow retail now:
+
+- **Developer prints are not coloured.** Retail's `CL_RefPrintf` (`0x422020`) prints
+  Ritual's levels (`PRINT_ALL`, `PRINT_DEVELOPER`, `PRINT_DEVELOPER_2`, `PRINT_WARNING`,
+  `PRINT_ERROR`, in `fgame/q_shared.h`) as plain text: level 0 always, 1 and 3 through
+  `Com_DPrintf` (`0x42d2a0`, developer only), 2 only at `developer 2`, 4 not at all.
+  Quake III printed its developer level in red. Ours keeps Quake III's levels, and
+  `PRINT_DEVELOPER_2` added after them; its warnings still print yellow without developer.
+- **`...loading 'scripts/<name>.shader'`** is a level 2 print (`0x479e74`), so it shows
+  at `developer 2` only.
+- **A `.tga` name loads the `.ftx` beside it first**, and the `.tga` only without one,
+  silently (`0x46f170`; any other extension goes to its own loader). ioquake3's loader
+  tried the `.tga` first and printed "WARNING: x.tga not present, using x.ftx instead"
+  for nearly every texture, the game's textures being `.ftx`.
+- **`nomipmaps` and `nopicmip` inside a stage** apply to the images that stage loads
+  after them; each stage starts from the shader's settings when its `{` is read, and a
+  `nextbundle` keeps them (`0x475f00`, the keywords at `0x475f43` and `0x475f61`, the
+  image loads at `0x476057`, `0x4760c8` and `0x476e2e`). A shader's own `nomipmaps`
+  sets only that: picmip still applies to it unless `nopicmip` is also written
+  (`0x4771d4`; Quake III's set both; with `r_picmip` 0, the default, nothing shows). Ours ignored them inside a stage, so the weapons in
+  `beau.shader` loaded `envmap_small3_nomipmap.tga` both with and without mipmaps and
+  printed "WARNING: reused image ... with mixed flags" at every load. Retail's image
+  cache (`0x46f7c0`) warns about a mixed mipmap or picmip setting at developer level and
+  a mixed clamp mode always.
+
 ### Views wider than 4:3 (deliberate)
 
 Retail ran at 4:3 shapes. Its client game module (`CG_CalcFov`, `cg_view.c:398`) keeps

@@ -664,7 +664,7 @@ static void ParseTexMod( char *_text, shaderStage_t *stage )
 ParseStage
 ===================
 */
-static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBundle, qboolean *nextBundle )
+static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBundle, qboolean *nextBundle, qboolean *noMipMaps, qboolean *noPicMip )
 {
 	char *token;
 	int depthMaskBits = GLS_DEPTHMASK_TRUE, blendSrcBits = 0, blendDstBits = 0, atestBits = 0, depthFuncBits = 0;
@@ -738,10 +738,10 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 				imgType_t type = IMGTYPE_COLORALPHA;
 				imgFlags_t flags = IMGFLAG_NONE;
 
-				if (!shader.noMipMaps)
+				if (!*noMipMaps)
 					flags |= IMGFLAG_MIPMAP;
 
-				if (!shader.noPicMip)
+				if (!*noPicMip)
 					flags |= IMGFLAG_PICMIP;
 
 				stage->bundle[0].image[0] = R_FindImageFile( token, type, flags );
@@ -768,10 +768,10 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 				return qfalse;
 			}
 
-			if (!shader.noMipMaps)
+			if (!*noMipMaps)
 				flags |= IMGFLAG_MIPMAP;
 
-			if (!shader.noPicMip)
+			if (!*noPicMip)
 				flags |= IMGFLAG_PICMIP;
 
 			stage->bundle[0].image[0] = R_FindImageFile( token, type, flags );
@@ -814,10 +814,10 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 				if ( num < MAX_IMAGE_ANIMATIONS ) {
 					imgFlags_t flags = IMGFLAG_NONE;
 
-					if (!shader.noMipMaps)
+					if (!*noMipMaps)
 						flags |= IMGFLAG_MIPMAP;
 
-					if (!shader.noPicMip)
+					if (!*noPicMip)
 						flags |= IMGFLAG_PICMIP;
 
 					stage->bundle[0].image[num] = R_FindImageFile( token, IMGTYPE_COLORALPHA, flags );
@@ -1214,10 +1214,16 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 			SkipRestOfLine( text );
 			continue;
 		}
-		else if ( !Q_stricmp( token, "nomipmaps" ) || !Q_stricmp( token, "nopicmip" ) )
+		// FAKK2: these inside a stage apply to the images it loads after them
+		// (fakk2.exe 0x475f43, 0x475f61)
+		else if ( !Q_stricmp( token, "nomipmaps" ) )
 		{
-			// FAKK2 allows these inside a stage; images are loaded with the
-			// shader's settings here
+			*noMipMaps = qtrue;
+			continue;
+		}
+		else if ( !Q_stricmp( token, "nopicmip" ) )
+		{
+			*noPicMip = qtrue;
 			continue;
 		}
 		else
@@ -1686,13 +1692,16 @@ static qboolean ParseShader( char **text )
 			}
 
 			qboolean	secondBundle = qfalse, nextBundle;
+			// FAKK2: each stage starts with the shader's mipmap settings and its own
+			// nomipmaps / nopicmip change them, across a nextbundle too (fakk2.exe 0x475f00)
+			qboolean	noMipMaps = shader.noMipMaps, noPicMip = shader.noPicMip;
 
 			do {
 				if ( s >= MAX_SHADER_STAGES ) {
 					ri.Printf( PRINT_WARNING, "WARNING: too many stages in shader %s (max is %i)\n", shader.name, MAX_SHADER_STAGES );
 					return qfalse;
 				}
-				if ( !ParseStage( &stages[s], text, secondBundle, &nextBundle ) )
+				if ( !ParseStage( &stages[s], text, secondBundle, &nextBundle, &noMipMaps, &noPicMip ) )
 				{
 					return qfalse;
 				}
@@ -1828,10 +1837,10 @@ static qboolean ParseShader( char **text )
 			continue;
 		}
 		// no mip maps
+		// FAKK2: picmip still applies; nopicmip is separate (fakk2.exe 0x4771d4)
 		else if ( !Q_stricmp( token, "nomipmaps" ) )
 		{
 			shader.noMipMaps = qtrue;
-			shader.noPicMip = qtrue;
 			continue;
 		}
 		// no picmip adjustment
@@ -3468,7 +3477,8 @@ static void ScanAndLoadShaderFiles( void )
 		char filename[MAX_QPATH];
 
 		Com_sprintf( filename, sizeof( filename ), "scripts/%s", shaderFiles[i] );
-		ri.Printf( PRINT_DEVELOPER, "...loading '%s'\n", filename );
+		// FAKK2: only at developer 2 (fakk2.exe 0x479e74 prints it at level 2)
+		ri.Printf( PRINT_DEVELOPER_2, "...loading '%s'\n", filename );
 		summand = ri.FS_ReadFile( filename, (void **)&buffers[i] );
 		
 		if ( !buffers[i] )

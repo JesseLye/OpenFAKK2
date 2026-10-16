@@ -274,7 +274,8 @@ typedef enum {
 	PRINT_ALL,
 	PRINT_DEVELOPER,		// only print when "developer 1"
 	PRINT_WARNING,
-	PRINT_ERROR
+	PRINT_ERROR,
+	PRINT_DEVELOPER_2		// only print when "developer 2" (FAKK2's level 2, kept last so the others keep their values)
 } printParm_t;
 
 

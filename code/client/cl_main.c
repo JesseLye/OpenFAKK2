@@ -3067,7 +3067,12 @@ static Q_PRINTF_FUNC(2, 3) void QDECL CL_RefPrintf( int print_level, const char 
 	} else if ( print_level == PRINT_ERROR ) {
 		Com_Printf (S_COLOR_RED "%s", msg);			// red
 	} else if ( print_level == PRINT_DEVELOPER ) {
-		Com_DPrintf (S_COLOR_RED "%s", msg);		// red - developer only
+		// FAKK2: uncoloured, as retail's CL_RefPrintf (fakk2.exe 0x422020)
+		Com_DPrintf ("%s", msg);
+	} else if ( print_level == PRINT_DEVELOPER_2 ) {
+		if ( com_developer && com_developer->integer == 2 ) {
+			Com_Printf ("%s", msg);
+		}
 	}
 }
 
