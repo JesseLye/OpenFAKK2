@@ -148,6 +148,14 @@ is the client side: the renderer, the client game module, the HUD.
   s, 2 frames a second.
 - `demo-swamp1` (`probe-dsw1`): swamp1's opening cinematic, then rockets and a walk into
   the water; 36 s, 1 frame a second.
+- `demo-muzzle` (`probe-dmuz`): `muzzle`'s scene (the still flash model, then the uzi
+  fired through two cameras by her hand); 5.5 s at 20 frames a second, so each flash
+  (0.05 s) is in the same frames on both games. Two runs of ours differed by 0.45 points
+  or less over its 111 frames; `muzzle`'s screenshots had moved by up to 10.
+- `demo-crosshair` (`probe-dxhr`): `crosshair`'s scene (the shotgun's crosshair on the
+  wall, then on the floor after `+lookdown`), at the pitch retail reached; 2.5 s, 4
+  frames a second. Two runs of ours differed by 0.11 points or less; `crosshair`'s
+  floor shot moved by 10 to 12, as its pitch depends on frame timing.
 - `timedemo` times both demos, uncapped (1.2 ms a frame on 2026-10-16), in place of a
   camera over an empty map.
 

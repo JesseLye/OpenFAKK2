@@ -141,6 +141,7 @@ function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [stri
     $play = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 $Extra +set cl_avidemo $Rate +set nextdemo quit +demo suite"
     if ($Side -eq 'ours') { $exe = Join-Path $(if ($Bin) { $Bin } else { $EngineBin }) 'openfakk2.exe'; $wd = Split-Path $exe; $play = "$OursHomeArgs +set in_nograb 1 +set developer 0 $play" }
     else { $exe = "$retailDir\fakk2.exe"; $wd = $retailDir }
+    if (-not (Test-Path $exe)) { throw "no client at $exe (build it, or pass -Bin)" }
     $p = $null
     try {
         $p = Start-HarnessGame -Side $Side -Exe $exe -WorkDir $wd -Arguments $play -What "suite demo $Side"

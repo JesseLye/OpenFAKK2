@@ -1,0 +1,24 @@
+// Records the suite's crosshair demo (demos/probe-dxhr.dm3), probe-crosshair's scene: on
+// training, Julie wields the shotgun, which shows the crosshair, on the wall ahead and
+// then on the floor. The pitch +lookdown reaches varies with frame timing, but the demo
+// holds the one retail reached, so the "demo-crosshair" check sees the same view on both
+// games; made on retail by refresh-retail.ps1. record needs g_syncronousClients
+// (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 25
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+stuffcmd "set g_syncronousClients 1"
+wait 3
+stuffcmd "record probe-dxhr"
+wait 1
+stuffcmd "+lookdown"
+wait 0.25
+stuffcmd "-lookdown"
+wait 1.5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end
