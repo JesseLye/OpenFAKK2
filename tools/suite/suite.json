@@ -189,7 +189,6 @@
       "cfg": ["map zoo", "wait 60", "map training", "wait 60", "map zoo", "wait 60", "map fakkhouse", "wait 60", "map homes1", "wait 60",
               "map creeperpens", "wait 60", "map zoo", "wait 60", "map swamp1", "wait 60", "map zoo", "wait 100", "echo ==== rush done", "quit"],
       "doneMarker": "==== rush done", "secs": 180,
-      "knownIssue": "crashes (exit 0xC0000028, no report) changing from creeperpens to zoo 60 frames after the load, before the player has entered; see docs/known-differences.md, Changing maps before the player enters",
       "note": "the restart check's map changes, each started 60 frames after the last, before the player has entered" },
 
     { "name": "sound-pan", "areas": ["sound"], "level": "full", "sound": true, "tolerance": { "db": 1 }, "toleranceWhy": "a loopback recording of the same sound moves by a few tenths of a dB",

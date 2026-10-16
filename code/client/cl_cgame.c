@@ -1072,7 +1072,7 @@ void CL_ShutdownCGame( void ) {
 		cge = NULL;
 	}
 	if ( cgameLibrary ) {
-		Sys_UnloadLibrary( cgameLibrary );
+		Com_UnloadModule( cgameLibrary );
 		cgameLibrary = NULL;
 	}
 }

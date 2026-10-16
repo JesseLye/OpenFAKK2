@@ -1246,7 +1246,7 @@ void SV_ShutdownGameProgs( void ) {
 	ge->Shutdown();
 	ge = NULL;
 
-	Sys_UnloadLibrary( gameLibrary );
+	Com_UnloadModule( gameLibrary );
 	gameLibrary = NULL;
 
 	sv.gentities = NULL;

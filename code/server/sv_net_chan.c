@@ -154,6 +154,29 @@ void SV_Netchan_FreeQueue(client_t *client)
 
 /*
 =================
+SV_Netchan_DropPending
+
+Forgets the rest of a fragmented message still going out at the client's rate,
+and the messages queued behind it, as if lost on the way. Called when a level
+is spawned: they belong to the level being left, and a gamestate finished after
+the spawn makes a local client load the old map's clip map over the server's.
+Retail's Netchan_Transmit (fakk2.exe 0x43ae20) sends every fragment at once,
+so nothing of a level is left to send when the next one spawns.
+=================
+*/
+void SV_Netchan_DropPending(client_t *client)
+{
+	if(client->netchan.unsentFragments)
+	{
+		client->netchan.unsentFragments = qfalse;
+		client->netchan.outgoingSequence++;
+	}
+
+	SV_Netchan_FreeQueue(client);
+}
+
+/*
+=================
 SV_Netchan_TransmitNextInQueue
 =================
 */

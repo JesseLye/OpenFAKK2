@@ -267,6 +267,37 @@ void QDECL Com_DPrintf( const char *fmt, ...) {
 
 /*
 =============
+Com_UnloadModule
+
+Unloads a game module's library (the game or the client game), unless
+Com_Error is under way: an error raised in an engine call the module made
+longjmps back to Com_Frame through the module's own frames, and on x86 Windows
+the exception handlers those frames registered are called on the way. With
+the library gone they are not there, and Windows ends the process with
+STATUS_BAD_STACK (0xc0000028) before any crash report can be written. Such a
+library is unloaded once Com_Frame has caught the error.
+=============
+*/
+#define	MAX_DEFERRED_UNLOADS	4
+static void	*com_deferredUnloads[MAX_DEFERRED_UNLOADS];
+static int	com_numDeferredUnloads;
+
+void Com_UnloadModule( void *library ) {
+	if ( com_errorEntered && com_numDeferredUnloads < MAX_DEFERRED_UNLOADS ) {
+		com_deferredUnloads[com_numDeferredUnloads++] = library;
+		return;
+	}
+	Sys_UnloadDll( library );
+}
+
+static void Com_UnloadDeferredModules( void ) {
+	while ( com_numDeferredUnloads > 0 ) {
+		Sys_UnloadDll( com_deferredUnloads[--com_numDeferredUnloads] );
+	}
+}
+
+/*
+=============
 Com_Error
 
 Both client and server can use this, and it will
@@ -3206,7 +3237,9 @@ void Com_Frame( void ) {
   
 
 	if ( setjmp (abortframe) ) {
-		return;			// an ERR_DROP was thrown
+		// an ERR_DROP was thrown; the frames of the modules it shut down are gone now
+		Com_UnloadDeferredModules();
+		return;
 	}
 
 	timeBeforeFirstEvents =0;
