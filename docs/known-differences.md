@@ -156,7 +156,7 @@ Missing from OpenFAKK2, to be done:
   (`0x43ed10` and `0x45c528`), but the client game module never calls it.
 - The interface: `ui_minicon` (the mini console, advanced options), the console as a
   window that can be moved (`ui_console`, `ui_consoleposition`, `ui_saveconsolepos`,
-  `ui_loadconsolepos`), and the tools `notepad`, `editscript`, `editshader`, `maplist`, `soundpicker` and
+  `ui_loadconsolepos`), and the tools `editscript`, `editshader`, `maplist`, `soundpicker` and
   `viewspawnlist` (registered with them, `0x40e805`). The
   development menus (`emitter`, `emitter2`, `zound`, `leveldesign`, `phook`,
   `animate2`, `cinematicmenu`) also need fields that can be edited and lists filled by
@@ -365,9 +365,124 @@ code that `in_joystick` and the controls menu's Joystick box still turn on:
   controller input; a second controller is ignored; there is no rumble.
 - **Testing.** `vpad attach | detach | button <name> <0|1> | axis <name> <value>` makes a
   virtual controller through SDL (names are SDL's: `a`, `start`, `dpdown`, `leftx`,
-  `righttrigger`), so the harness can press one. A cfg's `wait` holds a menu button's
-  queued command (`pushmenu`) as it does every other, so a menu test checks the click
-  rather than what it queues.
+  `righttrigger`), so the harness can press one; a restart of the video or sound drops it.
+  `vpad cursor <x> <y>` puts the menu cursor at a point in 640x480 units without moving
+  the system cursor, so `vpad button a 1` and `0` click there, hold and drag; `vpad type
+  <text>` gives characters (`^x` is control-x) and `vpad key <name>` presses and lets go a
+  key. A click's
+  queued command (a button's `pushmenu`, a pulldown entry's `set`) runs after everything
+  already in the command buffer, which holds the rest of an exec'd cfg; `vpad queue
+  <text>` adds text behind it, so a test made of cfgs ends one with
+  `vpad queue "exec next.cfg"` to see what the click did.
+
+## OpenFAKK2's options menu (deliberate)
+
+Retail's menus have no controls for what OpenFAKK2 adds. OpenFAKK2 adds a menu of its
+own, `openfakk2`, laid out as Ritual's advanced options menu, with only what no shipped
+menu sets: anti-aliasing (`r_ext_multisample`, up to 8x), anisotropic filtering
+(`r_ext_texture_filter_anisotropic`, `r_ext_max_anisotropy`), the frame rate limit
+(`com_maxfps`), `fov`, `cl_hudScale`, `cl_widescreenFov`, `cl_widescreenHud` and
+`r_swapInterval`; the controller (`in_gamepad`, `pad_yawSpeed`, `pad_pitchSpeed` and the
+two dead zones); and `s_useOpenAL`, `s_alHRTF`, `r_noborder` and `cl_autoRecordDemo`. It
+works as Ritual's pages do: a change shows at once (and takes effect at once unless its
+cvar waits for a restart); Apply runs `ui_checkrestart`, which restarts the video or the
+sound for what is latched, and keeps the changes (`popmenu 0`; as the video menu's Apply,
+it comes back to the main menu after a restart); Back undoes them (`popmenu 1`); Default
+resets every cvar on the page. `s_alHRTF` lets OpenAL Soft use
+HRTF, which it does on headphones only.
+
+- **Built in.** The menu is `code/client/urc/openfakk2.urc`, compiled into the client as
+  a string (`cmake/client.cmake`) and loaded after the game's `ui/*.urc` files, so a
+  `ui/*.urc` naming a menu `openfakk2` takes its place. Nothing of Ritual's is shipped or
+  replaced.
+- **What it changes in the video and audio menu**, with `code/client/urc/additions.urc`
+  in OpenFAKK2's own grammar (`URC_LoadAdditions`): `addto <menu>`, then resources up to
+  `end.`, adds widgets to the end of a menu as if its file had them; `change <menu>
+  <widget>`, then a `{ }` block, reads keys over a widget's own (by name, else title). It
+  adds an "OpenFAKK2 Options" button beside Back, and gives the screen resolution's list
+  every size: retail's lists 640x480 to 1600x1200 (`r_mode` 3 to 9) and has no way back
+  to the desktop's. The list (`popupsource videomodes`, `URC_BuildModeList`) is
+  "Desktop" (`r_mode -2`), then the display's sizes (`r_availableModes`) and the common
+  wide ones (16:9, 16:10, 21:9) at least 640x480, smallest first with their shape, as many
+  as fit the screen (33); a size is set with `r_mode -1`, `r_customwidth` and
+  `r_customheight`. Its label shows `ui_resolution`, which `URC_UpdateOptionCvars` keeps
+  from those cvars while a menu is up, and two hidden labels link the custom width and
+  height so Apply restarts for them and Default resets them.
+- **Latched cvars and Back, in every menu, as retail.** The UI sets a cvar as
+  `Cvar_Set2( name, value, 0 )` (`fakk2.exe` `0x40ccb0`, not forced), so a latched one
+  waits for Apply's restart, and reads one as its latched value when it has one
+  (`0x40cba0`), so labels, check boxes and sliders show the value it will take; OpenFAKK2
+  now does both (`URC_SetLinkCvar`, `URC_LinkValue`). It had set cvars outright
+  (`Cvar_Set`), so the advanced menu's latched boxes (vertex lighting, multitexture, ...)
+  changed at once and `ui_checkrestart` found nothing to restart for them, and read the
+  current value, so the video menu's color depth and texture choices seemed not taken
+  until the restart. `popmenu <restore_cvars>` ("set to 1 if you want all cvars restored
+  to their original values", `0x40bbd0`, `0x4a3420`, `0x4a3c40`) with 1, the pages' Back
+  buttons, sets every cvar the page links to back to its value as the page came up (the
+  snapshot also read as latched-or-current, `0x4a3a30`); OpenFAKK2 had ignored the
+  argument, so Back kept every change. A bare `popmenu`, as one shipped file has, keeps
+  them, without retail's usage message.
+- **A label's `linkformat`** (`"Field of View: %s"`) puts its value, through its
+  `linkstring`s, into the text. `ui_anisotropy` gathers the filter's two cvars for its
+  label.
+- **Longer arguments.** A key's argument is read up to 255 characters (it was 63, which no
+  shipped file reaches); a pulldown entry setting two cvars needs more.
+- **8x anti-aliasing.** `r_ext_multisample` goes up to 8 (ioquake3 allowed 4); a card
+  without as many samples gets half as many, and so on, rather than no window
+  (`GLimp_SetMode` prints "No visual with 8 samples, trying 4").
+
+Checked by clicking through it in the harness (`vpad cursor` and `vpad button a`, under
+"Game controllers"): from the main menu to the video and audio menu and its button; each
+check box; each slider by its arrows and by dragging (`fov` 90, 95, 130, 125; `cl_hudScale`
+1, 0.95, 0.25, 0.30); an entry of each pulldown, 8x anti-aliasing included; Apply, after
+which the video and sound had restarted with the new values (OpenAL off, `r_swapInterval`,
+`r_noborder`, `r_ext_multisample` 4 and 8, anisotropic 8x in use, and `s_alHRTF` with
+OpenAL on); Default, which put every setting back; Back, which undid a field of view, a check box and an
+anti-aliasing choice; Apply, which kept them and restarted for the controller box. In the video menu at 1024x768: 1920 x 1080 from the
+resolution list, 16 bit color, low texture detail and 32 bit texture quality show at once
+and Apply restarted at 1920x1080 with them; the advanced menu's vertex lighting box waited
+for Apply; Back undid a resolution, a texture detail and a brightness. On a 16:9 window
+the menu draws in the 4:3 middle.
+
+## The notepad
+
+`notepad [file]`, which the advanced options menu's Notepad button runs, is retail's
+UINotepad, read from `fakk2.exe` (the details and addresses are in `cl_urc.c`, "The
+notepad" and "The file picker"): a floating window at 100, 100, 450 by 300 titled "<file> -
+Notepad", with File (Open, Save, Save As..., Close) and Edit (Copy, Cut, Paste, Find, Go to
+line...) menus and their control-key shortcuts, a black on white verdana-14 text with a
+blinking caret and a white on dark blue selection, and a status bar that shows the caret's
+line and column, the prompts (white on dark red: go to line, find, save as, and "Save
+<file>? (yes/no/cancel)" when closing a changed text, by Close or by the close box) and,
+for 3 seconds, a message in red ("Saved <file>", "Line '<n>' doesn't exist.", "Text:
+'<text>' could not be found."). The text's keys and mouse are UIMultiLineEdit's: up and
+down keep the column, left and right go on over a line's end, control with home and end
+goes to the text's ends, page up and down go to the top or bottom line shown before
+paging, the wheel scrolls 2 lines, a click places the caret and a drag selects, scrolling
+every quarter second past the text shown. As retail's, delete with nothing selected only
+selects the next character (a second delete deletes it), and control or shift with insert
+copy or paste only while something is selected. Copy and paste use the system's
+clipboard; a paste is typed through the notepad, so a prompt up takes it. The menus'
+separators are 8 tall with a line in the text's colour, the open menu's title is white on
+black, and the status bar's corner resizes the window, to at least 32 by 16. Files are
+read and written through the game's file system, so a saved file lands in the home
+directory's `fakk`. Open lists files in retail's File Picker (FilePickerClass, at 100, 50,
+400 by 300, titled with its directory): "File Name", "Date" and "Size" columns, ".." when
+not at the top, the directories as "[name]", a double click to open; a date and size only
+for a file on the disk, none for one in a pk3, as retail's `_findfirst` gives.
+
+Its first picture matches a retail capture of the same moment pixel for pixel but for
+the caret's blink. Not retail's: keys reach a notepad while it is the active window and
+a menu is up, and a click outside every window takes the focus away from them; the
+picker looks for a file on the disk in the home directory before the install.
+
+Checked in the harness (`vpad type` and `vpad key`, under "Game controllers"): opened from
+the advanced menu's button, typed into, found a text (and failed to find one), went to a
+line (and failed to), saved as a new file (its contents checked on disk), selected by
+dragging, copied (the system's clipboard held it) and pasted, the left arrow over a line's
+start, delete's two presses, closed with the yes/no/cancel question from the close box,
+opened the saved file again with `notepad <file>`, opened `maps/blood.scr` through the
+picker, used the menus, the scroll bar, the wheel and the grip.
 
 ## Rules inferred, not read from the binary
 

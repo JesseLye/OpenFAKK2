@@ -49,6 +49,30 @@ set(CLIENT_SOURCES
 
 add_git_dependency(${SOURCE_DIR}/client/cl_console.c)
 
+# the menus OpenFAKK2 adds to the game's (cl_urc.c), built in as strings
+file(GLOB CLIENT_URC_SOURCES ${SOURCE_DIR}/client/urc/*.urc)
+
+set(CLIENT_URC_DIR ${CMAKE_BINARY_DIR}/urc.dir)
+file(MAKE_DIRECTORY ${CLIENT_URC_DIR})
+
+foreach(URC_FILE IN LISTS CLIENT_URC_SOURCES)
+    get_filename_component(URC_NAME ${URC_FILE} NAME_WE)
+    set(URC_C_FILE ${CLIENT_URC_DIR}/${URC_NAME}.c)
+
+    add_custom_command(
+        OUTPUT ${URC_C_FILE}
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_FILE=${URC_FILE}
+            -DOUTPUT_FILE=${URC_C_FILE}
+            -DSHADER_NAME=${URC_NAME}
+            -DVARIABLE_NAME=urc_builtin_${URC_NAME}
+            -P ${CMAKE_SOURCE_DIR}/cmake/utils/stringify_shader.cmake
+        DEPENDS ${URC_FILE}
+        COMMENT "Stringify menu ${URC_NAME}.urc")
+
+    list(APPEND CLIENT_SOURCES ${URC_C_FILE})
+endforeach()
+
 set(CLIENT_BINARY ${CLIENT_NAME})
 
 list(APPEND CLIENT_DEFINITIONS BOTLIB)

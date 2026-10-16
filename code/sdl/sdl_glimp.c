@@ -422,6 +422,7 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 	const char *glstring;
 	int perChannelColorBits;
 	int colorBits, depthBits, stencilBits;
+	int baseColorBits, baseDepthBits, baseStencilBits;
 	int samples;
 	int i = 0;
 	SDL_Surface *icon = NULL;
@@ -607,6 +608,11 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 		numContexts++;
 	}
 
+	baseColorBits = colorBits;
+	baseDepthBits = depthBits;
+	baseStencilBits = stencilBits;
+
+retry:
 	for (i = 0; i < 16; i++)
 	{
 		int testColorBits, testDepthBits, testStencilBits;
@@ -833,6 +839,18 @@ static int GLimp_SetMode(int mode, qboolean fullscreen, qboolean noborder, qbool
 		ri.Printf( PRINT_ALL, "Using %d color bits, %d depth, %d stencil display.\n",
 				glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
 		break;
+	}
+
+	// OpenFAKK2: fewer samples rather than no window, as a card may not
+	// have the anti-aliasing the options menu offers
+	if( !SDL_window && samples > 0 )
+	{
+		ri.Printf( PRINT_ALL, "No visual with %d samples, trying %d\n", samples, samples / 2 );
+		samples /= 2;
+		colorBits = baseColorBits;
+		depthBits = baseDepthBits;
+		stencilBits = baseStencilBits;
+		goto retry;
 	}
 
 	SDL_FreeSurface( icon );

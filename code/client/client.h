@@ -522,6 +522,7 @@ void URC_Draw( void );
 void URC_BeginLoading( void );
 void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
+void URC_CharEvent( int c );		// the active notepad's
 qboolean URC_HasMenus( void );
 qboolean URC_HasWindows( void );
 qboolean URC_BindWaiting( void );

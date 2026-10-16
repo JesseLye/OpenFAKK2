@@ -981,6 +981,11 @@ IN_VirtualPad_f
 "vpad detach": a controller made by SDL, for the test harness, which
 cannot press a real one. Names are SDL's (a, b, start, dpup, leftx,
 lefttrigger...); axis values run -32768 to 32767, triggers 0 to 32767.
+"vpad cursor <x> <y>" puts the menu cursor at a point in 640x480 units
+(the left stick would move the system cursor there), so A clicks it;
+"vpad type <text>" gives characters (^x is control-x), "vpad key <name>"
+presses and lets go a key, "vpad queue <text>" adds text to the end of
+the command buffer.
 ===============
 */
 static SDL_Joystick *vpad = NULL;
@@ -1060,9 +1065,51 @@ static void IN_VirtualPad_f( void )
 			v = v * 2 - 32768;
 		SDL_JoystickSetVirtualAxis( vpad, a, (Sint16)Com_Clamp( -32768, 32767, v ) );
 	}
+	else if ( !Q_stricmp( cmd, "cursor" ) && Cmd_Argc( ) == 4 )
+	{
+		// the menu cursor to a point in 640x480 units, as the system cursor
+		// would put it, without moving the system cursor itself
+		float x = atof( Cmd_Argv( 2 ) ), y = atof( Cmd_Argv( 3 ) );
+
+		SCR_AdjustFrom640( &x, &y, NULL, NULL );
+		Com_QueueEvent( in_eventTime, SE_MOUSE_ABS, (int)x, (int)y, 0, NULL );
+	}
+	else if ( !Q_stricmp( cmd, "type" ) && Cmd_Argc( ) >= 3 )
+	{
+		// characters, as the keyboard's text would give them; ^X is control-X
+		const char *s = Cmd_ArgsFrom( 2 );
+
+		for ( ; *s ; s++ )
+		{
+			if ( s[0] == '^' && s[1] >= 'a' && s[1] <= 'z' )
+				Com_QueueEvent( in_eventTime, SE_CHAR, CTRL( *++s ), 0, 0, NULL );
+			else
+				Com_QueueEvent( in_eventTime, SE_CHAR, *s, 0, 0, NULL );
+		}
+	}
+	else if ( !Q_stricmp( cmd, "key" ) && Cmd_Argc( ) == 3 )
+	{
+		// a key pressed and let go (Key_StringToKeynum's names)
+		int k = Key_StringToKeynum( Cmd_Argv( 2 ) );
+
+		if ( k < 0 )
+			Com_Printf( "vpad: no key %s\n", Cmd_Argv( 2 ) );
+		else
+		{
+			Com_QueueEvent( in_eventTime, SE_KEY, k, qtrue, 0, NULL );
+			Com_QueueEvent( in_eventTime, SE_KEY, k, qfalse, 0, NULL );
+		}
+	}
+	else if ( !Q_stricmp( cmd, "queue" ) && Cmd_Argc( ) >= 3 )
+	{
+		// after whatever is queued now, such as the command a click queued:
+		// the rest of an exec'd cfg runs before either, so a test made of
+		// cfgs ends one with 'vpad queue "exec next.cfg"'
+		Cbuf_AddText( va( "%s\n", Cmd_ArgsFrom( 2 ) ) );
+	}
 	else
 	{
-		Com_Printf( "Usage: vpad attach | detach | button <name> <0|1> | axis <name> <value>\n" );
+		Com_Printf( "Usage: vpad attach | detach | button <name> <0|1> | axis <name> <value> | cursor <x> <y> | type <text> | key <name> | queue <text>\n" );
 	}
 }
 
