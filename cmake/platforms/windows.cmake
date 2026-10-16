@@ -29,6 +29,10 @@ endif()
 
 list(APPEND CLIENT_DEFINITIONS USE_ICON)
 
+# The name win_resource.rc gives each executable in its version information
+list(APPEND CLIENT_DEFINITIONS WINDOWS_PRODUCT_NAME="${CLIENT_NAME}")
+list(APPEND SERVER_DEFINITIONS WINDOWS_PRODUCT_NAME="${SERVER_NAME}")
+
 set_source_files_properties(${SOURCE_DIR}/sys/win_resource.rc
     PROPERTIES COMPILE_DEFINITIONS WINDOWS_ICON_PATH="${WINDOWS_ICON_PATH}")
 
