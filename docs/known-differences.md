@@ -213,6 +213,25 @@ Left out on purpose:
   sounds, which the module always gives a velocity of 0; since looping sounds are merged
   by sound (`S_AddLoopingSound`), they carry no velocity at all.
 
+Added by OpenFAKK2:
+
+- `fov`, the player's field of view: "90", `CVAR_USERINFO | CVAR_ARCHIVE`
+  (`CL_Init`). Retail registers no `fov` cvar: the only `"fov"` in `fakk2.exe`
+  (`0x4ea8f0`) is the name of the player state's network field (`0x4ea730`, offset
+  `0x3d8`), and the client game module has none. The game module reads `fov` from the
+  userinfo when the player is made and on every userinfo change (`Player::Init`,
+  `G_ClientUserinfoChanged`: 1 to 160, 90 when missing), so on retail a player sets it
+  with `setu fov 110` (`Cvar_Init` `0x42fb20` registers `setu`), which lasts until the
+  game quits, or with the game's own `fov 110` command, which lasts until the next map or
+  userinfo change. With the cvar, `fov 110` changes the userinfo, so it takes effect at
+  once as on retail, is kept in `config.cfg`, and holds across maps and loaded games (a
+  loaded game's saved `fov` gives way when `G_ClientConnect` reapplies the userinfo).
+  `fov` alone prints the cvar instead of the game's "Fov = 90". Script cameras keep their
+  own field of view, and nothing in the game narrows the player's. Checked with
+  `probe-fov` on `zoo`: after `fov 110`, and from launch with `+setu fov 110` on retail and
+  `+set fov 110` on ours, the two pictures differ only by Julie's idle animation. Retail's
+  menus have no control for it (the only "FOV" is in the development `cinematicmenu`).
+
 Ritual's documents also name things no retail binary has (`cg_norain`, `sv_gore`,
 `sv_gibs`, `s_usemiles`, `ui_backgroundMouse`, `+info`, `+scores`, `invuse`,
 `testmodel`, `nextframe`, `prevframe`, `nextskin`, `prevskin`), and list `twosided` as a
