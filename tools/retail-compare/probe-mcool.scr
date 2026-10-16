@@ -1,0 +1,15 @@
+// cave's soundtrack on zoo: a surprise, then the mood pair a cool item's pickup sends
+// after it (Player::StartCoolItem: success, falling back to the current mood, which is
+// still surprise). developer 1 prints the music system's mood changes and songs.
+probe:
+waitforplayer
+wait 2
+soundtrack music/cave.mus
+forcemusic normal normal
+wait 4
+forcemusic surprise normal
+wait 10
+forcemusic success surprise
+wait 25
+stuffcmd "pendingevents"
+end
