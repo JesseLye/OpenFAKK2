@@ -2004,7 +2004,9 @@ looping sound and a `say`), recorded on each engine with `probe-client.ps1 [-Ret
 'g_syncronousClients 1' set for demos"; the client game module reads the same cvar and
 stops predicting), and writes `demos/<name>.dm3`, or the first free `demo0000` to
 `demo9999`. ioquake3 only warned about `g_synchronousClients` and named files
-`.dm_<protocol>`. `demo <name>` (`0x420610`) plays `demos/<name>`, or
+`.dm_<protocol>`. ioquake3's `cl_autoRecordDemo`, which retail does not have, sets
+`g_syncronousClients` to 1 itself before it records, so it keeps working (prediction
+is off while it records). `demo <name>` (`0x420610`) plays `demos/<name>`, or
 `demos/<name>.dm3` when the name has no `.dm3`. The file is
 `[int message sequence][int length][message]` records with a length of -1 at the end
 (retail's writer `0x41fff0`, called from `CL_PacketEvent` `0x421e69`; reader

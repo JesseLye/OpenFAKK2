@@ -299,6 +299,10 @@ def read_demo(path):
         pos += 8
         if length == -1:
             break
+        if pos + length > len(blob):
+            # a game stopped while recording; retail stops here too (0x4205c2)
+            print('Demo file was truncated.')
+            break
         demo.message(blob[pos:pos + length], sequence)
         pos += length
         records += 1

@@ -2971,6 +2971,12 @@ void CL_Frame ( int msec ) {
 			Q_strncpyz( mapName, COM_SkipPath( cl.mapname ), sizeof( cl.mapname ) );
 			COM_StripExtension(mapName, mapName, sizeof(mapName));
 
+			// record refuses without it, as retail's does (CL_Record_f); the
+			// player asked for every game recorded, so set it for them
+			if ( !Cvar_VariableValue( "g_syncronousClients" ) ) {
+				Cvar_Set( "g_syncronousClients", "1" );
+			}
+
 			Cbuf_ExecuteText( EXEC_NOW,
 					va( "record %s-%s-%s", nowString, serverName, mapName ) );
 		}
