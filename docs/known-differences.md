@@ -2110,7 +2110,23 @@ What is implemented, and on what basis:
   through the item config strings), and while it is up the attack keys equip the
   highlighted item by sending the game `use "<item>" lefthand|righthand|dualhand`
   (`0x409e50`, `0x40a090`), or a bare `use "<item>"` for one that is used; the bar goes
-  away five seconds after its last change. OpenFAKK2 does the same in `cl_inv.c`,
+  away five seconds after its last change. As retail's, the highlight stops on items the
+  player lacks, whose attack keys only play the reject sound (`0x409e50` asks `0x4070b0`
+  whether the player has it): `warpinv <slot>` highlights the slot's first item
+  (`0x4080a0`, `0x408cf0`), and a key bound to it pressed while that slot is up with an
+  item highlighted moves the highlight to the next one instead, from the last back to the
+  first (the key handler, `0x408dc0`, takes it before its binding runs; the command typed
+  or sent by a script never cycles), which is how the number keys cycle the swords. The
+  bar's sounds are `global0.scr`'s aliases, looked up among the global aliases
+  (`0x408860`, `0x43ed80`): `snd_inv_select` when an item is taken up, `snd_inv_reject`
+  when it cannot be, and `snd_inv_change` both when the bar comes up on a slot it was not
+  showing (`0x408ac0`) and when an item is highlighted (`0x40a2d0`), so a slot key plays
+  it twice at once and a cycling press once (retail's `s_show_sounds` shows the same).
+  `nextinv` and `previnv`
+  (`0x408670`, `0x408610`) skip the items the player lacks within the slot; past its end
+  they go to the next (or previous) slot's first (or last) item the player has, or that
+  slot's first item when there is none, and with the bar down they open it on the first
+  slot's first item. OpenFAKK2 does the same in `cl_inv.c`,
   drawing the slot buttons and item frames from the script's shaders, each frame's
   model turning ("move spin") or rocking ("move bob") in its `modelwindow`, and the
   item's ammo as the script's bar (`barshader`, filled by the count over the limit from
@@ -2130,8 +2146,8 @@ What is implemented, and on what basis:
   way, which puts the sword upright with its handle close up as retail does.
   `inventory` (the `i` key) is retail's full-screen inventory, which switches the
   video mode (`0x40ab60`, `ui_newvidmode`) and draws a screen of its own; here it opens
-  a screen of this client's own layout, a row per slot with the items the player
-  carries, which the arrows, the wheel and the number keys move through, the attack
+  a screen of this client's own layout, a row per slot with a frame for each of its
+  items and the model in those the player carries, which the arrows, the wheel and the number keys move through, the attack
   keys equip from, and escape closes.
 - **The inventory bar under a menu (deliberate).** Retail leaves the weapon bar drawn
   over a menu: Escape and `pushmenu` both reach the same push (`0x40bf90`), which closes
