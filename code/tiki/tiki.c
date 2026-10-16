@@ -1032,7 +1032,9 @@ static void TIKI_Finish( tiki_t *tiki, const tikiCommandList_t *surfaceCmds ) {
 
 		length = (int)FS_ReadFile( anim->fullname, &buffer );
 		if ( !buffer ) {
-			Com_DPrintf( "%s: dropping animation %s, couldn't load %s\n", tiki->name, anim->alias, anim->fullname );
+			// retail's words (TIKI_LoadAnim 0x449bb0); the animation is dropped,
+			// as retail's TIKI_ParseAnimations (0x44bd50) drops it
+			Com_DPrintf( "TIKI_LoadAnim: Could not load %s\n", anim->fullname );
 			continue;
 		}
 
