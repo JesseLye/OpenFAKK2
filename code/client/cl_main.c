@@ -3749,6 +3749,11 @@ void CL_Init( void ) {
 	Cvar_Get ("teamtask", "0", CVAR_USERINFO );
 	Cvar_Get ("sex", "male", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("cl_anonymous", "0", CVAR_USERINFO | CVAR_ARCHIVE );
+	// FAKK2: the game reads the player's field of view from the userinfo
+	// (Player::Init, G_ClientUserinfoChanged: 1 to 160, 90 when missing). Retail
+	// registers no such cvar, so there it takes "setu fov"; OpenFAKK2 adds one
+	// so the choice is kept in the config
+	Cvar_Get ("fov", "90", CVAR_USERINFO | CVAR_ARCHIVE );
 
 	Cvar_Get ("password", "", CVAR_USERINFO);
 	Cvar_Get ("cg_predictItems", "1", CVAR_USERINFO | CVAR_ARCHIVE );

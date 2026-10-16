@@ -224,6 +224,9 @@ at fixed times. `probe-load` takes one shot after entry and quits: does a map lo
 script camera (`r_ambientScale`). `probe-wgroup` saves the green sword as weapon group 3
 on `zoo`, holsters and takes the group up again (`saveweaps`, `weapgroup3`). `probe-fps`
 frames `zoo` from a script camera for the `fps` counter; run it with `-Extra "+set fps 1"`.
+`probe-fov` takes Julie's view on `zoo`, again after `fov 110`, through a script camera
+(which keeps its own 90) and back on the player; with `-RetailExtra "+setu fov 110"
+-OursExtra "+set fov 110"` the first shot is already at 110 on both.
 `probe-lightoff` puts a plain statue beside `fx\test_lightoff.tik` (a TIKI `lightoffset`)
 on `zoo`; copy that tik into `build\sandbox\retail\fakk\models` and
 `build\sandbox\test-home\fakk\models` first.

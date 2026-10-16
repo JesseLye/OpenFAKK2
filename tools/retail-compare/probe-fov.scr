@@ -1,0 +1,26 @@
+// The player's field of view: Julie's own view at the start, after "fov 110",
+// through a script camera (which keeps its own 90), and back on the player.
+// "fov 110" is the game's player command on retail and the fov cvar on ours
+// (sent in the userinfo); the pictures should match.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-fov -Map zoo -MaskNotify
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname fovcam origin "-2310 1568 56" angles "8 0 0"
+wait 1
+stuffcmd "screenshot"
+wait 4
+stuffcmd "fov 110"
+wait 1
+stuffcmd "screenshot"
+wait 4
+cuecamera $fovcam
+wait 1
+stuffcmd "screenshot"
+wait 4
+cueplayer
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
