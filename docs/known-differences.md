@@ -789,7 +789,14 @@ Not read, done another way:
   (`0x45e380`) on one of two handles, the song playing fading out over the new song's
   fade time unless the new song is `interrupt`, which stops it at once (`0x45e2e0`); a
   looping song starts at full volume and a one-shot fades in over its own fade time; a
-  song without `restart` resumes where it was stopped. A handle's volume (`0x45e5e0`) is
+  song without `restart` resumes where it was stopped, but stopping one that has already
+  finished does nothing (`0x45e2e0` only acts on a stream still playing), so it plays
+  again from the place it was last stopped at, the start if it never was. The song's end
+  and the place it resumes from are both measured where the listener is
+  (`AIL_stream_ms_position`), and ours takes them from the position heard, not the one
+  fed a quarter second ahead. Before 2026-10-16 ours used the fed position and remembered
+  the end of a finished song, so it skipped that song the next time it was asked for
+  (`wateraltar`'s mystery played twice). A handle's volume (`0x45e5e0`) is
   the song's volume times `s_musicvolume` (retail default 0.60, now ours) times the
   game's music volume times its fade, on top of `s_volume`. OpenFAKK2 feeds the two
   handles through two raw streams a quarter second ahead of real time, on either sound
