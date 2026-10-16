@@ -1012,6 +1012,7 @@ const void	*RB_DrawBuffer( const void *data ) {
 	cmd = (const drawBufferCommand_t *)data;
 
 	qglDrawBuffer( cmd->buffer );
+	RB_GammaPassNewFrame();
 
 	// Quake III relies on a sky box to cover whatever the world leaves open.
 	// FAKK2's portal skies do not until they are drawn, so start from black
@@ -1168,6 +1169,9 @@ const void	*RB_SwapBuffers( const void *data ) {
 		ri.Hunk_FreeTempMemory( stencilReadback );
 	}
 
+
+	// r_gamma, when the renderer applies it (tr_gamma.c)
+	RB_GammaPass();
 
 	if ( !glState.finishCalled ) {
 		qglFinish();

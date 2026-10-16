@@ -2104,6 +2104,32 @@ What is implemented, and on what basis:
   unrenumbered. Other saves and states did not crash, as what lies past the queued
   commands depends on the frames before: `probe-lsload` needs that session's save
   (see its header) and crashed on every run before the change.
+- **Brightness** (`r_gamma`, the options menu's "Brightness Slider", `ui/options.urc`:
+  0.5 to 3 in steps of 0.1, applied live) is applied by the renderer, not by the
+  display's gamma ramp; the picture at the defaults is the same. Retail's
+  `R_SetColorMappings` (`0x46ff70`) builds a 256-entry table, `255 * (i / 255) ^ (1 /
+  r_gamma)` shifted left by the overbright bits, after clamping `r_gamma` to 0.5..3, and
+  gives it to the ramp (`GLimp_SetGamma`, `0x48ad00`) when there is one; overbright bits
+  need the ramp and fullscreen (0 in a window), as in Quake III. OpenFAKK2 builds the
+  same table and, at the end of each frame, copies the back buffer to a texture and draws
+  it back through a GLSL shader that looks each channel up in it (`tr_gamma.c`), so the
+  game's window gets brighter and the rest of the desktop doesn't. With the defaults
+  (`r_gamma 1`, `r_overBrightBits 0`) the table is the identity and the pass doesn't run.
+  A ramp now changes the whole desktop or nothing, by driver; on the development machine
+  `GetDeviceGammaRamp` fails, so retail's slider most likely does nothing there. The
+  renderer draws as it would with a ramp (no gamma baked into textures; overbright bits
+  in fullscreen as retail allows them), and the startup log says `GAMMA: shader`. The
+  ramp is used only when the pass can't run (no OpenGL 2.0 or no second texture unit),
+  or with `r_gammaShader 0` (OpenFAKK2's own, archived, latched, 1); the two are never
+  used together. Screenshots, a saved game's picture, levelshots and video frames show
+  the gamma once: a picture read before the pass has run on the buffer gets the table
+  applied, one read after doesn't. So every capture compared with retail must be taken at
+  `r_gamma 1` on both engines, as the harness's are: our test home's `config.cfg` is
+  empty, and the retail sandbox starts from `default.cfg` (which sets no `r_gamma`) and
+  an empty `config.cfg` (`Reset-RetailConfig`). Checked on the main menu against the
+  table, on the pixels the menu doesn't animate: 99.99% exact at 1.5 and 99.4% at 0.6,
+  the rest at the edges of the moving clouds. Also checked on `homes1`, in a window shot
+  (`PrintWindow`, as the suite takes them), through `vid_restart` and in a save's picture.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

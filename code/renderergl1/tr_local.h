@@ -37,6 +37,7 @@ QGL_1_1_PROCS;
 QGL_1_1_FIXED_FUNCTION_PROCS;
 QGL_DESKTOP_1_1_PROCS;
 QGL_DESKTOP_1_1_FIXED_FUNCTION_PROCS;
+QGL_2_0_PROCS;		// NULL without OpenGL 2.0; only the gamma pass uses them (tr_gamma.c)
 QGL_3_0_PROCS;
 #undef GLE
 
@@ -1206,6 +1207,7 @@ extern	cvar_t	*r_nocurves;
 extern	cvar_t	*r_showcluster;
 
 extern cvar_t	*r_gamma;
+extern cvar_t	*r_gammaShader;		// apply r_gamma with a shader pass, not the display's gamma ramp
 extern cvar_t	*r_displayRefresh;		// optional display refresh option
 
 extern	cvar_t	*r_nobind;						// turns off binding to appropriate textures
@@ -1373,6 +1375,15 @@ void    	R_Init( void );
 
 void		R_SetColorMappings( void );
 void		R_GammaCorrect( byte *buffer, int bufSize );
+
+// tr_gamma.c
+void		R_InitGammaPass( void );
+void		R_ShutdownGammaPass( void );
+qboolean	R_GammaPassActive( void );
+void		R_SetGammaPassTable( const byte table[256] );
+void		RB_GammaPass( void );
+void		RB_GammaPassNewFrame( void );
+qboolean	RB_FramebufferNeedsGamma( void );
 
 void	R_ImageList_f( void );
 void	R_SkinList_f( void );
