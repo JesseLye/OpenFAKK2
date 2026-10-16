@@ -1932,7 +1932,14 @@ static void S_AL_SrcLoop( alSrcPriority_t priority, sfxHandle_t sfx,
 	// with subsequent calls to S_AL_SrcLoop
 	curSource->entity = entityNum;
 	curSource->isLooping = qtrue;
-	curSource->minDist = minDist;
+	// FAKK2: a loop already playing takes a new minimum distance at once (a new one
+	// gets it from S_AL_SrcSetup)
+	if( !sent->startLoopingSound && curSource->minDist != MAX( minDist, 1.0f ) )
+	{
+		qalSourcef( curSource->alSource, AL_REFERENCE_DISTANCE, MAX( minDist, 1.0f ) );
+		qalSourcef( curSource->alSource, AL_MAX_DISTANCE, MAX( minDist, 1.0f ) * SOUND_MAX_DIST_FACTOR );
+	}
+	curSource->minDist = MAX( minDist, 1.0f );
 
 	if( info->localSound || S_AL_HearingThroughEntity( entityNum ) )
 	{
@@ -2069,7 +2076,16 @@ void S_AL_SrcUpdate( void )
 					knownSfx[curSource->sfx].loopCnt++;
 					sent->startLoopingSound = qfalse;
 				}
-				
+
+				// FAKK2: a loop's volume carries its distance (the loops of one sound are
+				// one sample at half the minimum distance, S_SendLoops), so it follows
+				// the frame's volume rather than the one it started with
+				if(curSource->volume != sent->loopVolume)
+				{
+					curSource->volume = sent->loopVolume;
+					curSource->curGain = s_alGain->value * s_volume->value * curSource->volume;
+				}
+
 				curSfx = &knownSfx[curSource->sfx];
 
 				// FAKK2: placed again, as the setup above puts it at the origin

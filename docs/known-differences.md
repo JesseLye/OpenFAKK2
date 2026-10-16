@@ -709,6 +709,17 @@ Not read, done another way:
   lone loop is as loud as before. The retail game, recorded from the speakers with
   `sound-record.ps1`, reads alike too (within 1 dB, a brief rise as the two fires join). Not followed: a moving loop, which retail plays on its
   own, would be merged too.
+  Since the merged sample always sits within its minimum distance, its distance is all in
+  its volume, which changes every frame as the listener moves. The OpenAL backend took a
+  loop's volume only when the loop started (`S_AL_SrcSetup`), so a burning creature
+  stayed as loud as it was when it caught fire however far Julie went: walking 600 units
+  from a creeper set alight 70 units ahead, retail's fire fell from -19 to -31 dBFS and
+  ours stayed at -18. A loop now takes the frame's volume (and minimum distance) while it
+  plays, and the same demo (`probe-dbfar`, recorded on retail) reads within 1.6 dB of
+  retail every second on both backends, but for the second in which the fire goes out
+  (the level falls 15 dB within it, so a little timing shows; 5 dB on OpenAL). `probe-fdist` plays a fire, bare and attached to a model's
+  tag, 80, 240, 640 and 1280 units ahead: both games read alike at every distance, since
+  each fire starts where it is.
 - **Stopping an actor's dialog.** Retail keeps the entity and channel of every sample and
   `.mp3` stream it starts, a `localsound` included (`0x45bf00`, `0x45bd10`), so its stop
   (`0x45d710`) finds them. The dialog `.mp3`s are `localsound`s in the sound information,
