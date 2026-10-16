@@ -44,3 +44,7 @@ profile
 
 # Claude Code worktrees (the skills under .claude are tracked)
 /.claude/worktrees/
+
+# Python bytecode caches
+__pycache__/
+*.pyc

@@ -36,20 +36,22 @@ function Get-ChangeHash([string]$Root) {
     ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text.ToString()))) -replace '-', '').Substring(0, 16)
 }
 
-# The checks the commits since the base say they move on purpose, from trailer lines
+# The checks the commits since the base say they move on purpose, from trailers
 #   Suite-moves: crosshair, shots/*: the crosshair is now drawn at retail's size
 # (check names or groups, wildcards allowed, then a colon and why). run-suite.ps1 reports
 # such a check as moved rather than newly failing; -AcceptMoves makes its result the new
-# last good one.
+# last good one. Only real git trailers count (the message's last paragraph, beside
+# Co-Authored-By), as git itself reads them: a Suite-moves line quoted in a message's
+# body, as an example, declares nothing.
 function Get-DeclaredMoves([string]$Root, [string]$Since = '') {
     $base = Get-BranchBase $Root $Since
     if (-not $base) { return }
-    $records = (git -C $Root log --format='%h%x1f%B%x1e' "$base..HEAD" 2>$null | Out-String) -split [char]0x1e
+    $records = (git -C $Root log --format='%h%x1f%(trailers:key=Suite-moves,valueonly,unfold)%x1e' "$base..HEAD" 2>$null | Out-String) -split [char]0x1e
     foreach ($rec in $records) {
         $parts = $rec.Trim() -split [char]0x1f, 2
         if ($parts.Count -lt 2) { continue }
         foreach ($line in ($parts[1] -split "`n")) {
-            if ($line -match '^\s*Suite-moves:\s*([^:]+?)\s*(?::\s*(.*))?$') {
+            if ($line -match '^\s*([^:]+?)\s*(?::\s*(.*))?$') {
                 $why = if ($Matches[2]) { $Matches[2].Trim() } else { '' }
                 foreach ($p in ($Matches[1] -split ',')) {
                     if ($p.Trim()) { [pscustomobject]@{ Pattern = $p.Trim(); Reason = $why; Commit = $parts[0] } }

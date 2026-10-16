@@ -120,10 +120,15 @@ function Copy-IfThere([string]$From, [string]$To) {
     $false
 }
 
-# A picture of a game window's client area, taken from the screen (for moments a console
-# "screenshot" cannot be timed to, such as the startup intro, which runs through the same
-# command buffer a config's waits would hold up). Saved as an uncompressed TGA, top-down,
-# as shots.py reads. The window is brought to the front first.
+# A picture of a game window's client area (for moments a console "screenshot" cannot be
+# timed to, such as the startup intro, which runs through the same command buffer a
+# config's waits would hold up). Saved as an uncompressed TGA, top-down, as shots.py
+# reads. The window's own picture is asked for with PrintWindow (PW_CLIENTONLY |
+# PW_RENDERFULLCONTENT), which works with the window covered: copying the screen took
+# whatever was on top, since Windows refuses SetForegroundWindow to a background process
+# (an agent's terminal over the intro failed the check). Only when PrintWindow fails is
+# the screen copied, and then only if the window really is in front; otherwise no shot
+# is taken. (An all-black picture is not taken as a failure: the intro fades on black.)
 function Save-WindowShot($Process, [string]$Path) {
     if (-not ('OpenFakk2Harness.Window' -as [type])) {
         Add-Type -Namespace OpenFakk2Harness -Name Window -MemberDefinition @'
@@ -132,6 +137,8 @@ function Save-WindowShot($Process, [string]$Path) {
 [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool ClientToScreen(System.IntPtr h, ref POINT p);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern bool PrintWindow(System.IntPtr h, System.IntPtr hdc, uint flags);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 '@
         [OpenFakk2Harness.Window]::SetProcessDPIAware() | Out-Null
@@ -149,13 +156,22 @@ function Save-WindowShot($Process, [string]$Path) {
     if ($w -le 0 -or $hh -le 0) { return $false }
     $bmp = New-Object System.Drawing.Bitmap $w, $hh, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($pt.X, $pt.Y, 0, 0, (New-Object System.Drawing.Size $w, $hh))
-    $g.Dispose()
+    $hdc = $g.GetHdc()
+    $printed = [OpenFakk2Harness.Window]::PrintWindow($h, $hdc, 3)	# PW_CLIENTONLY | PW_RENDERFULLCONTENT
+    $g.ReleaseHdc($hdc)
     $data = $bmp.LockBits((New-Object System.Drawing.Rectangle 0, 0, $w, $hh), 'ReadOnly', $bmp.PixelFormat)
     $row = $w * 3
     $bytes = New-Object byte[] ($row * $hh)
     for ($y = 0; $y -lt $hh; $y++) { [Runtime.InteropServices.Marshal]::Copy([IntPtr]($data.Scan0.ToInt64() + $y * $data.Stride), $bytes, $y * $row, $row) }
-    $bmp.UnlockBits($data); $bmp.Dispose()
+    $bmp.UnlockBits($data)
+    if (-not $printed) {
+        if ([OpenFakk2Harness.Window]::GetForegroundWindow() -ne $h) { $g.Dispose(); $bmp.Dispose(); return $false }
+        $g.CopyFromScreen($pt.X, $pt.Y, 0, 0, (New-Object System.Drawing.Size $w, $hh))
+        $data = $bmp.LockBits((New-Object System.Drawing.Rectangle 0, 0, $w, $hh), 'ReadOnly', $bmp.PixelFormat)
+        for ($y = 0; $y -lt $hh; $y++) { [Runtime.InteropServices.Marshal]::Copy([IntPtr]($data.Scan0.ToInt64() + $y * $data.Stride), $bytes, $y * $row, $row) }
+        $bmp.UnlockBits($data)
+    }
+    $g.Dispose(); $bmp.Dispose()
     $header = New-Object byte[] 18
     $header[2] = 2; $header[12] = $w -band 255; $header[13] = $w -shr 8; $header[14] = $hh -band 255; $header[15] = $hh -shr 8; $header[16] = 24; $header[17] = 0x20
     $fs = [IO.File]::Create($Path); $fs.Write($header, 0, 18); $fs.Write($bytes, 0, $bytes.Length); $fs.Dispose()

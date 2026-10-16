@@ -69,7 +69,9 @@ with the Read tool.
   ours' last good result"); say so.
 - **A check your change moves on purpose** (a fix that is right by the binary but makes a
   picture or a count differ more from the cached result, a probe you changed) is
-  declared, not waved through: add a trailer to the commit that makes the change,
+  declared, not waved through: add a trailer to the commit that makes the change, in
+  the message's last paragraph beside `Co-Authored-By` (git reads only that paragraph as
+  trailers; the same line anywhere else declares nothing),
   ```
   Suite-moves: crosshair, shots/*: the crosshair is now drawn at retail's size (0x4b03c0)
   ```
