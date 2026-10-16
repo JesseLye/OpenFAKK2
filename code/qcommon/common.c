@@ -2245,6 +2245,9 @@ int Com_EventLoop( void ) {
 			case SE_JOYSTICK_AXIS:
 				CL_JoystickEvent( ev.evValue, ev.evValue2, ev.evTime );
 			break;
+			case SE_GAMEPAD_AXIS:
+				CL_GamepadAxisEvent( ev.evValue, ev.evValue2 );
+			break;
 			case SE_CONSOLE:
 				Cbuf_AddText( (char *)ev.evPtr );
 				Cbuf_AddText( "\n" );

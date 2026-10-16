@@ -315,6 +315,56 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
   separator (`...\fakk\\maps\`, as retail's `fs_filedir` reads), which no directory name
   has; so `cd` always clears `mapdir`, in retail too, and it has to be set by hand.
 
+## Game controllers (deliberate)
+
+Retail reads one Windows joystick through winmm (`joyGetPosEx`; `in_joystick`,
+`joy_threshold`, `in_debugjoystick`, `in_joyBallScale`, keys `JOY1` to `JOY32` and `AUX1`
+to `AUX16`), as Quake III did; its own controls are keyboard and mouse. OpenFAKK2 adds
+game controllers through SDL (`code/sdl/sdl_input.c`), apart from the Quake III joystick
+code that `in_joystick` and the controls menu's Joystick box still turn on:
+
+- **On by default.** `in_gamepad 1` opens the first controller SDL knows the layout of
+  (Xbox, PlayStation, Switch and most others), at startup or when one is plugged in;
+  `in_gamepad 0` and `in_restart` turn it off. A new cvar rather than `in_joystick`'s
+  default, because every existing `config.cfg` has `seta in_joystick "0"`.
+- **Its keys** are ioquake3's `PAD0_` keys; the controls menu shows them by readable
+  names (`Pad A`, `LS Up`, `D-Pad Left`, `Pad RT`), and while a controller is connected
+  its bindings come first in the list's two columns, so the list shows and rebinds them.
+- **Default bindings**, given when the controller is first used and none of its keys is
+  bound (also after `unbindall` or the menu's Default); the keyboard's and the mouse's
+  are left alone, and `default.cfg` is not changed. Left stick: move; right stick: turn
+  and look; LT/RT `+attackleft`/`+attackright`; A `+moveup`; B `+movedown`; X `+use`;
+  Y `inventory`; LB/RB `previnv`/`nextinv`; D-pad `warpinv swords`, `guns`, `health`,
+  `defense` (up, right, down, left); L3 `+speed`; R3 `+cameralook`; Back `holster`.
+  Start is the escape key (not bindable, like escape): the main menu over the game, back
+  out of a menu, the intro skipped.
+- **The sticks.** A stick direction bound to `+forward`, `+back`, `+moveleft`,
+  `+moveright`, `+left`, `+right`, `+lookup` or `+lookdown` works by degree (a new event,
+  `SE_GAMEPAD_AXIS`); bound to anything else it presses its key halfway over. Julie moves
+  at full speed in the stick's direction (within 17 degrees of an axis it snaps to it, so
+  a crooked push does not side-step) and runs past `pad_runThreshold` (0.7 of the travel;
+  more than 1 leaves it to `cl_run` and `+speed`, which inverts it as it does `cl_run`).
+  The view turns at up to `pad_yawSpeed` (200) and `pad_pitchSpeed` (140; negative
+  inverts) degrees a second along `pad_lookExponent` (2). Dead zones are circles,
+  `pad_deadzoneLeft` and `pad_deadzoneRight` (0.2 of the travel), with the travel past
+  them stretched to the full range; the triggers press at `pad_triggerThreshold` (0.25).
+  The menu's Joystick threshold slider (`joy_threshold`) is the Quake III joystick's and
+  does not change them.
+- **Menus.** The menus follow the system cursor, so the left stick moves it (up to
+  `pad_cursorSpeed`, 1.2 screen heights a second) and A clicks, holds and drags (sliders,
+  scroll bars) as the left mouse button; B goes back; the D-pad is the arrow keys (the
+  load and save list's selection); the right stick turns the mouse wheel over the list
+  under the cursor. While a bind list cell waits for its key, every button, trigger and
+  stick direction is a key to bind. In the inventory screen the D-pad steps through it
+  and B closes it.
+- **Not covered:** `+togglemouse`'s cursor in the game (no binding by default) takes no
+  controller input; a second controller is ignored; there is no rumble.
+- **Testing.** `vpad attach | detach | button <name> <0|1> | axis <name> <value>` makes a
+  virtual controller through SDL (names are SDL's: `a`, `start`, `dpdown`, `leftx`,
+  `righttrigger`), so the harness can press one. A cfg's `wait` holds a menu button's
+  queued command (`pushmenu`) as it does every other, so a menu test checks the click
+  rather than what it queues.
+
 ## Rules inferred, not read from the binary
 
 These produce results that agree with retail wherever they have been exercised, but the

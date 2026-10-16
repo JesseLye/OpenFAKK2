@@ -1528,16 +1528,24 @@ static void URC_LoadBindList( const char *file ) {
 	urc_pressKeyShader = re.RegisterShaderNoMip( "textures/menu/presskey" );
 }
 
-// the first two keys bound to a command; -1 for none
+// the first two keys bound to a command; -1 for none. OpenFAKK2: while a
+// controller is connected its keys come first, so the list shows (and
+// rebinds) them rather than the keyboard's
 static void URC_BindKeys( const char *command, int bound[2] ) {
-	int		k, n = 0;
+	int		k, n = 0, pass;
 
 	bound[0] = bound[1] = -1;
-	for ( k = 0 ; k < MAX_KEYS && n < 2 ; k++ ) {
-		const char	*b = Key_GetBinding( k );
+	for ( pass = in_padConnected ? 0 : 1 ; pass < 2 ; pass++ ) {
+		for ( k = 0 ; k < MAX_KEYS && n < 2 ; k++ ) {
+			const char	*b;
 
-		if ( b && b[0] && !Q_stricmp( b, command ) ) {
-			bound[n++] = k;
+			if ( in_padConnected && Key_IsPadKey( k ) != ( pass == 0 ) ) {
+				continue;
+			}
+			b = Key_GetBinding( k );
+			if ( b && b[0] && !Q_stricmp( b, command ) ) {
+				bound[n++] = k;
+			}
 		}
 	}
 }
@@ -1722,7 +1730,7 @@ static void URC_DrawBindList( const urcWidget_t *w, const float rect[4], float a
 					Vector4Copy( fg, color );
 					URC_PushClip( r, saved );
 					URC_PrintJustified( font, tr, URC_JUSTIFY_CENTER, URC_JUSTIFY_MIDDLE,
-						k >= 0 ? Key_KeynumToString( k ) : "None", color );
+						k >= 0 ? Key_KeynumToDisplayString( k ) : "None", color );
 					URC_PopClip( saved );
 				}
 			}
@@ -2709,6 +2717,12 @@ static void URC_UpdateCatcher( void ) {
 
 qboolean URC_HasMenus( void ) {
 	return urc_initialised && urc_stackDepth > 0;
+}
+
+// a bind list cell waits for the key to bind (the controller's sticks and
+// buttons are then keys rather than the cursor, sdl_input.c)
+qboolean URC_BindWaiting( void ) {
+	return URC_HasMenus() && urc_bindList.waiting;
 }
 
 qboolean URC_IntroActive( void ) {

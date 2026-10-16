@@ -77,6 +77,9 @@ void CL_ConsolePrint( char *txt ) {
 void CL_JoystickEvent( int axis, int value, int time ) {
 }
 
+void CL_GamepadAxisEvent( int channel, int value ) {
+}
+
 void CL_InitKeyCommands( void ) {
 }
 

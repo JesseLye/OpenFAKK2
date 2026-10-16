@@ -52,6 +52,7 @@ static cvar_t *in_joystick          = NULL;
 static cvar_t *in_joystickThreshold = NULL;
 static cvar_t *in_joystickNo        = NULL;
 static cvar_t *in_joystickUseAnalog = NULL;
+static cvar_t *in_gamepad;
 
 static int vidRestartTime = 0;
 
@@ -454,14 +455,21 @@ struct
 IN_InitJoystick
 ===============
 */
+static void IN_PadRelease( void );
+
 static void IN_InitJoystick( void )
 {
 	int i = 0;
 	int total = 0;
+	int index;
 	char buf[16384] = "";
 
 	if (gamepad)
+	{
+		IN_PadRelease( );
 		SDL_GameControllerClose(gamepad);
+	}
+	in_padConnected = qfalse;
 
 	if (stick != NULL)
 		SDL_JoystickClose(stick);
@@ -511,7 +519,7 @@ static void IN_InitJoystick( void )
 	// Update cvar on in_restart or controller add/remove.
 	Cvar_Set( "in_availableJoysticks", buf );
 
-	if( !in_joystick->integer ) {
+	if( !in_joystick->integer && !in_gamepad->integer ) {
 		Com_DPrintf( "Joystick is not active.\n" );
 		SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 		return;
@@ -523,18 +531,33 @@ static void IN_InitJoystick( void )
 
 	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "0", CVAR_ARCHIVE );
 
-	stick = SDL_JoystickOpen( in_joystickNo->integer );
+	// OpenFAKK2: with in_gamepad alone, only a game controller: the one
+	// in_joystickNo names, or else the first
+	index = in_joystickNo->integer;
+	if( !in_joystick->integer && ( index >= total || !SDL_IsGameController( index ) ) ) {
+		for( index = 0; index < total && !SDL_IsGameController( index ); index++ )
+			;
+		if( index >= total ) {
+			Com_DPrintf( "No game controller connected.\n" );
+			return;
+		}
+	}
+
+	stick = SDL_JoystickOpen( index );
 
 	if (stick == NULL) {
 		Com_DPrintf( "No joystick opened: %s\n", SDL_GetError() );
 		return;
 	}
 
-	if (SDL_IsGameController(in_joystickNo->integer))
-		gamepad = SDL_GameControllerOpen(in_joystickNo->integer);
+	if (SDL_IsGameController(index))
+		gamepad = SDL_GameControllerOpen(index);
+	in_padConnected = gamepad != NULL;
+	if( gamepad )
+		Com_Printf( "Controller: %s\n", SDL_GameControllerName( gamepad ) );
 
-	Com_DPrintf( "Joystick %d opened\n", in_joystickNo->integer );
-	Com_DPrintf( "Name:       %s\n", SDL_JoystickNameForIndex(in_joystickNo->integer) );
+	Com_DPrintf( "Joystick %d opened\n", index );
+	Com_DPrintf( "Name:       %s\n", SDL_JoystickNameForIndex(index) );
 	Com_DPrintf( "Axes:       %d\n", SDL_JoystickNumAxes(stick) );
 	Com_DPrintf( "Hats:       %d\n", SDL_JoystickNumHats(stick) );
 	Com_DPrintf( "Buttons:    %d\n", SDL_JoystickNumButtons(stick) );
@@ -551,6 +574,8 @@ static void IN_InitJoystick( void )
 IN_ShutdownJoystick
 ===============
 */
+static void IN_DetachVirtualPad( void );
+
 static void IN_ShutdownJoystick( void )
 {
 	if ( !SDL_WasInit( SDL_INIT_GAMECONTROLLER ) )
@@ -561,9 +586,11 @@ static void IN_ShutdownJoystick( void )
 
 	if (gamepad)
 	{
+		IN_PadRelease( );
 		SDL_GameControllerClose(gamepad);
 		gamepad = NULL;
 	}
+	in_padConnected = qfalse;
 
 	if (stick)
 	{
@@ -571,78 +598,61 @@ static void IN_ShutdownJoystick( void )
 		stick = NULL;
 	}
 
+	IN_DetachVirtualPad( );
+
 	SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
 }
 
 
-static qboolean KeyToAxisAndSign(int keynum, int *outAxis, int *outSign)
-{
-	char *bind;
+/*
+===============================================================================
 
-	if (!keynum)
-		return qfalse;
+GAME CONTROLLERS
 
-	bind = Key_GetBinding(keynum);
+OpenFAKK2: a controller SDL knows the layout of (an Xbox or PlayStation
+pad and most others) is opened by default (in_gamepad), apart from the
+Quake III joystick code that in_joystick turns on. Its buttons, triggers
+and stick directions are the PAD0_ keys. A stick direction bound to a
+movement or look command moves or turns by how far the stick goes
+(SE_GAMEPAD_AXIS, cl_input.c); one bound to anything else presses its key
+halfway over. While a menu is up the left stick moves the cursor and the
+right one scrolls; cl_keys.c turns the buttons into the menu's keys.
 
-	if (!bind || *bind != '+')
-		return qfalse;
+===============================================================================
+*/
 
-	*outSign = 0;
+#define PAD_STICK_PRESS		0.5f	// how far over a stick direction presses its key
+#define PAD_STICK_RELEASE	0.4f	// and back in lets it go
 
-	if (Q_stricmp(bind, "+forward") == 0)
-	{
-		*outAxis = j_forward_axis->integer;
-		*outSign = j_forward->value > 0.0f ? 1 : -1;
-	}
-	else if (Q_stricmp(bind, "+back") == 0)
-	{
-		*outAxis = j_forward_axis->integer;
-		*outSign = j_forward->value > 0.0f ? -1 : 1;
-	}
-	else if (Q_stricmp(bind, "+moveleft") == 0)
-	{
-		*outAxis = j_side_axis->integer;
-		*outSign = j_side->value > 0.0f ? -1 : 1;
-	}
-	else if (Q_stricmp(bind, "+moveright") == 0)
-	{
-		*outAxis = j_side_axis->integer;
-		*outSign = j_side->value > 0.0f ? 1 : -1;
-	}
-	else if (Q_stricmp(bind, "+lookup") == 0)
-	{
-		*outAxis = j_pitch_axis->integer;
-		*outSign = j_pitch->value > 0.0f ? -1 : 1;
-	}
-	else if (Q_stricmp(bind, "+lookdown") == 0)
-	{
-		*outAxis = j_pitch_axis->integer;
-		*outSign = j_pitch->value > 0.0f ? 1 : -1;
-	}
-	else if (Q_stricmp(bind, "+left") == 0)
-	{
-		*outAxis = j_yaw_axis->integer;
-		*outSign = j_yaw->value > 0.0f ? 1 : -1;
-	}
-	else if (Q_stricmp(bind, "+right") == 0)
-	{
-		*outAxis = j_yaw_axis->integer;
-		*outSign = j_yaw->value > 0.0f ? -1 : 1;
-	}
-	else if (Q_stricmp(bind, "+moveup") == 0)
-	{
-		*outAxis = j_up_axis->integer;
-		*outSign = j_up->value > 0.0f ? 1 : -1;
-	}
-	else if (Q_stricmp(bind, "+movedown") == 0)
-	{
-		*outAxis = j_up_axis->integer;
-		*outSign = j_up->value > 0.0f ? -1 : 1;
-	}
+typedef enum {
+	PADMODE_GAME,	// the sticks move and turn
+	PADMODE_MENU,	// the left stick moves the cursor, the right one scrolls
+	PADMODE_BIND,	// a bind list cell waits: every stick direction is a key
+	PADMODE_NONE	// the console is down
+} padMode_t;
 
-	return *outSign != 0;
-}
+static const int padStickKeys[2][4] = {
+	{ K_PAD0_LEFTSTICK_LEFT, K_PAD0_LEFTSTICK_RIGHT, K_PAD0_LEFTSTICK_UP, K_PAD0_LEFTSTICK_DOWN },
+	{ K_PAD0_RIGHTSTICK_LEFT, K_PAD0_RIGHTSTICK_RIGHT, K_PAD0_RIGHTSTICK_UP, K_PAD0_RIGHTSTICK_DOWN }
+};
+
+static struct {
+	qboolean	buttons[SDL_CONTROLLER_BUTTON_MAX];
+	qboolean	stickKeys[2][4];		// stick directions held down as keys
+	qboolean	triggers[2];
+	int			analog[PAD_ANALOG_MAX];	// as last sent
+	qboolean	active;					// something was pressed or pushed last frame
+	int			lastTime;
+	qboolean	cursorMoving;
+	float		cursorX, cursorY;		// the menu cursor while the stick moves it
+	int			scrollTime;				// when the right stick scrolls again
+} pad;
+
+static cvar_t *pad_deadzoneLeft;
+static cvar_t *pad_deadzoneRight;
+static cvar_t *pad_triggerThreshold;
+static cvar_t *pad_cursorSpeed;
 
 /*
 ===============
@@ -687,133 +697,374 @@ static keyNum_t IN_KeyFor( SDL_GameControllerButton sdlButton )
 
 /*
 ===============
+IN_PadAnalogBinding
+
+Whether a stick direction's key is bound to a command the stick works by
+degree, and which way along which channel.
+===============
+*/
+static qboolean IN_PadAnalogBinding( int key, int *channel, int *sign )
+{
+	static const struct {
+		const char	*command;
+		int			channel, sign;
+	} analog[] = {
+		{ "+forward", PAD_FORWARD, 1 },
+		{ "+back", PAD_FORWARD, -1 },
+		{ "+moveright", PAD_SIDE, 1 },
+		{ "+moveleft", PAD_SIDE, -1 },
+		{ "+right", PAD_YAW, 1 },
+		{ "+left", PAD_YAW, -1 },
+		{ "+lookdown", PAD_PITCH, 1 },
+		{ "+lookup", PAD_PITCH, -1 }
+	};
+	const char *bind = Key_GetBinding( key );
+	int i;
+
+	if ( !bind || bind[0] != '+' )
+		return qfalse;
+
+	for ( i = 0; i < ARRAY_LEN( analog ); i++ )
+	{
+		if ( !Q_stricmp( bind, analog[i].command ) )
+		{
+			*channel = analog[i].channel;
+			*sign = analog[i].sign;
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+/*
+===============
+IN_PadStick
+
+A stick's position past its dead zone, as -1 to 1 on each axis: the dead
+zone is a circle, and the stick's travel beyond it is stretched to the
+full range so it starts moving from nothing.
+===============
+*/
+static void IN_PadStick( int s, float *x, float *y )
+{
+	float dz = s ? pad_deadzoneRight->value : pad_deadzoneLeft->value;
+	float mag, scale;
+
+	*x = SDL_GameControllerGetAxis( gamepad, s ? SDL_CONTROLLER_AXIS_RIGHTX : SDL_CONTROLLER_AXIS_LEFTX ) / 32767.0f;
+	*y = SDL_GameControllerGetAxis( gamepad, s ? SDL_CONTROLLER_AXIS_RIGHTY : SDL_CONTROLLER_AXIS_LEFTY ) / 32767.0f;
+	*x = Com_Clamp( -1, 1, *x );
+	*y = Com_Clamp( -1, 1, *y );
+	dz = Com_Clamp( 0, 0.95f, dz );
+
+	mag = sqrt( *x * *x + *y * *y );
+	if ( mag <= dz )
+	{
+		*x = *y = 0;
+		return;
+	}
+	scale = MIN( 1, ( mag - dz ) / ( 1 - dz ) ) / mag;
+	*x *= scale;
+	*y *= scale;
+}
+
+static void IN_PadKey( qboolean *held, int key, qboolean down )
+{
+	if ( *held == down )
+		return;
+	Com_QueueEvent( in_eventTime, SE_KEY, key, down, 0, NULL );
+	*held = down;
+}
+
+static void IN_PadAnalog( int channel, float value )
+{
+	int v = (int)( 32767 * Com_Clamp( -1, 1, value ) );
+
+	if ( v == pad.analog[channel] )
+		return;
+	Com_QueueEvent( in_eventTime, SE_GAMEPAD_AXIS, channel, v, 0, NULL );
+	pad.analog[channel] = v;
+}
+
+/*
+===============
+IN_PadRelease
+
+Everything held let go, before the controller is closed or another opened.
+===============
+*/
+static void IN_PadRelease( void )
+{
+	int i, d;
+
+	for ( i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++ )
+		IN_PadKey( &pad.buttons[i], IN_KeyFor( SDL_CONTROLLER_BUTTON_A + i ), qfalse );
+	for ( i = 0; i < 2; i++ )
+	{
+		for ( d = 0; d < 4; d++ )
+			IN_PadKey( &pad.stickKeys[i][d], padStickKeys[i][d], qfalse );
+	}
+	IN_PadKey( &pad.triggers[0], K_PAD0_LEFTTRIGGER, qfalse );
+	IN_PadKey( &pad.triggers[1], K_PAD0_RIGHTTRIGGER, qfalse );
+	for ( i = 0; i < PAD_ANALOG_MAX; i++ )
+		IN_PadAnalog( i, 0 );
+	Com_Memset( &pad, 0, sizeof( pad ) );
+}
+
+static padMode_t IN_PadMode( void )
+{
+	if ( Key_GetCatcher( ) & KEYCATCH_CONSOLE )
+		return PADMODE_NONE;
+	if ( URC_BindWaiting( ) )
+		return PADMODE_BIND;
+	if ( URC_HasMenus( ) || ( Key_GetCatcher( ) & KEYCATCH_UI ) )
+		return PADMODE_MENU;
+	return PADMODE_GAME;
+}
+
+/*
+===============
+IN_PadCursor
+
+The left stick moves the menu cursor, at up to pad_cursorSpeed screen
+heights a second, slower near the middle. The menus follow the system
+cursor (SDL_MOUSEMOTION), so it is that cursor that moves.
+===============
+*/
+static void IN_PadCursor( float x, float y, int msec )
+{
+	float mag = sqrt( x * x + y * y );
+	float speed;
+	int wx, wy;
+
+	if ( mag <= 0 || !SDL_window || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0 )
+	{
+		pad.cursorMoving = qfalse;
+		return;
+	}
+	if ( !pad.cursorMoving )
+	{
+		// from wherever the mouse left it
+		SDL_GetMouseState( &wx, &wy );
+		pad.cursorX = wx;
+		pad.cursorY = wy;
+		pad.cursorMoving = qtrue;
+	}
+
+	speed = pad_cursorSpeed->value * cls.glconfig.vidHeight * mag * msec * 0.001f;
+	pad.cursorX = Com_Clamp( 0, cls.glconfig.vidWidth - 1, pad.cursorX + x * speed );
+	pad.cursorY = Com_Clamp( 0, cls.glconfig.vidHeight - 1, pad.cursorY + y * speed );
+	wx = (int)pad.cursorX;
+	wy = (int)pad.cursorY;
+
+	SDL_WarpMouseInWindow( SDL_window, wx, wy );
+	Com_QueueEvent( in_eventTime, SE_MOUSE_ABS, wx, wy, 0, NULL );
+}
+
+/*
+===============
+IN_PadScroll
+
+The right stick pushed up or down turns the mouse wheel over the list
+under the cursor, faster the further it goes.
+===============
+*/
+static void IN_PadScroll( float y, int now )
+{
+	float over = fabs( y );
+	int key;
+
+	if ( over < PAD_STICK_PRESS )
+	{
+		pad.scrollTime = 0;
+		return;
+	}
+	if ( pad.scrollTime && now < pad.scrollTime )
+		return;
+
+	key = y < 0 ? K_MWHEELUP : K_MWHEELDOWN;
+	Com_QueueEvent( in_eventTime, SE_KEY, key, qtrue, 0, NULL );
+	Com_QueueEvent( in_eventTime, SE_KEY, key, qfalse, 0, NULL );
+	pad.scrollTime = now + (int)( 250 - 170 * ( over - PAD_STICK_PRESS ) / ( 1 - PAD_STICK_PRESS ) );
+}
+
+/*
+===============
 IN_GamepadMove
 ===============
 */
 static void IN_GamepadMove( void )
 {
-	int i;
-	int translatedAxes[MAX_JOYSTICK_AXIS];
-	qboolean translatedAxesSet[MAX_JOYSTICK_AXIS];
+	qboolean pressed[SDL_CONTROLLER_BUTTON_MAX];
+	float sx[2], sy[2], trigger[2], analog[PAD_ANALOG_MAX];
+	float threshold = Com_Clamp( 0.05f, 0.95f, pad_triggerThreshold->value );
+	qboolean active = qfalse;
+	padMode_t mode = IN_PadMode( );
+	int now = Sys_Milliseconds( );
+	int msec = Com_Clamp( 0, 100, now - pad.lastTime );
+	int i, s, d;
+
+	pad.lastTime = now;
 
 	SDL_GameControllerUpdate();
 
-	// check buttons
 	for (i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
 	{
-		SDL_GameControllerButton sdlButton = SDL_CONTROLLER_BUTTON_A + i;
-		qboolean pressed = SDL_GameControllerGetButton(gamepad, sdlButton);
-		if (pressed != stick_state.buttons[i])
+		pressed[i] = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_A + i) != 0;
+		active |= pressed[i];
+	}
+	for (s = 0; s < 2; s++)
+	{
+		IN_PadStick( s, &sx[s], &sy[s] );
+		trigger[s] = SDL_GameControllerGetAxis( gamepad, s ? SDL_CONTROLLER_AXIS_TRIGGERRIGHT : SDL_CONTROLLER_AXIS_TRIGGERLEFT ) / 32767.0f;
+		active |= sx[s] != 0 || sy[s] != 0 || trigger[s] > threshold;
+	}
+
+	// a controller nobody has bound yet gets its bindings as it is first used
+	if ( active && !pad.active )
+		Key_PadDefaultBindings( );
+	pad.active = active;
+
+	for (i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+		IN_PadKey( &pad.buttons[i], IN_KeyFor( SDL_CONTROLLER_BUTTON_A + i ), pressed[i] );
+
+	IN_PadKey( &pad.triggers[0], K_PAD0_LEFTTRIGGER, mode != PADMODE_NONE && trigger[0] > threshold );
+	IN_PadKey( &pad.triggers[1], K_PAD0_RIGHTTRIGGER, mode != PADMODE_NONE && trigger[1] > threshold );
+
+	for (i = 0; i < PAD_ANALOG_MAX; i++)
+		analog[i] = 0;
+
+	for (s = 0; s < 2; s++)
+	{
+		// how far the stick goes left, right, up and down
+		float over[4];
+
+		over[0] = MAX( 0, -sx[s] );
+		over[1] = MAX( 0, sx[s] );
+		over[2] = MAX( 0, -sy[s] );
+		over[3] = MAX( 0, sy[s] );
+
+		for (d = 0; d < 4; d++)
 		{
-			Com_QueueEvent(in_eventTime, SE_KEY, IN_KeyFor(sdlButton), pressed, 0, NULL);
-			stick_state.buttons[i] = pressed;
+			int key = padStickKeys[s][d];
+			int channel, sign;
+			qboolean down = qfalse;
+
+			if ( mode == PADMODE_GAME && IN_PadAnalogBinding( key, &channel, &sign ) )
+				analog[channel] += sign * over[d];
+			else if ( mode == PADMODE_GAME || mode == PADMODE_BIND )
+				down = over[d] > ( pad.stickKeys[s][d] ? PAD_STICK_RELEASE : PAD_STICK_PRESS );
+
+			IN_PadKey( &pad.stickKeys[s][d], key, down );
 		}
 	}
 
-	// must defer translated axes until all real axes are processed
-	// must be done this way to prevent a later mapped axis from zeroing out a previous one
-	if (in_joystickUseAnalog->integer)
+	for (i = 0; i < PAD_ANALOG_MAX; i++)
+		IN_PadAnalog( i, analog[i] );
+
+	if ( mode == PADMODE_MENU )
 	{
-		for (i = 0; i < MAX_JOYSTICK_AXIS; i++)
-		{
-			translatedAxes[i] = 0;
-			translatedAxesSet[i] = qfalse;
-		}
+		IN_PadCursor( sx[0], sy[0], msec );
+		IN_PadScroll( sy[1], now );
 	}
-
-	// check axes
-	for (i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++)
+	else
 	{
-		int axis = SDL_GameControllerGetAxis(gamepad, SDL_CONTROLLER_AXIS_LEFTX + i);
-		int oldAxis = stick_state.oldaaxes[i];
-
-		// Smoothly ramp from dead zone to maximum value
-		float f = ((float)abs(axis) / 32767.0f - in_joystickThreshold->value) / (1.0f - in_joystickThreshold->value);
-
-		if (f < 0.0f)
-			f = 0.0f;
-
-		axis = (int)(32767 * ((axis < 0) ? -f : f));
-
-		if (axis != oldAxis)
-		{
-			const int negMap[SDL_CONTROLLER_AXIS_MAX] = { K_PAD0_LEFTSTICK_LEFT,  K_PAD0_LEFTSTICK_UP,   K_PAD0_RIGHTSTICK_LEFT,  K_PAD0_RIGHTSTICK_UP, 0, 0 };
-			const int posMap[SDL_CONTROLLER_AXIS_MAX] = { K_PAD0_LEFTSTICK_RIGHT, K_PAD0_LEFTSTICK_DOWN, K_PAD0_RIGHTSTICK_RIGHT, K_PAD0_RIGHTSTICK_DOWN, K_PAD0_LEFTTRIGGER, K_PAD0_RIGHTTRIGGER };
-
-			qboolean posAnalog = qfalse, negAnalog = qfalse;
-			int negKey = negMap[i];
-			int posKey = posMap[i];
-
-			if (in_joystickUseAnalog->integer)
-			{
-				int posAxis = 0, posSign = 0, negAxis = 0, negSign = 0;
-
-				// get axes and axes signs for keys if available
-				posAnalog = KeyToAxisAndSign(posKey, &posAxis, &posSign);
-				negAnalog = KeyToAxisAndSign(negKey, &negAxis, &negSign);
-
-				// positive to negative/neutral -> keyup if axis hasn't yet been set
-				if (posAnalog && !translatedAxesSet[posAxis] && oldAxis > 0 && axis <= 0)
-				{
-					translatedAxes[posAxis] = 0;
-					translatedAxesSet[posAxis] = qtrue;
-				}
-
-				// negative to positive/neutral -> keyup if axis hasn't yet been set
-				if (negAnalog && !translatedAxesSet[negAxis] && oldAxis < 0 && axis >= 0)
-				{
-					translatedAxes[negAxis] = 0;
-					translatedAxesSet[negAxis] = qtrue;
-				}
-
-				// negative/neutral to positive -> keydown
-				if (posAnalog && axis > 0)
-				{
-					translatedAxes[posAxis] = axis * posSign;
-					translatedAxesSet[posAxis] = qtrue;
-				}
-
-				// positive/neutral to negative -> keydown
-				if (negAnalog && axis < 0)
-				{
-					translatedAxes[negAxis] = -axis * negSign;
-					translatedAxesSet[negAxis] = qtrue;
-				}
-			}
-
-			// keyups first so they get overridden by keydowns later
-
-			// positive to negative/neutral -> keyup
-			if (!posAnalog && posKey && oldAxis > 0 && axis <= 0)
-				Com_QueueEvent(in_eventTime, SE_KEY, posKey, qfalse, 0, NULL);
-
-			// negative to positive/neutral -> keyup
-			if (!negAnalog && negKey && oldAxis < 0 && axis >= 0)
-				Com_QueueEvent(in_eventTime, SE_KEY, negKey, qfalse, 0, NULL);
-
-			// negative/neutral to positive -> keydown
-			if (!posAnalog && posKey && oldAxis <= 0 && axis > 0)
-				Com_QueueEvent(in_eventTime, SE_KEY, posKey, qtrue, 0, NULL);
-
-			// positive/neutral to negative -> keydown
-			if (!negAnalog && negKey && oldAxis >= 0 && axis < 0)
-				Com_QueueEvent(in_eventTime, SE_KEY, negKey, qtrue, 0, NULL);
-
-			stick_state.oldaaxes[i] = axis;
-		}
-	}
-
-	// set translated axes
-	if (in_joystickUseAnalog->integer)
-	{
-		for (i = 0; i < MAX_JOYSTICK_AXIS; i++)
-		{
-			if (translatedAxesSet[i])
-				Com_QueueEvent(in_eventTime, SE_JOYSTICK_AXIS, i, translatedAxes[i], 0, NULL);
-		}
+		pad.cursorMoving = qfalse;
+		pad.scrollTime = 0;
 	}
 }
 
+/*
+===============
+IN_VirtualPad_f
+
+"vpad attach", "vpad button <name> <0|1>", "vpad axis <name> <value>",
+"vpad detach": a controller made by SDL, for the test harness, which
+cannot press a real one. Names are SDL's (a, b, start, dpup, leftx,
+lefttrigger...); axis values run -32768 to 32767, triggers 0 to 32767.
+===============
+*/
+static SDL_Joystick *vpad = NULL;
+static int vpadIndex = -1;
+
+static void IN_DetachVirtualPad( void )
+{
+	if ( !vpad )
+		return;
+	SDL_JoystickClose( vpad );
+	SDL_JoystickDetachVirtual( vpadIndex );
+	vpad = NULL;
+	vpadIndex = -1;
+}
+
+static void IN_VirtualPad_f( void )
+{
+	const char *cmd = Cmd_Argv( 1 );
+
+	if ( !Q_stricmp( cmd, "attach" ) )
+	{
+		SDL_VirtualJoystickDesc desc;
+
+		if ( vpad )
+			return;
+		if ( !SDL_WasInit( SDL_INIT_JOYSTICK ) || !SDL_WasInit( SDL_INIT_GAMECONTROLLER ) )
+		{
+			Com_Printf( "vpad: controllers are off (in_gamepad 0)\n" );
+			return;
+		}
+		Com_Memset( &desc, 0, sizeof( desc ) );
+		desc.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+		desc.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+		desc.naxes = SDL_CONTROLLER_AXIS_MAX;
+		desc.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+		desc.button_mask = ( 1u << SDL_CONTROLLER_BUTTON_MAX ) - 1;
+		desc.axis_mask = ( 1u << SDL_CONTROLLER_AXIS_MAX ) - 1;
+		desc.name = "OpenFAKK2 virtual controller";
+		// the harness's window need not have the focus
+		SDL_SetHint( SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1" );
+		vpadIndex = SDL_JoystickAttachVirtualEx( &desc );
+		if ( vpadIndex < 0 || !( vpad = SDL_JoystickOpen( vpadIndex ) ) )
+		{
+			Com_Printf( "vpad: %s\n", SDL_GetError( ) );
+			vpadIndex = -1;
+			return;
+		}
+		// the triggers rest at the bottom of their range
+		SDL_JoystickSetVirtualAxis( vpad, SDL_CONTROLLER_AXIS_TRIGGERLEFT, -32768 );
+		SDL_JoystickSetVirtualAxis( vpad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, -32768 );
+		// SDL_CONTROLLERDEVICEADDED opens it
+	}
+	else if ( !Q_stricmp( cmd, "detach" ) )
+	{
+		IN_DetachVirtualPad( );
+	}
+	else if ( !Q_stricmp( cmd, "button" ) && vpad && Cmd_Argc( ) == 4 )
+	{
+		SDL_GameControllerButton b = SDL_GameControllerGetButtonFromString( Cmd_Argv( 2 ) );
+
+		if ( b == SDL_CONTROLLER_BUTTON_INVALID )
+			Com_Printf( "vpad: no button %s\n", Cmd_Argv( 2 ) );
+		else
+			SDL_JoystickSetVirtualButton( vpad, b, atoi( Cmd_Argv( 3 ) ) ? 1 : 0 );
+	}
+	else if ( !Q_stricmp( cmd, "axis" ) && vpad && Cmd_Argc( ) == 4 )
+	{
+		SDL_GameControllerAxis a = SDL_GameControllerGetAxisFromString( Cmd_Argv( 2 ) );
+		int v = atoi( Cmd_Argv( 3 ) );
+
+		if ( a == SDL_CONTROLLER_AXIS_INVALID )
+		{
+			Com_Printf( "vpad: no axis %s\n", Cmd_Argv( 2 ) );
+			return;
+		}
+		if ( a == SDL_CONTROLLER_AXIS_TRIGGERLEFT || a == SDL_CONTROLLER_AXIS_TRIGGERRIGHT )
+			v = v * 2 - 32768;
+		SDL_JoystickSetVirtualAxis( vpad, a, (Sint16)Com_Clamp( -32768, 32767, v ) );
+	}
+	else
+	{
+		Com_Printf( "Usage: vpad attach | detach | button <name> <0|1> | axis <name> <value>\n" );
+	}
+}
 
 /*
 ===============
@@ -1162,7 +1413,7 @@ static void IN_ProcessEvents( void )
 
 			case SDL_CONTROLLERDEVICEADDED:
 			case SDL_CONTROLLERDEVICEREMOVED:
-				if (in_joystick->integer)
+				if (in_joystick->integer || in_gamepad->integer)
 					IN_InitJoystick();
 				break;
 
@@ -1357,6 +1608,17 @@ void IN_Init( void *windowData )
 
 	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_ARCHIVE|CVAR_LATCH );
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE );
+
+	// OpenFAKK2: game controllers, on by default; the sticks' dead zones and
+	// the triggers' press point as fractions of their travel, and the menu
+	// cursor's speed in screen heights a second
+	in_gamepad = Cvar_Get( "in_gamepad", "1", CVAR_ARCHIVE|CVAR_LATCH );
+	pad_deadzoneLeft = Cvar_Get( "pad_deadzoneLeft", "0.2", CVAR_ARCHIVE );
+	pad_deadzoneRight = Cvar_Get( "pad_deadzoneRight", "0.2", CVAR_ARCHIVE );
+	pad_triggerThreshold = Cvar_Get( "pad_triggerThreshold", "0.25", CVAR_ARCHIVE );
+	pad_cursorSpeed = Cvar_Get( "pad_cursorSpeed", "1.2", CVAR_ARCHIVE );
+	Cmd_RemoveCommand( "vpad" );
+	Cmd_AddCommand( "vpad", IN_VirtualPad_f );
 
 #if defined(PROTOCOL_HANDLER) && defined(__APPLE__)
 	SDL_EventState( SDL_DROPFILE, SDL_ENABLE );

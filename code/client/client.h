@@ -523,6 +523,7 @@ void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
 qboolean URC_HasMenus( void );
 qboolean URC_HasWindows( void );
+qboolean URC_BindWaiting( void );
 qboolean URC_IntroActive( void );
 qboolean URC_IsFullscreen( void );
 void URC_PushMenu( const char *name );
@@ -561,11 +562,31 @@ extern vec3_t	cl_cameraOffset;
 extern qboolean	cl_cameraResetView;
 extern qboolean	cl_mouseShown;		// FAKK2: the cursor in the game (+togglemouse)
 
+// OpenFAKK2: a game controller's sticks, as the commands their directions
+// are bound to (SE_GAMEPAD_AXIS); each runs -32767 to 32767, past the
+// stick's dead zone
+typedef enum {
+	PAD_FORWARD,	// +forward, +back negative
+	PAD_SIDE,		// +moveright, +moveleft negative
+	PAD_YAW,		// +right, +left negative
+	PAD_PITCH,		// +lookdown, +lookup negative
+	PAD_ANALOG_MAX
+} padAnalog_t;
+
+extern qboolean	in_padConnected;	// set by the system's input code while a controller is open
+extern cvar_t	*pad_yawSpeed;
+extern cvar_t	*pad_pitchSpeed;
+extern cvar_t	*pad_lookExponent;
+extern cvar_t	*pad_runThreshold;
+
 void CL_VerifyCode( void );
 
 float CL_KeyState (kbutton_t *key);
 int Key_StringToKeynum( char *str );
 char *Key_KeynumToString (int keynum);
+const char *Key_KeynumToDisplayString( int keynum );
+qboolean Key_IsPadKey( int keynum );
+void Key_PadDefaultBindings( void );
 
 //
 // cl_parse.c
