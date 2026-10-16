@@ -330,10 +330,17 @@ row per position; `rms <from> <to>` for music or a whole scene). The recorder ne
 out loud and anything else playing is recorded with it. The retail game runs from
 `build\sandbox\retail-snd`, which keeps the install's Miles drivers but no DirectSound
 wrapper, so it opens Miles' "Fast 2D Positional Audio" provider; its window has to be in
-front, or DirectSound silences it, so the script keeps bringing it back there (another
-game started meanwhile, say by another worktree's harness run, would still be heard in
-the recording). `-Volume` (0.25) is kept low because the Windows output path can compress loud
-sound; play a tone of known level through it first if in doubt. The probes put
+front, or DirectSound silences it, so the script keeps bringing it back there; it holds
+the harness lock exclusive, so no other harness game plays or comes in front meanwhile.
+`-Volume` (0.25) is kept low because the Windows output path can compress loud
+sound; play a tone of known level through it first if in doubt. **Check Windows' volume
+mixer before blaming the engine:** it keeps a level for each executable *path* and output
+device, applied before the loopback records. On 2026-10-16 the main checkout's
+`build\x86-Release\Release\openfakk2.exe` sat at 25% on Speakers, so every recording of
+that build read about 12 dB quiet against retail while the engine's own output (OpenAL
+Soft's wave writer) matched; it was taken for a difference until found. The level is in
+`HKCU\Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore`;
+a build copied to a new path starts at 100%. The probes put
 `sound/test/tone.wav` (from `sound_tone.py`) in the game directory:
 
 - `probe-sound-pan`: the tone 48 units away at 14 bearings from ahead to behind.

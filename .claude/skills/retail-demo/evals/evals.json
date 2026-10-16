@@ -17,14 +17,14 @@
     {
       "id": 1,
       "prompt": "Weapons sound way quieter in OpenFAKK2 than in the original game.",
-      "expected_output": "A demo with weapon fire (an existing take such as probe-dzoo-retail, or one recorded by a probe) played at speed on both games with demo.ps1 -Mode sound at a low -Volume, the per-second levels read for a steady offset or a few loud seconds, the started-sound lists compared (with -Backend dma for ours' list), and the finding checked against the known 12 dB entry in known-differences.md.",
+      "expected_output": "A demo with weapon fire (an existing take such as probe-dzoo-retail, or one recorded by a probe) played at speed on both games with demo.ps1 -Mode sound at a low -Volume, the per-second levels read for a steady offset or a few loud seconds, the started-sound lists compared (with -Backend dma for ours' list), and a steady offset checked against Windows' per-app volume for each exe path before it is reported as a gain difference.",
       "files": [],
       "expectations": [
         "Sound mode is used (both games play the same demo at speed while the speakers are recorded), not two separate play sessions",
         "-Volume is kept at 0.25 or lower (0.06 for loud weapons) so the output path does not compress",
         "The report gives the level difference in dB and says whether it is steady over the demo or confined to some seconds",
         "The report does not count retail's s_volume-scaled volume prints or random alias variants (site1/site2) as differences",
-        "The report notes that nothing else should play during the recording, and that another game window in front silences retail"
+        "The report notes that nothing else should play during the recording, and checks the volume mixer's per-app level for both executables before calling a steady offset a difference"
       ]
     },
     {

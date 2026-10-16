@@ -120,7 +120,11 @@ mixer prints: pass `-Backend dma` for the list (openal, the default, is what pla
 hear). Retail prints volumes already scaled by `s_volume`; the comparison divides that
 out. An alias with several sounds draws one at random on each game (`site1` / `site2`), so
 those are counted as variants, not differences. Keep `-Volume` at 0.25, or 0.06 for loud
-weapons: this machine's output compresses above about -20 dBFS. The recording also takes
+weapons: this machine's output compresses above about -20 dBFS. A steady offset over the
+whole demo is first a suspect for Windows' volume mixer, which keeps a level per
+executable path: the 12 dB "gap" found here on 2026-10-16 was the main checkout's
+`openfakk2.exe` left at 25% (`tools/retail-compare/README.md`, "Sound"); check it before
+reporting a gain difference. The recording also takes
 whatever else plays: the recorder holds the harness alone, so no other session's game
 plays or comes in front of retail meanwhile, but your own music or video would be
 recorded, so nothing else should play.
