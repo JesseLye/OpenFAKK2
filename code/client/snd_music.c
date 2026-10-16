@@ -27,7 +27,9 @@ MUSIC_UpdateVolume. Read from fakk2.exe:
   unless the new song is marked interrupt, which stops it at once
   (0x45e2e0); a looping song starts at full volume, a one-shot fades in
   over its own fade time; a song without restart resumes where it was
-  stopped. Each handle's volume (0x45e5e0) is the song's volume times
+  stopped, but stopping one that has already finished changes nothing,
+  so it plays again from the place it was last stopped at (the start if
+  it never was). Each handle's volume (0x45e5e0) is the song's volume times
   s_musicvolume times the game's music volume times its fade, on top of
   s_volume. The retail default for s_musicvolume is 0.60.
 
@@ -164,11 +166,38 @@ static int MUSIC_FindSong( const char *name ) {
 	return -1;
 }
 
+// how far the handle has been fed ahead of what has been heard
+static int MUSIC_FramesAhead( const musicHandle_t *handle ) {
+	int		heard = (int)( ( Sys_Milliseconds() - handle->startTime ) * (double)handle->stream->info.rate / 1000.0 );
+
+	return heard < handle->playedFrames ? handle->playedFrames - heard : 0;
+}
+
+// where in the song the listener is, which is what the retail engine measures
+// (AIL_stream_ms_position) for a song's end and the place it resumes from
+static int MUSIC_HeardFrame( const musicHandle_t *handle ) {
+	int		frame = handle->posFrame - MUSIC_FramesAhead( handle );
+
+	if ( frame < 0 ) {
+		frame = handle->looping ? frame + handle->stream->info.samples : 0;
+	}
+	return frame;
+}
+
+// the song has run out and all of it has been heard: the retail engine's stream
+// is no longer playing
+static qboolean MUSIC_HandleFinished( const musicHandle_t *handle ) {
+	return handle->ended && !MUSIC_FramesAhead( handle );
+}
+
 /*
 =================
 MUSIC_StopHandle
 
-Remembers where the song was, unless it restarts.
+Remembers where the song was, unless it restarts. A song that has finished
+keeps the place it was last stopped at: retail's 0x45e2e0 leaves a stream
+that is no longer playing alone, so such a song plays again from there
+rather than from its end.
 =================
 */
 static void MUSIC_StopHandle( int h ) {
@@ -179,7 +208,11 @@ static void MUSIC_StopHandle( int h ) {
 		return;
 	}
 	song = &music_songs[handle->song];
-	song->resumeFrame = ( song->flags & SONG_RESTART ) ? 0 : handle->posFrame;
+	if ( song->flags & SONG_RESTART ) {
+		song->resumeFrame = 0;
+	} else if ( !MUSIC_HandleFinished( handle ) ) {
+		song->resumeFrame = MUSIC_HeardFrame( handle );
+	}
 	S_CodecCloseStream( handle->stream );
 	handle->stream = NULL;
 	handle->watchEnd = qfalse;
@@ -501,7 +534,7 @@ static void MUSIC_CheckSongEnds( void ) {
 		}
 		fb = MUSIC_FindSong( MUSIC_MoodName( music_fallbackMood ) );
 		fade = fb >= 0 ? music_songs[fb].fadeTime : 0;
-		if ( !handle->ended && handle->posFrame + fade * handle->stream->info.rate < handle->stream->info.samples ) {
+		if ( !MUSIC_HandleFinished( handle ) && MUSIC_HeardFrame( handle ) + fade * handle->stream->info.rate < handle->stream->info.samples ) {
 			continue;
 		}
 		handle->watchEnd = qfalse;
