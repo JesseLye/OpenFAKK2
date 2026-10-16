@@ -944,6 +944,7 @@ Loads any of the supported image types into a canonical
 void R_LoadImage( const char *name, byte **pic, int *width, int *height )
 {
 	qboolean orgNameFailed = qfalse;
+	qboolean ftxTried = qfalse;
 	int orgLoader = -1;
 	int i;
 	char localName[ MAX_QPATH ];
@@ -957,6 +958,22 @@ void R_LoadImage( const char *name, byte **pic, int *width, int *height )
 	Q_strncpyz( localName, name, MAX_QPATH );
 
 	ext = COM_GetExtension( localName );
+
+	// FAKK2: the game's textures are .ftx and the scripts name them .tga; a .tga
+	// name loads the .ftx beside it first and the .tga only without one, saying
+	// nothing either way (fakk2.exe 0x46f170)
+	if( !Q_stricmp( ext, "tga" ) )
+	{
+		char ftxName[ MAX_QPATH ];
+
+		COM_StripExtension( name, ftxName, sizeof( ftxName ) );
+		Q_strcat( ftxName, sizeof( ftxName ), ".ftx" );
+		R_LoadFTX( ftxName, pic, width, height );
+		if( *pic )
+			return;
+
+		ftxTried = qtrue;
+	}
 
 	if( *ext )
 	{
@@ -994,7 +1011,7 @@ void R_LoadImage( const char *name, byte **pic, int *width, int *height )
 	// the image formats supported
 	for( i = 0; i < numImageLoaders; i++ )
 	{
-		if (i == orgLoader)
+		if (i == orgLoader || ( ftxTried && imageLoaders[ i ].ImageLoader == R_LoadFTX ))
 			continue;
 
 		altName = va( "%s.%s", localName, imageLoaders[ i ].ext );
