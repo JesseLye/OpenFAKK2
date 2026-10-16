@@ -852,7 +852,9 @@ void INV_Draw( void ) {
 	}
 	w = inv.width;
 	h = inv.height;
-	// at the window's side, wide or not
+	// at the window's side, wide or not, and at the HUD's size towards that
+	// side's top corner
+	SCR_BeginHudScale( inv.alignRight ? SCR_ScreenRight640() : SCR_ScreenLeft640(), 0 );
 	bx = inv.alignRight ? SCR_ScreenRight640() - w - inv.horizOffset : SCR_ScreenLeft640() + inv.horizOffset;
 	y = inv.vertOffset;
 
@@ -870,6 +872,7 @@ void INV_Draw( void ) {
 
 		INV_DrawFrame( item, x, y + i * type->height, type->width, type->height, i == inv_curItem, INV_Owned( item ) );
 	}
+	SCR_EndHudScale();
 }
 
 /*

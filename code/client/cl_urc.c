@@ -2185,16 +2185,39 @@ wider than 4:3 (cl_widescreenHud) the screen reaches past 0 and 640: a menu
 aligned left or right goes to that side of the window (the HUD to its
 corners), and one with no horizontal alignment (the full-screen menus)
 stays in the 4:3 frame in the middle. A menu slides in from off the
-window's edge.
+window's edge. URC_MenuAnchor is the point the alignment holds the menu to,
+which the HUD's size (cl_hudScale) shrinks it towards.
 =================
 */
-static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float *oy ) {
-	float	dx, dy, left = 0, right = 640;
-
+static void URC_MenuSides( const urcMenu_t *menu, float *left, float *right ) {
+	*left = 0;
+	*right = 640;
 	if ( menu->hasAlignH ) {
-		left = SCR_ScreenLeft640();
-		right = SCR_ScreenRight640();
+		*left = SCR_ScreenLeft640();
+		*right = SCR_ScreenRight640();
 	}
+}
+
+static void URC_MenuAnchor( const urcMenu_t *menu, float *px, float *py ) {
+	float	left, right;
+
+	URC_MenuSides( menu, &left, &right );
+	switch ( menu->alignH ) {
+	case 1: *px = 320; break;
+	case 2: *px = right; break;
+	default: *px = left; break;
+	}
+	switch ( menu->alignV ) {
+	case 1: *py = 240; break;
+	case 2: *py = 480; break;
+	default: *py = 0; break;
+	}
+}
+
+static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float *oy ) {
+	float	dx, dy, left, right;
+
+	URC_MenuSides( menu, &left, &right );
 	switch ( menu->alignH ) {
 	case 1: *ox = ( 640 - menu->width ) * 0.5f; break;
 	case 2: *ox = right - menu->width; break;
@@ -2643,9 +2666,12 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 /*
 =================
 URC_DrawMenu
+
+A HUD menu (one shown rather than pushed, which the cursor never reaches)
+is drawn at the HUD's size, towards the point its alignment anchors it to.
 =================
 */
-static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop ) {
+static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
 	float	ox, oy, alpha;
 	int		elapsed, i;
 	vec4_t	color;
@@ -2655,6 +2681,12 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop ) {
 		// the whole window: a full-screen menu on a wide one has its colour
 		// (black in every shipped menu) at the sides
 		URC_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, menu->bgfill );
+	}
+	if ( hud && !menu->fullscreen ) {
+		float	px, py;
+
+		URC_MenuAnchor( menu, &px, &py );
+		SCR_BeginHudScale( px, py );
 	}
 	URC_MenuOrigin( menu, elapsed, &ox, &oy );
 	alpha = URC_FadeAlpha( menu->fadein, elapsed );
@@ -2666,6 +2698,7 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop ) {
 	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
 		URC_DrawWidget( &urc_widgets[menu->firstWidget + i], menu, ox, oy, elapsed, alpha, onTop );
 	}
+	SCR_EndHudScale();
 }
 
 /*
@@ -3151,13 +3184,19 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 		// width and height of the image); "GAME SAVED" is 256 x 64
 		float	w = re.GetShaderWidth( pr->shader ), h = re.GetShaderHeight( pr->shader );
 
+		SCR_BeginHudScale( 320, 240 );
 		URC_DrawPicST( 320 - w * 0.5f, 240 - h * 0.5f, w, h, 0, 0, 1, 1, pr->shader, color );
+		SCR_EndHudScale();
 		return;
 	}
 	font = URC_LoadFont( URC_PRINT_FONT );
 	if ( !font ) {
 		return;
 	}
+	// at the HUD's size, towards the point the print is placed by: the
+	// middle, or a location print's x and the foot of its first line
+	SCR_BeginHudScale( pr->located && pr->x != -1 ? pr->x : 320,
+		pr->located && pr->y != -1 ? 480 - pr->y : 240 );
 	// the text is placed in the screen's rectangle by PrintJustified
 	// (0x4b03c0), as one block: centred by its widest line, every line from
 	// the block's left edge. A centre print (0x419480) is centred both ways.
@@ -3193,6 +3232,7 @@ static void URC_DrawPrint( urcPrint_t *pr ) {
 	r[0] -= 1;
 	r[1] -= 1;
 	URC_PrintJustified( font, r, horz, vert, pr->text, color );
+	SCR_EndHudScale();
 }
 
 /*
@@ -3939,7 +3979,7 @@ void URC_Draw( void ) {
 			for ( k = 0 ; k < urc_stackDepth && urc_stack[k] != i ; k++ ) {
 			}
 			if ( menu->visible && k == urc_stackDepth ) {
-				URC_DrawMenu( menu, qfalse );
+				URC_DrawMenu( menu, qfalse, qtrue );
 			}
 		}
 		return;
@@ -3977,11 +4017,11 @@ void URC_Draw( void ) {
 			}
 		}
 		if ( menu->visible && !stacked ) {
-			URC_DrawMenu( menu, qfalse );
+			URC_DrawMenu( menu, qfalse, qtrue );
 		}
 	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
-		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1 );
+		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1, qfalse );
 	}
 	URC_DrawWindows();
 	URC_DrawPopup();

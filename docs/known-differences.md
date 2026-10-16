@@ -1969,6 +1969,24 @@ What is implemented, and on what basis:
   posted-mouse run over the main menu (the cursor over CONTROLS lights it up, and the
   click uses the same hit test). The 3D view widens to the window on its own; see "Views
   wider than 4:3" below.
+- **The HUD's size (deliberate addition).** Retail's HUD is always the 640x480 layer's
+  full height, which at 1440p or 4K makes the gauges and weapon windows very large.
+  `cl_hudScale` (archived, default 1, as retail; 0.25 to 1) draws the HUD smaller, each
+  piece shrunk towards the point it is anchored to (`SCR_BeginHudScale`, applied in
+  `SCR_AdjustFrom640` before the window's own scale): a HUD menu (one shown rather than
+  pushed: `healthhud`, `weaphud`, `dualweaphud`, `bosshud`, `damage`) towards the corner
+  or edge its `.urc` `align` names, so `healthhud` stays in the top left and `bosshud`
+  at the left edge's middle; the inventory bar towards its side's top corner, so it
+  stays under the weapon windows; centre prints and the "GAME SAVED" picture towards the
+  middle; a location print towards its x and the foot of its first line, so it stays
+  where the script put it. The weapon windows' and inventory frames' models are placed
+  through the same conversion and stay in their frames. Menus (full-screen, pop-ups,
+  dialogs) and the full-screen inventory stay full size, since they are read and
+  clicked: the cursor is only ever tested against the pushed menu on top, which is never
+  scaled, so it maps as before. The fps counter, fades, letterbox and the console
+  (`con_scale`) are unaffected. At 1 nothing changes. Checked at 2560x1440 at 1, 0.75
+  and 0.5 with `probe-hud`, `probe-inv` and `probe-printpos`: nothing cut off, the models
+  in their frames.
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for

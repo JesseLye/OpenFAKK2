@@ -31,9 +31,15 @@ cvar_t		*cl_graphheight;
 cvar_t		*cl_graphscale;
 cvar_t		*cl_graphshift;
 cvar_t		*cl_widescreenHud;
+cvar_t		*cl_hudScale;
 
 // the screenshot a saveshot takes at the end of the frame it draws
 static char		scr_saveShotCmd[MAX_STRING_CHARS];
+
+// while the HUD is drawn: its size (cl_hudScale) and the point in 640x480
+// units it shrinks towards (SCR_BeginHudScale)
+static float	scr_hudScale = 1;
+static float	scr_hudPivot[2];
 
 /*
 ================
@@ -102,6 +108,32 @@ float SCR_ScreenRight640( void ) {
 
 /*
 ================
+SCR_BeginHudScale, SCR_EndHudScale
+
+OpenFAKK2's cl_hudScale: what is drawn between these (the HUD menus, the
+prints, the inventory bar) is drawn that much smaller, towards px, py in
+640x480 units, the corner or edge it is anchored to, so a menu at the
+window's left edge stays there. The menus, which are read and clicked, stay
+full size.
+================
+*/
+void SCR_BeginHudScale( float px, float py ) {
+	scr_hudScale = cl_hudScale ? cl_hudScale->value : 1;
+	if ( scr_hudScale < 0.25f ) {
+		scr_hudScale = 0.25f;
+	} else if ( scr_hudScale > 1 ) {
+		scr_hudScale = 1;
+	}
+	scr_hudPivot[0] = px;
+	scr_hudPivot[1] = py;
+}
+
+void SCR_EndHudScale( void ) {
+	scr_hudScale = 1;
+}
+
+/*
+================
 SCR_AdjustTo640
 
 A point in window pixels in 640x480 units (the cursor), as the inverse of
@@ -118,6 +150,10 @@ void SCR_AdjustTo640( float *x, float *y ) {
 	if ( yscale > 0 ) {
 		*y /= yscale;
 	}
+	if ( scr_hudScale != 1 ) {
+		*x = scr_hudPivot[0] + ( *x - scr_hudPivot[0] ) / scr_hudScale;
+		*y = scr_hudPivot[1] + ( *y - scr_hudPivot[1] ) / scr_hudScale;
+	}
 }
 
 /*
@@ -131,6 +167,22 @@ void SCR_AdjustFrom640( float *x, float *y, float *w, float *h ) {
 	float	xscale;
 	float	yscale;
 	float	xoffset;
+
+	// the HUD's size first, in 640x480 units
+	if ( scr_hudScale != 1 ) {
+		if ( x ) {
+			*x = scr_hudPivot[0] + ( *x - scr_hudPivot[0] ) * scr_hudScale;
+		}
+		if ( y ) {
+			*y = scr_hudPivot[1] + ( *y - scr_hudPivot[1] ) * scr_hudScale;
+		}
+		if ( w ) {
+			*w *= scr_hudScale;
+		}
+		if ( h ) {
+			*h *= scr_hudScale;
+		}
+	}
 
 	// scale for screen sizes, keeping the shape on wide screens
 	SCR_Layout640( &xscale, &yscale, &xoffset );
@@ -557,6 +609,9 @@ void SCR_Init( void ) {
 	// OpenFAKK2's: the HUD, menus and prints keep their 4:3 shape on a wide
 	// window (0 stretches them over it, as retail)
 	cl_widescreenHud = Cvar_Get ("cl_widescreenHud", "1", CVAR_ARCHIVE);
+	// OpenFAKK2's: the HUD, prints and inventory bar drawn smaller (0.25 to 1),
+	// each towards its corner or edge; the menus stay full size
+	cl_hudScale = Cvar_Get ("cl_hudScale", "1", CVAR_ARCHIVE);
 
 	Cmd_AddCommand( "saveshot", SCR_SaveShot_f );
 
