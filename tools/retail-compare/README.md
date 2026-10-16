@@ -241,7 +241,9 @@ kept and total triangles as figures over it) at `r_lodscale` 5 and 0.5, then the
 at 0.1; `probe-lodsoup` shoots a swamp tree baked into `swamp1` at `r_lodscale` 5 and
 0.05, where retail and ours drop the same pieces of it.
 `probe-tiki` runs `tiki` and `tikilist` on `zoo` for their log output, between `====`
-markers; compare the two logs' sections.
+markers; compare the two logs' sections. `probe-lochtiki` runs `tiki lochnar` the same
+way, and `probe-lochnar` spawns `lochnar.tik` on `zoo` and reads it, which crashes retail
+(see "Animation files the archives lack" in `docs/known-differences.md`).
 `probe-shadows` frames Julie's feet on `zoo` with `cg_shadows 2` (stencil, which retail
 cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
 `probe-fogvol` frames `cemetery`'s blood and water entrance fogs from three script cameras,

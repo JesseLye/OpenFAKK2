@@ -1,0 +1,50 @@
+// lochnar.tik, whose two animation files are not in the retail archives: retail takes
+// the definition from Ritual's lochnar.cik, which lists both, and crashes on the spawn
+// (TIKI_Anim_Time, fakk2.exe 0x44e068, on the animation's handle -1). Spawns one on zoo
+// ahead of the player's start, prints the client's definition and reads the entity
+// (the sweep finds it by "Model models/lochnar.tik"). Ours spawns an invisible Object.
+probe:
+waitforplayer
+wait 2
+spawn lochnar.tik origin "-2150 1568 64" targetname "loch"
+wait 1
+stuffcmd "echo ====TIKI"
+stuffcmd "tiki lochnar"
+stuffcmd "echo ====END"
+stuffcmd "whatis 0"
+stuffcmd "whatis 120"
+stuffcmd "whatis 121"
+stuffcmd "whatis 122"
+stuffcmd "whatis 123"
+stuffcmd "whatis 124"
+stuffcmd "whatis 125"
+stuffcmd "whatis 126"
+stuffcmd "whatis 127"
+stuffcmd "whatis 128"
+stuffcmd "whatis 129"
+wait 0.1
+stuffcmd "whatis 130"
+stuffcmd "whatis 131"
+stuffcmd "whatis 132"
+stuffcmd "whatis 133"
+stuffcmd "whatis 134"
+stuffcmd "whatis 135"
+stuffcmd "whatis 136"
+stuffcmd "whatis 137"
+stuffcmd "whatis 138"
+stuffcmd "whatis 139"
+wait 0.1
+stuffcmd "whatis 140"
+stuffcmd "whatis 141"
+stuffcmd "whatis 142"
+stuffcmd "whatis 143"
+stuffcmd "whatis 144"
+stuffcmd "whatis 145"
+stuffcmd "whatis 146"
+stuffcmd "whatis 147"
+stuffcmd "whatis 148"
+stuffcmd "whatis 149"
+wait 0.5
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

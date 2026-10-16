@@ -49,7 +49,7 @@
     { "name": "build", "areas": ["build"], "always": true, "level": "quick", "kind": "build",
       "note": "the build succeeds and its warning count (as a full build would print it) does not grow" },
     { "name": "cik", "areas": ["data"], "always": true, "level": "quick", "kind": "cik",
-      "note": "check_tiki_against_cik.py: model bounds and radius against the retail engine's .cik caches (742 of 743 match)" },
+      "note": "check_tiki_against_cik.py: model bounds and radius against the retail engine's .cik caches (742 of 743 match; lochnar's cache was written from animation files the archives lack, see docs/known-differences.md)" },
     { "name": "tiki-parse", "areas": ["data"], "always": true, "level": "quick", "kind": "tiki",
       "note": "cachealltikis on the client loads every .tik; its warnings and errors do not grow" },
     { "name": "shader-parse", "areas": ["data", "rendering"], "always": true, "level": "quick", "kind": "cfgrun",

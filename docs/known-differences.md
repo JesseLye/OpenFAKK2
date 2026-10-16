@@ -1472,6 +1472,44 @@ What is implemented, and on what basis:
   structures, not retail's. `cachealltikis` (`0x452490`) loads every `models/*.tik`
   with retail's progress lines; retail also rewrites its binary cache of each
   definition (`0x44d4d0`), which this engine does not keep.
+- **Animation files the archives lack**: three animations named in shipped `.tik` files
+  have no file in `pak0`/`pak1` under any name, case, extension or folder:
+  `gruff.tik`'s `sit_gesture1` (`models/npc/gruff/sit_gesture1.ska`) and `lochnar.tik`'s
+  `idle` and `lochnar` (`models/lochnar/idle.tan`, `lochnar.tan`; there is no
+  `models/lochnar/` at all). They are missing for retail too. Retail's `.tik` parser
+  (`TIKI_ParseAnimations` `0x44bd50`) names the file as the `path` in force plus the
+  file name, with no other place tried, and registers it (`0x449ce0`, loading through
+  `TIKI_LoadAnim` `0x449bb0`); when that fails it skips the animation and its command
+  block and does not count it. The failure prints `TIKI_LoadAnim: Could not load <file>`
+  through `0x4493e0`, which is `Com_DPrintf` (`0x42d2a0`) unless `developer` is above 1
+  (then a message box), so a normal retail console says nothing. OpenFAKK2 drops the
+  animation the same way and prints the same line under `developer`. Nothing in the
+  shipped scripts, state machines or maps asks for `sit_gesture1`.
+  `TIKI_RegisterTiki` (`0x44d5e0`) takes the shipped `.cik` cache (`TIKI_LoadCachedTIKI`
+  `0x44d3a0`) in preference to the `.tik` when `developer` is 0; with `developer` set it
+  parses the `.tik` and rewrites the cache when `0x44d570` (comparing the two files
+  through `0x432c90`) says so, or when the flag at `0x7291c0` is set. The shipped caches
+  show which files Ritual still had when writing them: `gruff.cik` lists 23 animations, without
+  `sit_gesture1`, and its bounds are the union of the 23 that load, as ours are. But
+  `lochnar.cik` lists both Lochnar animations with their files and holds bounds from
+  them, (-74.6, -121.3, -144.2) to (402.7, 199.2, 535.4) with radius 698.9, which no
+  shipped file can reproduce: it is the one model of 743 whose bounds differ from
+  OpenFAKK2's (the suite's `cik` check), where the definition with no animations gets
+  the 4-unit box. Those bounds are never used in retail, because the cached animations
+  cannot load: `0x44d2f0` stores each one's handle from `0x449ce0`, which is -1 for a
+  file that is not there (and then adds one to the reference count of slot -1, at
+  `0x6dd3ac`, just before the table), and the first use of the animation dereferences what
+  `TIKI_GetAnim` (`0x449c90`, `TIKI_GetAnim: handle -1 out of range`) returns for it,
+  NULL. `probe-lochtiki` shows it on `tiki lochnar`: retail prints `Total Anims: 2`, the
+  handle error and `ModelInfo: couldn't find anim 0`; ours `Total Anims: 0` and empty
+  totals. `probe-lochnar` spawns one on `zoo`: retail crashes with an access violation
+  at `0x44e068` in `TIKI_Anim_Time` (`0x44e030`, reached through the game module's
+  import table from the definition's own `anim idle`), with `developer` 0 or 1; ours
+  spawns an invisible 4-unit `Object` and the client game warns that `tag_spawn` does
+  not exist for its emitter. No shipped map spawns `lochnar.tik` (the intro's
+  `$lochnar` is a brush `script_object`, and `lochnar.scr` belongs to a map that was not
+  shipped), so the game never meets either. The cache's bounds are not taken over and
+  the crash is not reproduced.
 - **Models from `.tik` definitions**: the `.tan` file of the animation the entity asks
   for is loaded on first use, and the entity's frame and old frame are decoded and
   interpolated by `backlerp`, as Quake III does with MD3 frames; vertexes are scaled by

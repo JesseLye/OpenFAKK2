@@ -1,0 +1,11 @@
+// lochnar.tik's definition as the client lists it, without spawning one (a spawned
+// Lochnar crashes retail: probe-lochnar).
+probe:
+waitforplayer
+wait 2
+stuffcmd "echo ====TIKI"
+stuffcmd "tiki lochnar"
+stuffcmd "echo ====END"
+wait 1
+stuffcmd "pendingevents"
+end
