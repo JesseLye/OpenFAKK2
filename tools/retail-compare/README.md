@@ -339,8 +339,9 @@ device, applied before the loopback records. On 2026-10-16 the main checkout's
 `build\x86-Release\Release\openfakk2.exe` sat at 25% on Speakers, so every recording of
 that build read about 12 dB quiet against retail while the engine's own output (OpenAL
 Soft's wave writer) matched; it was taken for a difference until found. The level is in
-`HKCU\Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore`;
-a build copied to a new path starts at 100%. The probes put
+`HKCU\Software\Microsoft\Internet Explorer\LowRegistry\Audio\PolicyConfig\PropertyStore`
+(value `3` holds it as a float; no value is 100%); a build copied to a new path starts at
+100%. The probes put
 `sound/test/tone.wav` (from `sound_tone.py`) in the game directory:
 
 - `probe-sound-pan`: the tone 48 units away at 14 bearings from ahead to behind.
