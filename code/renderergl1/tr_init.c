@@ -142,6 +142,7 @@ cvar_t	*r_textureMode;
 cvar_t	*r_offsetFactor;
 cvar_t	*r_offsetUnits;
 cvar_t	*r_gamma;
+cvar_t	*r_gammaShader;
 cvar_t	*r_intensity;
 cvar_t	*r_lockpvs;
 cvar_t	*r_noportals;
@@ -226,6 +227,8 @@ static void InitOpenGL( void )
 		{
 			glConfig.maxTextureSize = 0;
 		}
+
+		R_InitGammaPass();
 	}
 
 	// set default state
@@ -515,7 +518,7 @@ void RB_TakeScreenshot(int x, int y, int width, int height, int outWidth, int ou
 		RB_ScaleScreenshot( allbuf + offset, width, height, scaled + 18, outWidth, outHeight );
 		memcount = outWidth * outHeight * 3;
 
-		if(glConfig.deviceSupportsGamma)
+		if(RB_FramebufferNeedsGamma())
 			R_GammaCorrect(scaled + 18, memcount);
 
 		ri.FS_WriteFile(fileName, scaled, memcount + 18);
@@ -526,7 +529,7 @@ void RB_TakeScreenshot(int x, int y, int width, int height, int outWidth, int ou
 	}
 
 	// gamma correct
-	if(glConfig.deviceSupportsGamma)
+	if(RB_FramebufferNeedsGamma())
 		R_GammaCorrect(allbuf + offset, memcount);
 
 	ri.FS_WriteFile(fileName, buffer, memcount + 18);
@@ -550,7 +553,7 @@ void RB_TakeScreenshotJPEG(int x, int y, int width, int height, char *fileName)
 	memcount = (width * 3 + padlen) * height;
 
 	// gamma correct
-	if(glConfig.deviceSupportsGamma)
+	if(RB_FramebufferNeedsGamma())
 		R_GammaCorrect(buffer + offset, memcount);
 
 	RE_SaveJPG(fileName, r_screenshotJpegQuality->integer, width, height, buffer + offset, padlen);
@@ -715,7 +718,7 @@ void R_LevelShot( void ) {
 	}
 
 	// gamma correct
-	if ( glConfig.deviceSupportsGamma ) {
+	if ( RB_FramebufferNeedsGamma() ) {
 		R_GammaCorrect( buffer + 18, 128 * 128 * 3 );
 	}
 
@@ -896,7 +899,7 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 	memcount = padwidth * cmd->height;
 
 	// gamma correct
-	if(glConfig.deviceSupportsGamma)
+	if(RB_FramebufferNeedsGamma())
 		R_GammaCorrect(cBuf, memcount);
 
 	if(cmd->motionJpeg)
@@ -1059,7 +1062,11 @@ void GfxInfo_f( void )
 	{
 		ri.Printf( PRINT_ALL, "N/A\n" );
 	}
-	if ( glConfig.deviceSupportsGamma )
+	if ( R_GammaPassActive() )
+	{
+		ri.Printf( PRINT_ALL, "GAMMA: shader w/ %d overbright bits\n", tr.overbrightBits );
+	}
+	else if ( glConfig.deviceSupportsGamma )
 	{
 		ri.Printf( PRINT_ALL, "GAMMA: hardware w/ %d overbright bits\n", tr.overbrightBits );
 	}
@@ -1173,7 +1180,8 @@ static void R_SetGfxInfoCvar( void ) {
 	} else {
 		R_GfxInfoAppend( buf, sizeof( buf ), "N/A\n" );
 	}
-	R_GfxInfoAppend( buf, sizeof( buf ), glConfig.deviceSupportsGamma ? "GAMMA: hardware w/ %d overbright bits\n" :
+	R_GfxInfoAppend( buf, sizeof( buf ), R_GammaPassActive() ? "GAMMA: shader w/ %d overbright bits\n" :
+		glConfig.deviceSupportsGamma ? "GAMMA: hardware w/ %d overbright bits\n" :
 		"GAMMA: software w/ %d overbright bits\n", tr.overbrightBits );
 	R_GfxInfoAppend( buf, sizeof( buf ), "CPU: %s\n", ri.Cvar_Get( "sys_cpustring", "", 0 )->string );
 	R_GfxInfoAppend( buf, sizeof( buf ), "rendering primitives: " );
@@ -1251,6 +1259,8 @@ void R_Register( void )
 	ri.Cvar_CheckRange( r_ext_multisample, 0, 4, qtrue );
 	r_overBrightBits = ri.Cvar_Get ("r_overBrightBits", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_ignorehwgamma = ri.Cvar_Get( "r_ignorehwgamma", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	// not retail's: 0 puts r_gamma on the display's gamma ramp as retail did (tr_gamma.c)
+	r_gammaShader = ri.Cvar_Get( "r_gammaShader", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	r_mode = ri.Cvar_Get( "r_mode", "-2", CVAR_ARCHIVE | CVAR_LATCH );
 	r_fullscreen = ri.Cvar_Get( "r_fullscreen", "1", CVAR_ARCHIVE );
 	r_noborder = ri.Cvar_Get("r_noborder", "0", CVAR_ARCHIVE | CVAR_LATCH);
@@ -1537,6 +1547,7 @@ void RE_Shutdown( qboolean destroyWindow ) {
 
 	// shut down platform specific OpenGL stuff
 	if ( destroyWindow ) {
+		R_ShutdownGammaPass();
 		GLimp_Shutdown();
 
 		Com_Memset( &glConfig, 0, sizeof( glConfig ) );

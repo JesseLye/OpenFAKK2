@@ -1342,7 +1342,12 @@ void R_SetColorMappings( void ) {
 		s_intensitytable[i] = j;
 	}
 
-	if ( glConfig.deviceSupportsGamma )
+	// the renderer's own pass when it has one; never that and the display's ramp both
+	if ( R_GammaPassActive() )
+	{
+		R_SetGammaPassTable( s_gammatable );
+	}
+	else if ( glConfig.deviceSupportsGamma )
 	{
 		GLimp_SetGamma( s_gammatable, s_gammatable, s_gammatable );
 	}

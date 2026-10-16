@@ -13,6 +13,7 @@ set(RENDERER_GL1_SOURCES
     ${SOURCE_DIR}/renderergl1/tr_cmds.c
     ${SOURCE_DIR}/renderergl1/tr_curve.c
     ${SOURCE_DIR}/renderergl1/tr_flares.c
+    ${SOURCE_DIR}/renderergl1/tr_gamma.c
     ${SOURCE_DIR}/renderergl1/tr_lensflare.c
     ${SOURCE_DIR}/renderergl1/tr_image.c
     ${SOURCE_DIR}/renderergl1/tr_init.c

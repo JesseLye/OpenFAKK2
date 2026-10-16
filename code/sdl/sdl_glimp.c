@@ -344,6 +344,25 @@ static qboolean GLimp_GetProcAddresses( qboolean fixedFunction ) {
 
 #undef GLE
 
+	// OpenFAKK2: the fixed-function renderer applies r_gamma with a GLSL pass
+	// when it can (renderergl1/tr_gamma.c); missing functions only turn that off
+	if ( fixedFunction && QGL_VERSION_ATLEAST( 2, 0 ) ) {
+		qboolean haveGLSL = qtrue;
+
+#define GLE( ret, name, ... ) qgl##name = (name##proc *) SDL_GL_GetProcAddress("gl" #name); \
+	if ( qgl##name == NULL ) { \
+		haveGLSL = qfalse; \
+	}
+		QGL_2_0_PROCS;
+#undef GLE
+
+		if ( !haveGLSL ) {
+#define GLE( ret, name, ... ) qgl##name = NULL;
+			QGL_2_0_PROCS;
+#undef GLE
+		}
+	}
+
 	return success;
 }
 
