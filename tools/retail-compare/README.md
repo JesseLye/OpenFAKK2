@@ -66,6 +66,14 @@ for a change.
   either game (`probe-client.ps1 -Probe prec [-Retail]`, `demos/drec.dm3`), and
   `+demo drec` plays it on either. The format is under "Demos" in
   `docs/known-differences.md`.
+- `demo_diff.py <retail.dm3> <ours.dm3>` compares two demos of the same play, one recorded
+  on each game, as a timeline: when the player, each entity (paired by model), the
+  server's sounds, prints and commands first differ. `demo_sound.py <retail.npy>
+  <ours.npy>` compares two recordings of one demo played at speed (`sound-record.ps1
+  -Demo`), second by second, and the sounds each game logged. The `retail-demo` skill's
+  `demo.ps1` runs both, and plays a demo on both games frame by frame
+  (`shots.py rank` scores the frames). Demos kept for this live in the main checkout's
+  `build\demos`, never in git.
 
 ## With a player
 
@@ -326,6 +334,10 @@ sound; play a tone of known level through it first if in doubt. The probes put
   units ahead, then three of them, then one put out and another lit, 4 s each; the
   retail engine plays loops of one sound as one, so all three stretches should read
   alike with `rms`.
+
+`-Demo <file.dm3>` plays a demo at its own speed instead of a probe, with each game
+logging the sounds it starts (retail's `s_show_sounds`; ours' `s_show`, software mixer
+only): both hear the same sound events, so `demo_sound.py` shows how each plays them.
 
 `save-load.ps1 -Map <map>` checks saved games against themselves rather than against
 retail: it plays the map with `probe-save`, which saves the game three seconds after the

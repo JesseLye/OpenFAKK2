@@ -19,6 +19,13 @@
       grid cell. Take OFF and ON in one probe (the effect toggled between two screenshots)
       on each game, run delta on both pairs and compare the figures.
 
+  shots.py rank  A_DIR B_DIR [--top N] [--pairs OUT_DIR] [--rate R] [--csv FILE] [--mask ...] [--mask-notify]
+      Every shot-<n>.tga in both folders (a demo played frame by frame on two games), scored
+      as pair scores one: the share of pixels differing by more than --threshold and the
+      mean absolute difference. Prints the spread, the frames ranked worst first (with their
+      time in the demo when --rate gives the frames per second), and with --pairs writes
+      pair-<n>.png for the --top worst (default 6). Uses numpy when it is installed.
+
 Coordinates are pixels from the top left of the full screenshot; X1 and Y1 are exclusive.
 --mask-notify hides the "Wrote screenshots/shotNNNN.tga" line a screenshot taken within
 three seconds of another shows: retail prints it centred (rows 228-250 at 640x480), ours
@@ -217,6 +224,87 @@ def cmd_delta(args):
                 print('cell %d,%d    %s' % (c, r, fmt(cells[r][c])))
 
 
+def score(img_a, img_b, mask, threshold):
+    """(percent of unmasked pixels whose largest channel differs by more than threshold,
+    mean absolute difference over channels), numpy when there is one."""
+    (w, h, ra), (_, _, rb) = img_a, img_b
+    try:
+        import numpy as np
+        a = np.frombuffer(b''.join(bytes(r) for r in ra), np.uint8).reshape(h, w, 3).astype(np.int16)
+        b = np.frombuffer(b''.join(bytes(r) for r in rb), np.uint8).reshape(h, w, 3).astype(np.int16)
+        keep = np.frombuffer(b''.join(bytes(r) for r in mask), np.uint8).reshape(h, w) == 0
+        d = np.abs(a - b)[keep]
+        if not d.size:
+            return 0.0, 0.0
+        return 100.0 * float((d.max(axis=1) > threshold).mean()), float(d.mean())
+    except ImportError:
+        n = over = total = 0
+        for y in range(h):
+            a, b, m = ra[y], rb[y], mask[y]
+            for x in range(w):
+                if m[x]:
+                    continue
+                i = x * 3
+                d = (abs(a[i] - b[i]), abs(a[i + 1] - b[i + 1]), abs(a[i + 2] - b[i + 2]))
+                total += sum(d)
+                over += max(d) > threshold
+                n += 1
+        return (100.0 * over / n, total / (3.0 * n)) if n else (0.0, 0.0)
+
+
+def cmd_rank(args):
+    import os
+    import re
+
+    def shots(folder):
+        found = {}
+        for f in os.listdir(folder):
+            m = re.fullmatch(r'shot-(\d+)\.tga', f)
+            if m:
+                found[int(m.group(1))] = os.path.join(folder, f)
+        return found
+    a, b = shots(args.a), shots(args.b)
+    common_ = sorted(set(a) & set(b))
+    if not common_:
+        sys.exit('no shot-<n>.tga in both %s and %s' % (args.a, args.b))
+    only = sorted(set(a) ^ set(b))
+    args.crop = None
+    rows = []
+    for n in common_:
+        img_a, mask = load(a[n], args)
+        img_b, _ = load(b[n], args)
+        if img_a[:2] != img_b[:2]:
+            sys.exit('frame %d: the images differ in size' % n)
+        pct, mean = score(img_a, img_b, mask, args.threshold)
+        rows.append((n, pct, mean))
+    when = (lambda n: '%7.2f s' % (n / args.rate)) if args.rate else (lambda n: '')
+    pcts = sorted(r[1] for r in rows)
+    print('%d frames paired%s' % (len(rows), '; only on one side: %s' % only[:20] if only else ''))
+    print('pixels differing by more than %d: median %.2f%%, 90th percentile %.2f%%, worst %.2f%%'
+          % (args.threshold, pcts[len(pcts) // 2], pcts[min(len(pcts) - 1, len(pcts) * 9 // 10)], pcts[-1]))
+    worst = sorted(rows, key=lambda r: -r[1])
+    print('worst frames:')
+    for n, pct, mean in worst[:max(args.top, 10)]:
+        print('  frame %5d %s  %6.2f%% of pixels, mean %5.2f' % (n, when(n), pct, mean))
+    if args.csv:
+        with open(args.csv, 'w', newline='\n') as f:
+            f.write('frame,seconds,percent,mean\n')
+            for n, pct, mean in rows:
+                f.write('%d,%s,%.3f,%.3f\n' % (n, '%.3f' % (n / args.rate) if args.rate else '', pct, mean))
+    if args.pairs:
+        import contextlib
+        import io
+        os.makedirs(args.pairs, exist_ok=True)
+        args.zoom = 1
+        for n, _, _ in worst[:args.top]:
+            img_a, mask = load(a[n], args)
+            img_b, _ = load(b[n], args)
+            args.output = os.path.join(args.pairs, 'pair-%d.png' % n)
+            with contextlib.redirect_stdout(io.StringIO()):
+                compare(img_a, mask, img_b, args, 0, 0)
+        print('pair-<frame>.png for the %d worst in %s' % (min(args.top, len(worst)), args.pairs))
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -260,6 +348,17 @@ def main():
     sp.add_argument('--grid', default='1x1', type=lambda s: tuple(int(v) for v in s.lower().split('x')))
     masking(sp)
     sp.set_defaults(fn=cmd_delta)
+
+    sp = sub.add_parser('rank')
+    sp.add_argument('a')
+    sp.add_argument('b')
+    sp.add_argument('--top', type=int, default=6)
+    sp.add_argument('--pairs')
+    sp.add_argument('--rate', type=float, default=0)
+    sp.add_argument('--csv')
+    sp.add_argument('--threshold', type=int, default=24)
+    masking(sp)
+    sp.set_defaults(fn=cmd_rank)
 
     args = p.parse_args()
     args.fn(args)

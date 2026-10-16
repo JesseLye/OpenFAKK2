@@ -157,6 +157,15 @@ s) keep the frames around the moments that matter, so a demo can hold several sc
 with the weapon changes between them left out. The windows are part of the reference:
 changing them makes it stale, as changing the probe does.
 
+A demo someone recorded by hand (anything too fiddly to script) makes a check with
+`"demoFile": "<name>.dm3"` in place of `"probe"` and `"map"`: the file in the main
+checkout's `build\demos`, which `refresh-retail.ps1` copies into the reference before
+playing it on retail. The demo is part of the reference as a probe is, so a new take of
+it makes the reference stale. It lives only on the machine it was recorded on (demos are
+made from Ritual's data and never committed): elsewhere the check is skipped for want of
+a reference. The `retail-demo` skill records, plays and compares demos outside the
+suite, and says how to turn one into a check.
+
 - `demo-zoo` (`probe-dzoo`): two creepers fight Julie; chaingun, rockets, her death; 15
   s, 2 frames a second.
 - `demo-swamp1` (`probe-dsw1`): swamp1's opening cinematic, then rockets and a walk into

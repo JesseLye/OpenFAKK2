@@ -1,6 +1,6 @@
 ---
 name: retail-capture
-description: Compare what OpenFAKK2 draws with what the retail FAKK2 game draws, from screenshots of the same moment taken by one probe script on both engines, paired with a difference image and figures. Use this whenever a report or a change is about how something looks rather than where it is (a sprite, the crosshair, the HUD, a menu, fog, lighting, a model, a weapon effect, a decal, a swipe, a lens flare, the loading screen), whenever someone attaches a retail and an OpenFAKK2 screenshot, says "looks different", "match retail" or "doesn't look right", and whenever a renderer or UI fix needs showing against retail, even if nobody says "capture", "screenshot" or "probe".
+description: Compare what OpenFAKK2 draws with what the retail FAKK2 game draws where no demo can, from screenshots of the same moment taken on both engines, paired with a difference image and figures. Use this for the menus and every .urc page, the loading screen, the startup intro, a cinematic while its map is still loading, the console, the cursor, what a video restart or Apply changes, a saved game's picture, and quick checks of a still scene through a script camera (fog, lighting, a lens flare, a decal left on a wall), whenever someone attaches a retail and an OpenFAKK2 screenshot of one of those, and whenever such a fix needs showing against retail, even if nobody says "capture" or "screenshot". Something seen during play (weapon effects, explosions, flashes, swipes, models moving, the HUD while playing) goes to retail-demo, which plays one demo on both games frame by frame; what the game does goes to retail-probe.
 ---
 
 # Capturing the picture against retail
@@ -11,6 +11,19 @@ picture: one level script (a *probe*) waits for the player, sets the scene, take
 `screenshot`s and quits; `scripts\capture.ps1` runs it on the retail game and on ours and
 pairs the shots as `retail | ours | difference`. For where things are and what state
 they hold (positions, velocities, `whatis`), use the `retail-probe` skill instead.
+
+## Which skill
+
+| The report is about | Skill | Because |
+| --- | --- | --- |
+| What happens: AI, physics, doors, scripts, damage | `retail-probe` | our server must run the game |
+| Something seen or heard during play: weapon effects, explosions, flashes, swipes, moving models, the HUD while playing, cinematics after the load, sound | `retail-demo` | one demo played on both games: frame *n* is the same moment on both, no key timing |
+| A menu, the loading screen, the intro, a cinematic while the map loads, the console, the cursor, a video restart, the save picture, a quick still through a camera | **this one** | none of those is in a demo |
+
+Timed screenshots of play land a little differently on each game (held keys, frame
+rates, random particles), which is why play moved to demos: the suite plays demos for
+muzzle flashes, the crosshair, flashes, the guns, melee and the HUD (`demo-*`). The weapon
+effect probes below still serve as the start of a recording probe for `retail-demo`.
 
 ## Where to look first
 
@@ -59,7 +72,8 @@ player aims, two shots), `probe-swbranch.scr` (three script cameras) or `probe-h
 `probe-shotgun`, `probe-rocket`, `probe-sword` (swipes) and `probe-fx-guns`,
 `probe-fx-range`, `probe-fx-melee` fire each weapon at the floor and catch the burst,
 puffs, decals and explosions; `probe-fx-expl`, `probe-sprites` and `probe-fx-order` spawn
-one effect model alone.
+one effect model alone. For a moment of play rather than a still, turn the probe into a
+recording one and use `retail-demo`: every frame is then the same moment on both games.
 
 Before writing a probe that fires, aims, moves or sets up a scene, read
 `tools\retail-compare\probe-scripting.md`, shared with the retail-probe skill: weapons,

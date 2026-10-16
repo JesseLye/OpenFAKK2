@@ -1,0 +1,44 @@
+{
+  "skill_name": "retail-demo",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "The rocket launcher's explosion on zoo looks off compared to retail. Can you check?",
+      "expected_output": "A recording probe on zoo (or the existing probe-dzoo) played on both games with demo.ps1 frame by frame, the frames ranked, the worst pair pictures read, the explosion frames named with their time in the demo, and a -RetailCgame run of ours to say whether the difference is in the client game module or the engine.",
+      "files": [],
+      "expectations": [
+        "The comparison plays one demo, recorded on retail, on both games (demo.ps1 frames mode), not timed screenshots",
+        "A new recording probe, if written, sets g_syncronousClients 1, records under its own name after the setup, and ends with stoprecord and quit",
+        "The report names the frames that differ most and their time in the demo, and reads at least one pair picture",
+        "The report treats a few points of difference in frames full of particles as retail's random effects, not a bug, unless the difference is structured",
+        "Ours is also played with -RetailCgame, and the report says whether the difference stays (engine) or goes (client game module)"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Weapons sound way quieter in OpenFAKK2 than in the original game.",
+      "expected_output": "A demo with weapon fire (an existing take such as probe-dzoo-retail, or one recorded by a probe) played at speed on both games with demo.ps1 -Mode sound at a low -Volume, the per-second levels read for a steady offset or a few loud seconds, the started-sound lists compared (with -Backend dma for ours' list), and the finding checked against the known 12 dB entry in known-differences.md.",
+      "files": [],
+      "expectations": [
+        "Sound mode is used (both games play the same demo at speed while the speakers are recorded), not two separate play sessions",
+        "-Volume is kept at 0.25 or lower (0.06 for loud weapons) so the output path does not compress",
+        "The report gives the level difference in dB and says whether it is steady over the demo or confined to some seconds",
+        "The report does not count retail's s_volume-scaled volume prints or random alias variants (site1/site2) as differences",
+        "The report notes that nothing else should play during the recording, and that another game window in front silences retail"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I recorded a demo on retail of the swamp2 fog (it's in build\\demos\\swamp2-fog.dm3). Compare it with ours and make it a test so we don't regress.",
+      "expected_output": "demo.ps1 -Demo swamp2-fog on both games, the ranking and worst pairs reported, then a suite.json demo check with \"demoFile\": \"swamp2-fog.dm3\", its retail reference made with refresh-retail.ps1 -Only, and a commit with a Suite-moves trailer declaring the new check.",
+      "files": [],
+      "expectations": [
+        "The user's demo is played from build\\demos by name, not re-recorded",
+        "The new suite.json entry is of kind demo with demoFile (not probe and map), with a note that says what it shows",
+        "The retail reference is made with tools\\suite\\refresh-retail.ps1 -Only <check>",
+        "The commit carries a Suite-moves trailer for the new check so the merge keeps its first result",
+        "The report says the demo file lives only on this machine and is never committed"
+      ]
+    }
+  ]
+}
