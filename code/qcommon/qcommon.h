@@ -101,6 +101,7 @@ void MSG_ReadDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct pl
 
 
 void MSG_ReportChangeVectors_f( void );
+void MSG_GetNullEntityState( entityState_t *nullState );
 
 //============================================================================
 
@@ -247,13 +248,13 @@ PROTOCOL
 ==============================================================
 */
 
-#define	PROTOCOL_VERSION	71
+// FAKK2: the retail engine's (fakk2.exe SV_DirectConnect 0x443550), whose
+// server-to-client messages these are (msg.c, "Demos" in
+// docs/known-differences.md)
+#define	PROTOCOL_VERSION	1
 #define PROTOCOL_LEGACY_VERSION	68
 // 1.31 - 67
 
-// maintain a list of compatible protocols for demo playing
-// NOTE: that stuff only works with two digits protocols
-extern int demo_protocols[];
 
 #if !defined UPDATE_SERVER_NAME && !defined STANDALONE
 #define	UPDATE_SERVER_NAME	"update.quake3arena.com"
@@ -291,17 +292,17 @@ enum svc_ops_e {
 	svc_configstring,			// [short] [string] only in gamestate messages
 	svc_baseline,				// only in gamestate messages
 	svc_serverCommand,			// [string] to be executed by client game module
-	svc_download,				// [short] size [size bytes]
+	svc_download,				// [short] size [size bytes]; retail refuses it
 	svc_snapshot,
-	svc_EOF,
 
-// new commands, supported only by ioquake3 protocol but not legacy
-	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
-	svc_voipOpus,      //
-
-// FAKK2: the game's prints (the retail engine numbers them 8 and 9)
+// FAKK2: the retail engine's numbers to here (fakk2.exe CL_ParseServerMessage
+// 0x423d60). A message ends where its data does; there is no svc_EOF.
 	svc_centerprint,   // [string] centred on the screen
 	svc_locprint,      // [short x] [short y] [string] centred on x at y
+
+// ioquake3's, unknown to retail
+	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
+	svc_voipOpus,      //
 };
 
 

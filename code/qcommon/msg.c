@@ -22,38 +22,33 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "q_shared.h"
 #include "qcommon.h"
 
-static huffman_t		msgHuff;
-
-static qboolean			msgInit = qfalse;
-
-int pcount[256];
-
 /*
 ==============================================================================
 
 			MESSAGE IO FUNCTIONS
 
 Handles byte ordering and avoids alignment errors
+
+FAKK2: a message's bits are the retail engine's (fakk2.exe MSG_WriteBits
+0x439420, MSG_ReadBits 0x439520): packed least significant first, a byte at a
+time, with no Huffman coding, in both directions. cursize and readcount count
+the bytes begun and bit is the position within the last of them. Data and
+strings start on a byte boundary, and moving to one passes a byte more than it
+needs to (MSG_GetSpace 0x439370, reading 0x439350), on both sides, as retail
+does. Out-of-band messages are written and read whole bytes at a time and
+always sit on a boundary, so they come out the same.
 ==============================================================================
 */
 
 int oldsize = 0;
 
-void MSG_initHuffman( void );
-
 void MSG_Init( msg_t *buf, byte *data, int length ) {
-	if (!msgInit) {
-		MSG_initHuffman();
-	}
 	Com_Memset (buf, 0, sizeof(*buf));
 	buf->data = data;
 	buf->maxsize = length;
 }
 
 void MSG_InitOOB( msg_t *buf, byte *data, int length ) {
-	if (!msgInit) {
-		MSG_initHuffman();
-	}
 	Com_Memset (buf, 0, sizeof(*buf));
 	buf->data = data;
 	buf->maxsize = length;
@@ -63,7 +58,7 @@ void MSG_InitOOB( msg_t *buf, byte *data, int length ) {
 void MSG_Clear( msg_t *buf ) {
 	buf->cursize = 0;
 	buf->overflowed = qfalse;
-	buf->bit = 0;					//<- in bits
+	buf->bit = 0;
 }
 
 
@@ -103,7 +98,8 @@ bit functions
 
 // negative bit values include signs
 void MSG_WriteBits( msg_t *msg, int value, int bits ) {
-	int	i;
+	int				put;
+	unsigned int	v;
 
 	oldsize += bits;
 
@@ -128,56 +124,45 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 		if ( bits == 8 ) {
 			msg->data[msg->cursize] = value;
 			msg->cursize += 1;
-			msg->bit += 8;
 		} else if ( bits == 16 ) {
 			short temp = value;
 
 			CopyLittleShort( &msg->data[msg->cursize], &temp );
 			msg->cursize += 2;
-			msg->bit += 16;
 		} else if ( bits==32 ) {
 			CopyLittleLong( &msg->data[msg->cursize], &value );
 			msg->cursize += 4;
-			msg->bit += 32;
 		} else {
 			Com_Error( ERR_DROP, "can't write %d bits", bits );
 		}
 	} else {
-		value &= (0xffffffff >> (32 - bits));
-		if ( bits&7 ) {
-			int nbits;
-			nbits = bits&7;
-			if ( msg->bit + nbits >= msg->maxsize << 3 ) {
-				msg->overflowed = qtrue;
-				return;
-			}
-			for( i = 0; i < nbits; i++ ) {
-				Huff_putBit( (value & 1), msg->data, &msg->bit );
-				value = (value >> 1);
-			}
-			bits = bits - nbits;
-		}
-		if ( bits ) {
-			for( i = 0; i < bits; i += 8 ) {
-				Huff_offsetTransmit( &msgHuff.compressor, (value & 0xff), msg->data, &msg->bit, msg->maxsize << 3 );
-				value = (value >> 8);
-
-				if ( msg->bit >= msg->maxsize << 3 ) {
+		v = (unsigned int)value;
+		while ( bits ) {
+			if ( msg->bit == 0 ) {
+				if ( msg->cursize >= msg->maxsize ) {
 					msg->overflowed = qtrue;
 					return;
 				}
+				msg->data[msg->cursize++] = 0;
 			}
+			put = 8 - msg->bit;
+			if ( put > bits ) {
+				put = bits;
+			}
+			msg->data[msg->cursize - 1] |= ( v & ( ( 1u << put ) - 1 ) ) << msg->bit;
+			v >>= put;
+			msg->bit = ( msg->bit + put ) & 7;
+			bits -= put;
 		}
-		msg->cursize = (msg->bit >> 3) + 1;
 	}
 }
 
 int MSG_ReadBits( msg_t *msg, int bits ) {
-	int			value;
-	int			get;
-	qboolean	sgn;
-	int			i, nbits;
-//	FILE*	fp;
+	int				value;
+	int				get;
+	qboolean		sgn;
+	int				i;
+	unsigned int	v;
 
 	if ( msg->readcount > msg->cursize ) {
 		return 0;
@@ -202,53 +187,40 @@ int MSG_ReadBits( msg_t *msg, int bits ) {
 		{
 			value = msg->data[msg->readcount];
 			msg->readcount += 1;
-			msg->bit += 8;
 		}
 		else if(bits==16)
 		{
 			short temp;
-			
+
 			CopyLittleShort(&temp, &msg->data[msg->readcount]);
 			value = temp;
 			msg->readcount += 2;
-			msg->bit += 16;
 		}
 		else if(bits==32)
 		{
 			CopyLittleLong(&value, &msg->data[msg->readcount]);
 			msg->readcount += 4;
-			msg->bit += 32;
 		}
 		else
 			Com_Error(ERR_DROP, "can't read %d bits", bits);
 	} else {
-		nbits = 0;
-		if (bits&7) {
-			nbits = bits&7;
-			if (msg->bit + nbits > msg->cursize << 3) {
-				msg->readcount = msg->cursize + 1;
-				return 0;
-			}
-			for(i=0;i<nbits;i++) {
-				value |= (Huff_getBit(msg->data, &msg->bit)<<i);
-			}
-			bits = bits - nbits;
-		}
-		if (bits) {
-//			fp = fopen("c:\\netchan.bin", "a");
-			for(i=0;i<bits;i+=8) {
-				Huff_offsetReceive (msgHuff.decompressor.tree, &get, msg->data, &msg->bit, msg->cursize<<3);
-//				fwrite(&get, 1, 1, fp);
-				value = (unsigned int)value | ((unsigned int)get<<(i+nbits));
-
-				if (msg->bit > msg->cursize<<3) {
+		v = 0;
+		for ( i = 0 ; i < bits ; i += get ) {
+			if ( msg->bit == 0 ) {
+				if ( msg->readcount >= msg->cursize ) {
 					msg->readcount = msg->cursize + 1;
 					return 0;
 				}
+				msg->readcount++;
 			}
-//			fclose(fp);
+			get = 8 - msg->bit;
+			if ( get > bits - i ) {
+				get = bits - i;
+			}
+			v |= ( ( (unsigned int)msg->data[msg->readcount - 1] >> msg->bit ) & ( ( 1u << get ) - 1 ) ) << i;
+			msg->bit = ( msg->bit + get ) & 7;
 		}
-		msg->readcount = (msg->bit>>3)+1;
+		value = (int)v;
 	}
 	if ( sgn && bits > 0 && bits < 32 ) {
 		if ( value & ( 1 << ( bits - 1 ) ) ) {
@@ -285,8 +257,32 @@ void MSG_WriteByte( msg_t *sb, int c ) {
 	MSG_WriteBits( sb, c, 8 );
 }
 
+// Moves a bitstream to the next byte boundary as retail does (MSG_GetSpace
+// 0x439370): past the byte begun and one more, which is left 0.
+static void MSG_AlignWrite( msg_t *msg ) {
+	if ( msg->oob || !msg->bit ) {
+		return;
+	}
+	msg->bit = 0;
+	if ( msg->cursize >= msg->maxsize ) {
+		msg->overflowed = qtrue;
+		return;
+	}
+	msg->data[msg->cursize++] = 0;
+}
+
+// The reader's side of MSG_AlignWrite (0x439350)
+static void MSG_AlignRead( msg_t *msg ) {
+	if ( msg->oob || !msg->bit ) {
+		return;
+	}
+	msg->bit = 0;
+	msg->readcount++;
+}
+
 void MSG_WriteData( msg_t *buf, const void *data, int length ) {
 	int i;
+	MSG_AlignWrite( buf );
 	for(i=0;i<length;i++) {
 		MSG_WriteByte(buf, ((byte *)data)[i]);
 	}
@@ -401,11 +397,9 @@ int MSG_ReadByte( msg_t *msg ) {
 }
 
 int MSG_LookaheadByte( msg_t *msg ) {
-	const int bloc = Huff_getBloc();
 	const int readcount = msg->readcount;
 	const int bit = msg->bit;
 	int c = MSG_ReadByte(msg);
-	Huff_setBloc(bloc);
 	msg->readcount = readcount;
 	msg->bit = bit;
 	return c;
@@ -448,6 +442,7 @@ char *MSG_ReadString( msg_t *msg ) {
 	static char	string[MAX_STRING_CHARS];
 	int		l,c;
 	
+	MSG_AlignRead( msg );
 	l = 0;
 	do {
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
@@ -478,6 +473,7 @@ char *MSG_ReadBigString( msg_t *msg ) {
 	static char	string[BIG_INFO_STRING];
 	int		l,c;
 	
+	MSG_AlignRead( msg );
 	l = 0;
 	do {
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
@@ -508,6 +504,7 @@ char *MSG_ReadStringLine( msg_t *msg ) {
 	static char	string[MAX_STRING_CHARS];
 	int		l,c;
 
+	MSG_AlignRead( msg );
 	l = 0;
 	do {
 		c = MSG_ReadByte(msg);		// use ReadByte so -1 is out of bounds
@@ -541,6 +538,7 @@ float MSG_ReadAngle16( msg_t *msg ) {
 void MSG_ReadData( msg_t *msg, void *data, int len ) {
 	int		i;
 
+	MSG_AlignRead( msg );
 	for (i=0 ; i<len ; i++) {
 		((byte *)data)[i] = MSG_ReadByte (msg);
 	}
@@ -716,22 +714,6 @@ entityState_t communication
 =============================================================================
 */
 
-/*
-=================
-MSG_ReportChangeVectors_f
-
-Prints out a table from the current statistics for copying to code
-=================
-*/
-void MSG_ReportChangeVectors_f( void ) {
-	int i;
-	for(i=0;i<256;i++) {
-		if (pcount[i]) {
-			Com_Printf("%d used %d\n", i, pcount[i]);
-		}
-	}
-}
-
 typedef struct {
 	char	*name;
 	int		offset;
@@ -743,11 +725,12 @@ typedef struct {
 
 netField_t	entityStateFields[] =
 {
-// The wire layout is OpenFAKK2's own: the retail 1.02 protocol is not
-// documented, and FAKK2 has no multiplayer to stay compatible with. Fields the
-// SDK marks "not sent over" (bone_quat, bindparent, quat, mat) are omitted, and
-// so are origin and angles, which the reader takes from netorigin and netangles
-// as retail does.
+// FAKK2: the retail engine's fields, order and widths (fakk2.exe 0x4ea228).
+// Fields the SDK marks "not sent over" (bone_quat, bindparent, quat, mat) are
+// left out, and so are origin and angles, which the reader takes from
+// netorigin and netangles as retail does. surfaces follows separately.
+{ NETF(eType), 8 },
+{ NETF(eFlags), 16 },
 { NETF(pos.trType), 8 },
 { NETF(pos.trTime), 32 },
 { NETF(pos.trDuration), 32 },
@@ -775,31 +758,29 @@ netField_t	entityStateFields[] =
 { NETF(netangles[0]), 0 },
 { NETF(netangles[1]), 0 },
 { NETF(netangles[2]), 0 },
-{ NETF(eType), 8 },
-{ NETF(eFlags), 32 },
 { NETF(constantLight), 32 },
 { NETF(loopSound), 16 },
 { NETF(loopSoundVolume), 0 },
 { NETF(loopSoundMinDist), 0 },
-{ NETF(parent), 32 },
-{ NETF(tag_num), 32 },
+{ NETF(parent), 16 },
+{ NETF(tag_num), 10 },
 { NETF(attach_use_angles), 1 },
 { NETF(attach_offset[0]), 0 },
 { NETF(attach_offset[1]), 0 },
 { NETF(attach_offset[2]), 0 },
 { NETF(modelindex), 16 },
-{ NETF(skinNum), 32 },
-{ NETF(anim), 32 },
-{ NETF(frame), 32 },
-{ NETF(crossblend_time), 32 },
-{ NETF(torso_anim), 32 },
-{ NETF(torso_frame), 32 },
-{ NETF(torso_crossblend_time), 32 },
-{ NETF(bone_tag[0]), 32 },
-{ NETF(bone_tag[1]), 32 },
-{ NETF(bone_tag[2]), 32 },
-{ NETF(bone_tag[3]), 32 },
-{ NETF(bone_tag[4]), 32 },
+{ NETF(skinNum), 16 },
+{ NETF(anim), 11 },
+{ NETF(frame), 10 },
+{ NETF(crossblend_time), -16 },
+{ NETF(torso_anim), 11 },
+{ NETF(torso_frame), 10 },
+{ NETF(torso_crossblend_time), -16 },
+{ NETF(bone_tag[0]), -8 },
+{ NETF(bone_tag[1]), -8 },
+{ NETF(bone_tag[2]), -8 },
+{ NETF(bone_tag[3]), -8 },
+{ NETF(bone_tag[4]), -8 },
 { NETF(bone_angles[0][0]), 0 },
 { NETF(bone_angles[0][1]), 0 },
 { NETF(bone_angles[0][2]), 0 },
@@ -815,29 +796,144 @@ netField_t	entityStateFields[] =
 { NETF(bone_angles[4][0]), 0 },
 { NETF(bone_angles[4][1]), 0 },
 { NETF(bone_angles[4][2]), 0 },
-// surfaces is a byte array; it is sent four entries at a time because every
-// field here is read and written through an int
-{ NETF(surfaces[0]), 32 },
-{ NETF(surfaces[4]), 32 },
-{ NETF(surfaces[8]), 32 },
-{ NETF(surfaces[12]), 32 },
-{ NETF(surfaces[16]), 32 },
-{ NETF(surfaces[20]), 32 },
-{ NETF(surfaces[24]), 32 },
-{ NETF(surfaces[28]), 32 },
 { NETF(clientNum), 8 },
 { NETF(groundEntityNum), GENTITYNUM_BITS },
-{ NETF(solid), 24 },
+{ NETF(solid), 32 },
 { NETF(scale), 0 },
 { NETF(alpha), 0 },
 { NETF(renderfx), 32 }
 };
 
+// Which fields changed goes as a bit per field of entityStateFields, or as the
+// index of one of these common masks when it is one of them (fakk2.exe
+// 0x4e6220); index 31 means the mask itself follows.
+#define	CHANGE_VECTOR_BYTES		10
+#define	NUM_CHANGE_VECTORS		31
+#define	CHANGE_VECTOR_BITS		5
+
+static const byte changeVectors[NUM_CHANGE_VECTORS][CHANGE_VECTOR_BYTES] =
+{
+	{ 0xe0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe1, 0x00, 0x00, 0x0e, 0x04, 0x20, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe0, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0xc0, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe0, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x80, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xed, 0x07, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0xc0, 0x00, 0x00, 0x00, 0x10, 0x02, 0x00, 0x00, 0x00 },
+	{ 0xa0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xed, 0x07, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xc0, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x80, 0x00, 0x00, 0x00, 0x10, 0x02, 0x00, 0x00, 0x00 },
+	{ 0x60, 0xc0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe0, 0xc0, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x00, 0x00, 0x00, 0x00, 0x10, 0x02, 0x00, 0x00, 0x00 },
+	{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe0, 0xc0, 0x00, 0x00, 0x00, 0x10, 0x02, 0x00, 0x00, 0x00 },
+	{ 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x60, 0x80, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0xe1, 0x00, 0x00, 0x0e, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+	{ 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+};
+
+// masks read as an index and read in full (fakk2.exe 0xacc1c0, 0xacc1c4)
+static int	vectorsCompressed, vectorsUncompressed;
+
+/*
+=================
+MSG_ReportChangeVectors_f
+
+What retail's changeVectors prints (fakk2.exe 0x439b80): its search for new
+common masks was compiled out.
+=================
+*/
+void MSG_ReportChangeVectors_f( void ) {
+	int		total = vectorsCompressed + vectorsUncompressed;
+
+	Com_Printf( "FIND_NEW_CHANGE_VECTORS not defined.\n" );
+	Com_Printf( "%i%% of vectors compressed\n", total ? vectorsCompressed * 100 / total : 0 );
+}
+
+/*
+=================
+MSG_GetNullEntityState
+
+The state a game state's baselines are written and read against (fakk2.exe
+0x43a220), not all zeros.
+=================
+*/
+void MSG_GetNullEntityState( entityState_t *nullState ) {
+	int		i;
+
+	Com_Memset( nullState, 0, sizeof( *nullState ) );
+	nullState->alpha = 1.0f;
+	nullState->scale = 1.0f;
+	nullState->parent = ENTITYNUM_NONE;
+	nullState->constantLight = 0xffffff;
+	nullState->renderfx = 16;
+	for ( i = 0 ; i < NUM_BONE_CONTROLLERS ; i++ ) {
+		nullState->bone_tag[i] = -1;
+	}
+}
 
 // if (int)f == f and (int)f + ( 1<<(FLOAT_INT_BITS-1) ) < ( 1 << FLOAT_INT_BITS )
 // the float will be sent with FLOAT_INT_BITS, otherwise all 32 bits will be sent
 #define	FLOAT_INT_BITS	13
 #define	FLOAT_INT_BIAS	(1<<(FLOAT_INT_BITS-1))
+
+// One changed field: an integer in its bits, or a float as a bit and then 13
+// bits of integral value or all 32 (fakk2.exe 0x439d7c)
+static void MSG_WriteNetField( msg_t *msg, const netField_t *field, const int *toF ) {
+	float	fullFloat;
+	int		trunc;
+
+	if ( field->bits ) {
+		MSG_WriteBits( msg, *toF, field->bits );
+		return;
+	}
+	fullFloat = *(const float *)toF;
+	trunc = (int)fullFloat;
+	if ( trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 &&
+		trunc + FLOAT_INT_BIAS < ( 1 << FLOAT_INT_BITS ) ) {
+		MSG_WriteBits( msg, 0, 1 );
+		MSG_WriteBits( msg, trunc + FLOAT_INT_BIAS, FLOAT_INT_BITS );
+	} else {
+		MSG_WriteBits( msg, 1, 1 );
+		MSG_WriteBits( msg, *toF, 32 );
+	}
+}
+
+static void MSG_ReadNetField( msg_t *msg, const netField_t *field, int *toF, qboolean print ) {
+	int		trunc;
+
+	if ( field->bits ) {
+		*toF = MSG_ReadBits( msg, field->bits );
+		if ( print ) {
+			Com_Printf( "%s:%i ", field->name, *toF );
+		}
+	} else if ( MSG_ReadBits( msg, 1 ) == 0 ) {
+		trunc = MSG_ReadBits( msg, FLOAT_INT_BITS ) - FLOAT_INT_BIAS;
+		*(float *)toF = trunc;
+		if ( print ) {
+			Com_Printf( "%s:%i ", field->name, trunc );
+		}
+	} else {
+		*toF = MSG_ReadBits( msg, 32 );
+		if ( print ) {
+			Com_Printf( "%s:%f ", field->name, *(float *)toF );
+		}
+	}
+}
 
 /*
 ==================
@@ -850,17 +946,16 @@ If force is not set, then nothing at all will be generated if the entity is
 identical, under the assumption that the in-order delta code will catch it.
 ==================
 */
-void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entityState_s *to, 
+void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entityState_s *to,
 						   qboolean force ) {
-	int			i, lc;
+	int			i, vector;
 	int			numFields;
 	netField_t	*field;
-	int			trunc;
-	float		fullFloat;
 	int			*fromF, *toF;
+	byte		changes[CHANGE_VECTOR_BYTES];
+	unsigned	surfaces;
 
 	numFields = ARRAY_LEN( entityStateFields );
-
 
 	// a NULL to is a delta remove message
 	if ( to == NULL ) {
@@ -876,17 +971,24 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 		Com_Error (ERR_FATAL, "MSG_WriteDeltaEntity: Bad entity number: %i", to->number );
 	}
 
-	lc = 0;
-	// build the change vector as bytes so it is endien independent
+	Com_Memset( changes, 0, sizeof( changes ) );
 	for ( i = 0, field = entityStateFields ; i < numFields ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
 		if ( *fromF != *toF ) {
-			lc = i+1;
+			changes[i >> 3] |= 1 << ( i & 7 );
+		}
+	}
+	surfaces = 0;
+	for ( i = 0 ; i < MAX_MODEL_SURFACES ; i++ ) {
+		if ( from->surfaces[i] != to->surfaces[i] ) {
+			surfaces |= 1u << i;
 		}
 	}
 
-	if ( lc == 0 ) {
+	for ( i = 0 ; i < CHANGE_VECTOR_BYTES && !changes[i] ; i++ ) {
+	}
+	if ( i == CHANGE_VECTOR_BYTES && !surfaces ) {
 		// nothing at all changed
 		if ( !force ) {
 			return;		// nothing at all
@@ -898,54 +1000,41 @@ void MSG_WriteDeltaEntity( msg_t *msg, struct entityState_s *from, struct entity
 		return;
 	}
 
+	for ( vector = 0 ; vector < NUM_CHANGE_VECTORS ; vector++ ) {
+		if ( !memcmp( changes, changeVectors[vector], CHANGE_VECTOR_BYTES ) ) {
+			break;
+		}
+	}
+
 	MSG_WriteBits( msg, to->number, GENTITYNUM_BITS );
 	MSG_WriteBits( msg, 0, 1 );			// not removed
 	MSG_WriteBits( msg, 1, 1 );			// we have a delta
-
-	MSG_WriteByte( msg, lc );	// # of changes
+	MSG_WriteBits( msg, vector, CHANGE_VECTOR_BITS );
+	if ( vector == NUM_CHANGE_VECTORS ) {
+		// not a common one: the mask itself, a byte at a time and the last bit
+		for ( i = 0 ; i + 8 <= numFields ; i += 8 ) {
+			MSG_WriteByte( msg, changes[i >> 3] );
+		}
+		MSG_WriteBits( msg, changes[i >> 3], numFields - i );
+	}
 
 	oldsize += numFields;
 
-	for ( i = 0, field = entityStateFields ; i < lc ; i++, field++ ) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-
-		if ( *fromF == *toF ) {
-			MSG_WriteBits( msg, 0, 1 );	// no change
-			continue;
+	for ( i = 0, field = entityStateFields ; i < numFields ; i++, field++ ) {
+		if ( changes[i >> 3] & ( 1 << ( i & 7 ) ) ) {
+			MSG_WriteNetField( msg, field, (int *)( (byte *)to + field->offset ) );
 		}
+	}
 
-		MSG_WriteBits( msg, 1, 1 );	// changed
-
-		if ( field->bits == 0 ) {
-			// float
-			fullFloat = *(float *)toF;
-			trunc = (int)fullFloat;
-
-			if (fullFloat == 0.0f) {
-					MSG_WriteBits( msg, 0, 1 );
-					oldsize += FLOAT_INT_BITS;
-			} else {
-				MSG_WriteBits( msg, 1, 1 );
-				if ( trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 && 
-					trunc + FLOAT_INT_BIAS < ( 1 << FLOAT_INT_BITS ) ) {
-					// send as small integer
-					MSG_WriteBits( msg, 0, 1 );
-					MSG_WriteBits( msg, trunc + FLOAT_INT_BIAS, FLOAT_INT_BITS );
-				} else {
-					// send as full floating point value
-					MSG_WriteBits( msg, 1, 1 );
-					MSG_WriteBits( msg, *toF, 32 );
-				}
-			}
-		} else {
-			if (*toF == 0) {
-				MSG_WriteBits( msg, 0, 1 );
-			} else {
-				MSG_WriteBits( msg, 1, 1 );
-				// integer
-				MSG_WriteBits( msg, *toF, field->bits );
-			}
+	if ( !surfaces ) {
+		MSG_WriteBits( msg, 0, 1 );
+		return;
+	}
+	MSG_WriteBits( msg, 1, 1 );
+	MSG_WriteLong( msg, (int)surfaces );
+	for ( i = 0 ; i < MAX_MODEL_SURFACES ; i++ ) {
+		if ( surfaces & ( 1u << i ) ) {
+			MSG_WriteByte( msg, to->surfaces[i] );
 		}
 	}
 }
@@ -962,29 +1051,23 @@ If the delta removes the entity, entityState_t->number will be set to MAX_GENTIT
 Can go from either a baseline or a previous packet_entity
 ==================
 */
-void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to, 
+void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 						 int number) {
-	int			i, lc;
+	int			i, vector;
 	int			numFields;
 	netField_t	*field;
-	int			*fromF, *toF;
 	int			print;
-	int			trunc;
-	int			startBit, endBit;
+	unsigned	surfaces;
+	byte		explicitChanges[CHANGE_VECTOR_BYTES];
+	const byte	*changes;
 
 	if ( number < 0 || number >= MAX_GENTITIES) {
 		Com_Error( ERR_DROP, "Bad delta entity number: %i", number );
 	}
 
-	if ( msg->bit == 0 ) {
-		startBit = msg->readcount * 8 - GENTITYNUM_BITS;
-	} else {
-		startBit = ( msg->readcount - 1 ) * 8 + msg->bit - GENTITYNUM_BITS;
-	}
-
 	// check for a remove
 	if ( MSG_ReadBits( msg, 1 ) == 1 ) {
-		Com_Memset( to, 0, sizeof( *to ) );	
+		Com_Memset( to, 0, sizeof( *to ) );
 		to->number = MAX_GENTITIES - 1;
 		if ( cl_shownet && ( cl_shownet->integer >= 2 || cl_shownet->integer == -1 ) ) {
 			Com_Printf( "%3i: #%-3i remove\n", msg->readcount, number );
@@ -999,73 +1082,52 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 		return;
 	}
 
-	numFields = ARRAY_LEN( entityStateFields );
-	lc = MSG_ReadByte(msg);
-
-	if ( lc > numFields || lc < 0 ) {
-		Com_Error( ERR_DROP, "invalid entityState field count" );
-	}
-
 	// shownet 2/3 will interleave with other printed info, -1 will
 	// just print the delta records`
 	if ( cl_shownet && ( cl_shownet->integer >= 2 || cl_shownet->integer == -1 ) ) {
 		print = 1;
-		Com_Printf( "%3i: #%-3i ", msg->readcount, to->number );
+		Com_Printf( "%3i: #%-3i ", msg->readcount, number );
 	} else {
 		print = 0;
 	}
 
-	to->number = number;
-
-	for ( i = 0, field = entityStateFields ; i < lc ; i++, field++ ) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-
-		if ( ! MSG_ReadBits( msg, 1 ) ) {
-			// no change
-			*toF = *fromF;
-		} else {
-			if ( field->bits == 0 ) {
-				// float
-				if ( MSG_ReadBits( msg, 1 ) == 0 ) {
-						*(float *)toF = 0.0f; 
-				} else {
-					if ( MSG_ReadBits( msg, 1 ) == 0 ) {
-						// integral float
-						trunc = MSG_ReadBits( msg, FLOAT_INT_BITS );
-						// bias to allow equal parts positive and negative
-						trunc -= FLOAT_INT_BIAS;
-						*(float *)toF = trunc; 
-						if ( print ) {
-							Com_Printf( "%s:%i ", field->name, trunc );
-						}
-					} else {
-						// full floating point value
-						*toF = MSG_ReadBits( msg, 32 );
-						if ( print ) {
-							Com_Printf( "%s:%f ", field->name, *(float *)toF );
-						}
-					}
-				}
-			} else {
-				if ( MSG_ReadBits( msg, 1 ) == 0 ) {
-					*toF = 0;
-				} else {
-					// integer
-					*toF = MSG_ReadBits( msg, field->bits );
-					if ( print ) {
-						Com_Printf( "%s:%i ", field->name, *toF );
-					}
-				}
-			}
-//			pcount[i]++;
+	numFields = ARRAY_LEN( entityStateFields );
+	vector = MSG_ReadBits( msg, CHANGE_VECTOR_BITS );
+	if ( vector == NUM_CHANGE_VECTORS ) {
+		vectorsUncompressed++;
+		Com_Memset( explicitChanges, 0, sizeof( explicitChanges ) );
+		for ( i = 0 ; i + 8 <= numFields ; i += 8 ) {
+			explicitChanges[i >> 3] = MSG_ReadByte( msg );
+		}
+		explicitChanges[i >> 3] = MSG_ReadBits( msg, numFields - i );
+		changes = explicitChanges;
+		if ( print ) {
+			Com_Printf( "<uc> " );
+		}
+	} else {
+		vectorsCompressed++;
+		changes = changeVectors[vector];
+		if ( print ) {
+			Com_Printf( "<%2i> ", vector );
 		}
 	}
-	for ( i = lc, field = &entityStateFields[lc] ; i < numFields ; i++, field++ ) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-		// no change
-		*toF = *fromF;
+
+	*to = *from;
+	to->number = number;
+
+	for ( i = 0, field = entityStateFields ; i < numFields ; i++, field++ ) {
+		if ( changes[i >> 3] & ( 1 << ( i & 7 ) ) ) {
+			MSG_ReadNetField( msg, field, (int *)( (byte *)to + field->offset ), print );
+		}
+	}
+
+	if ( MSG_ReadBits( msg, 1 ) ) {
+		surfaces = MSG_ReadLong( msg );
+		for ( i = 0 ; i < MAX_MODEL_SURFACES ; i++ ) {
+			if ( surfaces & ( 1u << i ) ) {
+				to->surfaces[i] = MSG_ReadByte( msg );
+			}
+		}
 	}
 
 	// FAKK2 (fakk2.exe 0x439e70): the fields that travel are the net ones, and
@@ -1080,12 +1142,7 @@ void MSG_ReadDeltaEntity( msg_t *msg, entityState_t *from, entityState_t *to,
 	}
 
 	if ( print ) {
-		if ( msg->bit == 0 ) {
-			endBit = msg->readcount * 8 - GENTITYNUM_BITS;
-		} else {
-			endBit = ( msg->readcount - 1 ) * 8 + msg->bit - GENTITYNUM_BITS;
-		}
-		Com_Printf( " (%i bits)\n", endBit - startBit  );
+		Com_Printf( "\n" );
 	}
 }
 
@@ -1103,14 +1160,14 @@ plyer_state_t communication
 
 netField_t	playerStateFields[] =
 {
-// See entityStateFields: the wire layout is OpenFAKK2's own. groundTrace and
-// ping are server-local and not sent.
+// FAKK2: the retail engine's fields, order and widths (fakk2.exe 0x4ea598).
+// walking, groundPlane, falldir, groundTrace and ping are not sent.
 { PSF(commandTime), 32 },
 { PSF(pm_type), 8 },
 { PSF(bobCycle), 8 },
-{ PSF(pm_flags), 32 },
+{ PSF(pm_flags), 16 },
 { PSF(pm_time), -16 },
-{ PSF(pm_runtime), 32 },
+{ PSF(pm_runtime), -16 },
 { PSF(origin[0]), 0 },
 { PSF(origin[1]), 0 },
 { PSF(origin[2]), 0 },
@@ -1123,12 +1180,7 @@ netField_t	playerStateFields[] =
 { PSF(delta_angles[1]), 16 },
 { PSF(delta_angles[2]), 16 },
 { PSF(groundEntityNum), GENTITYNUM_BITS },
-{ PSF(walking), 1 },
-{ PSF(groundPlane), 1 },
-{ PSF(feetfalling), 32 },
-{ PSF(falldir[0]), 0 },
-{ PSF(falldir[1]), 0 },
-{ PSF(falldir[2]), 0 },
+{ PSF(feetfalling), 8 },
 { PSF(clientNum), 8 },
 { PSF(viewangles[0]), 0 },
 { PSF(viewangles[1]), 0 },
@@ -1138,61 +1190,61 @@ netField_t	playerStateFields[] =
 { PSF(fallback_music_mood), 8 },
 { PSF(music_volume), 0 },
 { PSF(music_volume_fade_time), 0 },
-{ PSF(reverb_type), 8 },
+{ PSF(reverb_type), 6 },
 { PSF(reverb_level), 0 },
 { PSF(blend[0]), 0 },
 { PSF(blend[1]), 0 },
 { PSF(blend[2]), 0 },
 { PSF(blend[3]), 0 },
 { PSF(fov), 0 },
-{ PSF(camera_origin[0]), 0 },
-{ PSF(camera_origin[1]), 0 },
-{ PSF(camera_origin[2]), 0 },
 { PSF(camera_angles[0]), 0 },
 { PSF(camera_angles[1]), 0 },
 { PSF(camera_angles[2]), 0 },
-{ PSF(camera_time), 0 },
+{ PSF(camera_origin[0]), 0 },
+{ PSF(camera_origin[1]), 0 },
+{ PSF(camera_origin[2]), 0 },
 { PSF(camera_offset[0]), 0 },
 { PSF(camera_offset[1]), 0 },
 { PSF(camera_offset[2]), 0 },
 { PSF(damage_angles[0]), 0 },
 { PSF(damage_angles[1]), 0 },
 { PSF(damage_angles[2]), 0 },
-{ PSF(camera_flags), 32 }
+{ PSF(camera_time), 0 },
+{ PSF(camera_flags), 16 }
 };
 
-// playerState_t arrays, each PS_ARRAY_LEN ints, sent as a change mask followed
-// by the changed values
+// playerState_t arrays, each PS_ARRAY_LEN ints, sent as a bit, then when one
+// changed a 32-bit mask and a short for each change (fakk2.exe 0x43a37e)
 #define	PS_ARRAY_LEN	32
-#define	PSA(x) (size_t)&((playerState_t*)0)->x[0]
+#define	PSA(x) (size_t)&((playerState_t*)0)->x[0], #x
 
-static const size_t playerStateArrays[] =
+static const struct {
+	size_t		offset;
+	const char	*name;
+} playerStateArrays[] =
 {
-	PSA(stats),
-	PSA(activeItems),
-	PSA(inventory_name_index),
-	PSA(ammo_name_index),
-	PSA(ammo_amount),
-	PSA(max_ammo_amount)
+	{ PSA(stats) },
+	{ PSA(activeItems) },
+	{ PSA(inventory_name_index) },
+	{ PSA(ammo_name_index) },
+	{ PSA(ammo_amount) },
+	{ PSA(max_ammo_amount) }
 };
 
 /*
 =============
 MSG_WriteDeltaPlayerstate
 
+fakk2.exe 0x43a280: a bit per field, then the arrays
 =============
 */
 void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct playerState_s *to ) {
-	int				i;
+	int				i, j;
 	playerState_t	dummy;
-	unsigned		arraybits[ARRAY_LEN( playerStateArrays )];
-	qboolean		anyChanged;
-	int				j;
 	int				numFields;
 	netField_t		*field;
 	int				*fromF, *toF;
-	float			fullFloat;
-	int				trunc, lc;
+	unsigned		changed;
 
 	if (!from) {
 		from = &dummy;
@@ -1201,20 +1253,7 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 
 	numFields = ARRAY_LEN( playerStateFields );
 
-	lc = 0;
 	for ( i = 0, field = playerStateFields ; i < numFields ; i++, field++ ) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-		if ( *fromF != *toF ) {
-			lc = i+1;
-		}
-	}
-
-	MSG_WriteByte( msg, lc );	// # of changes
-
-	oldsize += numFields - lc;
-
-	for ( i = 0, field = playerStateFields ; i < lc ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
 
@@ -1222,68 +1261,28 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 			MSG_WriteBits( msg, 0, 1 );	// no change
 			continue;
 		}
-
 		MSG_WriteBits( msg, 1, 1 );	// changed
-//		pcount[i]++;
-
-		if ( field->bits == 0 ) {
-			// float
-			fullFloat = *(float *)toF;
-			trunc = (int)fullFloat;
-
-			if ( trunc == fullFloat && trunc + FLOAT_INT_BIAS >= 0 && 
-				trunc + FLOAT_INT_BIAS < ( 1 << FLOAT_INT_BITS ) ) {
-				// send as small integer
-				MSG_WriteBits( msg, 0, 1 );
-				MSG_WriteBits( msg, trunc + FLOAT_INT_BIAS, FLOAT_INT_BITS );
-			} else {
-				// send as full floating point value
-				MSG_WriteBits( msg, 1, 1 );
-				MSG_WriteBits( msg, *toF, 32 );
-			}
-		} else {
-			// integer
-			MSG_WriteBits( msg, *toF, field->bits );
-		}
+		MSG_WriteNetField( msg, field, toF );
 	}
 
-
-	//
-	// send the arrays
-	//
-	anyChanged = qfalse;
 	for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
-		fromF = (int *)( (byte *)from + playerStateArrays[j] );
-		toF = (int *)( (byte *)to + playerStateArrays[j] );
-		arraybits[j] = 0;
+		fromF = (int *)( (byte *)from + playerStateArrays[j].offset );
+		toF = (int *)( (byte *)to + playerStateArrays[j].offset );
+		changed = 0;
 		for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
 			if ( toF[i] != fromF[i] ) {
-				arraybits[j] |= 1u << i;
+				changed |= 1u << i;
 			}
 		}
-		if ( arraybits[j] ) {
-			anyChanged = qtrue;
-		}
-	}
-
-	if ( !anyChanged ) {
-		MSG_WriteBits( msg, 0, 1 );	// no change
-		oldsize += 4;
-		return;
-	}
-	MSG_WriteBits( msg, 1, 1 );	// changed
-
-	for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
-		if ( !arraybits[j] ) {
+		if ( !changed ) {
 			MSG_WriteBits( msg, 0, 1 );	// no change
 			continue;
 		}
-		toF = (int *)( (byte *)to + playerStateArrays[j] );
 		MSG_WriteBits( msg, 1, 1 );	// changed
-		MSG_WriteBits( msg, (int)arraybits[j], PS_ARRAY_LEN );
+		MSG_WriteLong( msg, (int)changed );
 		for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
-			if ( arraybits[j] & ( 1u << i ) ) {
-				MSG_WriteLong( msg, toF[i] );
+			if ( changed & ( 1u << i ) ) {
+				MSG_WriteShort( msg, toF[i] );
 			}
 		}
 	}
@@ -1293,17 +1292,17 @@ void MSG_WriteDeltaPlayerstate( msg_t *msg, struct playerState_s *from, struct p
 /*
 ===================
 MSG_ReadDeltaPlayerstate
+
+fakk2.exe 0x43a680
 ===================
 */
 void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *to ) {
-	int			i, lc;
-	int			bits;
+	int			i, j;
 	netField_t	*field;
 	int			numFields;
-	int			startBit, endBit;
 	int			print;
-	int			*fromF, *toF;
-	int			trunc;
+	int			*toF;
+	unsigned	changed;
 	playerState_t	dummy;
 
 	if ( !from ) {
@@ -1311,12 +1310,6 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 		Com_Memset( &dummy, 0, sizeof( dummy ) );
 	}
 	*to = *from;
-
-	if ( msg->bit == 0 ) {
-		startBit = msg->readcount * 8 - GENTITYNUM_BITS;
-	} else {
-		startBit = ( msg->readcount - 1 ) * 8 + msg->bit - GENTITYNUM_BITS;
-	}
 
 	// shownet 2/3 will interleave with other printed info, -2 will
 	// just print the delta records
@@ -1328,389 +1321,29 @@ void MSG_ReadDeltaPlayerstate (msg_t *msg, playerState_t *from, playerState_t *t
 	}
 
 	numFields = ARRAY_LEN( playerStateFields );
-	lc = MSG_ReadByte(msg);
-
-	if ( lc > numFields || lc < 0 ) {
-		Com_Error( ERR_DROP, "invalid playerState field count" );
-	}
-
-	for ( i = 0, field = playerStateFields ; i < lc ; i++, field++ ) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-
-		if ( ! MSG_ReadBits( msg, 1 ) ) {
-			// no change
-			*toF = *fromF;
-		} else {
-			if ( field->bits == 0 ) {
-				// float
-				if ( MSG_ReadBits( msg, 1 ) == 0 ) {
-					// integral float
-					trunc = MSG_ReadBits( msg, FLOAT_INT_BITS );
-					// bias to allow equal parts positive and negative
-					trunc -= FLOAT_INT_BIAS;
-					*(float *)toF = trunc; 
-					if ( print ) {
-						Com_Printf( "%s:%i ", field->name, trunc );
-					}
-				} else {
-					// full floating point value
-					*toF = MSG_ReadBits( msg, 32 );
-					if ( print ) {
-						Com_Printf( "%s:%f ", field->name, *(float *)toF );
-					}
-				}
-			} else {
-				// integer
-				*toF = MSG_ReadBits( msg, field->bits );
-				if ( print ) {
-					Com_Printf( "%s:%i ", field->name, *toF );
-				}
-			}
+	for ( i = 0, field = playerStateFields ; i < numFields ; i++, field++ ) {
+		if ( MSG_ReadBits( msg, 1 ) ) {
+			MSG_ReadNetField( msg, field, (int *)( (byte *)to + field->offset ), print );
 		}
 	}
-	for ( i=lc,field = &playerStateFields[lc];i<numFields; i++, field++) {
-		fromF = (int *)( (byte *)from + field->offset );
-		toF = (int *)( (byte *)to + field->offset );
-		// no change
-		*toF = *fromF;
-	}
 
-
-	// read the arrays
-	if (MSG_ReadBits( msg, 1 ) ) {
-		int		j;
-
-		for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
-			if ( !MSG_ReadBits( msg, 1 ) ) {
-				continue;
-			}
-			LOG("PS_ARRAY");
-			toF = (int *)( (byte *)to + playerStateArrays[j] );
-			bits = MSG_ReadBits( msg, PS_ARRAY_LEN );
-			for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
-				if ( (unsigned)bits & ( 1u << i ) ) {
-					toF[i] = MSG_ReadLong( msg );
-				}
+	for ( j = 0 ; j < (int)ARRAY_LEN( playerStateArrays ) ; j++ ) {
+		if ( !MSG_ReadBits( msg, 1 ) ) {
+			continue;
+		}
+		LOG( playerStateArrays[j].name );
+		toF = (int *)( (byte *)to + playerStateArrays[j].offset );
+		changed = MSG_ReadLong( msg );
+		for ( i = 0 ; i < PS_ARRAY_LEN ; i++ ) {
+			if ( changed & ( 1u << i ) ) {
+				toF[i] = MSG_ReadShort( msg );
 			}
 		}
 	}
 
 	if ( print ) {
-		if ( msg->bit == 0 ) {
-			endBit = msg->readcount * 8 - GENTITYNUM_BITS;
-		} else {
-			endBit = ( msg->readcount - 1 ) * 8 + msg->bit - GENTITYNUM_BITS;
-		}
-		Com_Printf( " (%i bits)\n", endBit - startBit  );
+		Com_Printf( "\n" );
 	}
 }
-
-int msg_hData[256] = {
-250315,			// 0
-41193,			// 1
-6292,			// 2
-7106,			// 3
-3730,			// 4
-3750,			// 5
-6110,			// 6
-23283,			// 7
-33317,			// 8
-6950,			// 9
-7838,			// 10
-9714,			// 11
-9257,			// 12
-17259,			// 13
-3949,			// 14
-1778,			// 15
-8288,			// 16
-1604,			// 17
-1590,			// 18
-1663,			// 19
-1100,			// 20
-1213,			// 21
-1238,			// 22
-1134,			// 23
-1749,			// 24
-1059,			// 25
-1246,			// 26
-1149,			// 27
-1273,			// 28
-4486,			// 29
-2805,			// 30
-3472,			// 31
-21819,			// 32
-1159,			// 33
-1670,			// 34
-1066,			// 35
-1043,			// 36
-1012,			// 37
-1053,			// 38
-1070,			// 39
-1726,			// 40
-888,			// 41
-1180,			// 42
-850,			// 43
-960,			// 44
-780,			// 45
-1752,			// 46
-3296,			// 47
-10630,			// 48
-4514,			// 49
-5881,			// 50
-2685,			// 51
-4650,			// 52
-3837,			// 53
-2093,			// 54
-1867,			// 55
-2584,			// 56
-1949,			// 57
-1972,			// 58
-940,			// 59
-1134,			// 60
-1788,			// 61
-1670,			// 62
-1206,			// 63
-5719,			// 64
-6128,			// 65
-7222,			// 66
-6654,			// 67
-3710,			// 68
-3795,			// 69
-1492,			// 70
-1524,			// 71
-2215,			// 72
-1140,			// 73
-1355,			// 74
-971,			// 75
-2180,			// 76
-1248,			// 77
-1328,			// 78
-1195,			// 79
-1770,			// 80
-1078,			// 81
-1264,			// 82
-1266,			// 83
-1168,			// 84
-965,			// 85
-1155,			// 86
-1186,			// 87
-1347,			// 88
-1228,			// 89
-1529,			// 90
-1600,			// 91
-2617,			// 92
-2048,			// 93
-2546,			// 94
-3275,			// 95
-2410,			// 96
-3585,			// 97
-2504,			// 98
-2800,			// 99
-2675,			// 100
-6146,			// 101
-3663,			// 102
-2840,			// 103
-14253,			// 104
-3164,			// 105
-2221,			// 106
-1687,			// 107
-3208,			// 108
-2739,			// 109
-3512,			// 110
-4796,			// 111
-4091,			// 112
-3515,			// 113
-5288,			// 114
-4016,			// 115
-7937,			// 116
-6031,			// 117
-5360,			// 118
-3924,			// 119
-4892,			// 120
-3743,			// 121
-4566,			// 122
-4807,			// 123
-5852,			// 124
-6400,			// 125
-6225,			// 126
-8291,			// 127
-23243,			// 128
-7838,			// 129
-7073,			// 130
-8935,			// 131
-5437,			// 132
-4483,			// 133
-3641,			// 134
-5256,			// 135
-5312,			// 136
-5328,			// 137
-5370,			// 138
-3492,			// 139
-2458,			// 140
-1694,			// 141
-1821,			// 142
-2121,			// 143
-1916,			// 144
-1149,			// 145
-1516,			// 146
-1367,			// 147
-1236,			// 148
-1029,			// 149
-1258,			// 150
-1104,			// 151
-1245,			// 152
-1006,			// 153
-1149,			// 154
-1025,			// 155
-1241,			// 156
-952,			// 157
-1287,			// 158
-997,			// 159
-1713,			// 160
-1009,			// 161
-1187,			// 162
-879,			// 163
-1099,			// 164
-929,			// 165
-1078,			// 166
-951,			// 167
-1656,			// 168
-930,			// 169
-1153,			// 170
-1030,			// 171
-1262,			// 172
-1062,			// 173
-1214,			// 174
-1060,			// 175
-1621,			// 176
-930,			// 177
-1106,			// 178
-912,			// 179
-1034,			// 180
-892,			// 181
-1158,			// 182
-990,			// 183
-1175,			// 184
-850,			// 185
-1121,			// 186
-903,			// 187
-1087,			// 188
-920,			// 189
-1144,			// 190
-1056,			// 191
-3462,			// 192
-2240,			// 193
-4397,			// 194
-12136,			// 195
-7758,			// 196
-1345,			// 197
-1307,			// 198
-3278,			// 199
-1950,			// 200
-886,			// 201
-1023,			// 202
-1112,			// 203
-1077,			// 204
-1042,			// 205
-1061,			// 206
-1071,			// 207
-1484,			// 208
-1001,			// 209
-1096,			// 210
-915,			// 211
-1052,			// 212
-995,			// 213
-1070,			// 214
-876,			// 215
-1111,			// 216
-851,			// 217
-1059,			// 218
-805,			// 219
-1112,			// 220
-923,			// 221
-1103,			// 222
-817,			// 223
-1899,			// 224
-1872,			// 225
-976,			// 226
-841,			// 227
-1127,			// 228
-956,			// 229
-1159,			// 230
-950,			// 231
-7791,			// 232
-954,			// 233
-1289,			// 234
-933,			// 235
-1127,			// 236
-3207,			// 237
-1020,			// 238
-927,			// 239
-1355,			// 240
-768,			// 241
-1040,			// 242
-745,			// 243
-952,			// 244
-805,			// 245
-1073,			// 246
-740,			// 247
-1013,			// 248
-805,			// 249
-1008,			// 250
-796,			// 251
-996,			// 252
-1057,			// 253
-11457,			// 254
-13504,			// 255
-};
-
-void MSG_initHuffman( void ) {
-	int i,j;
-
-	msgInit = qtrue;
-	Huff_Init(&msgHuff);
-	for(i=0;i<256;i++) {
-		for (j=0;j<msg_hData[i];j++) {
-			Huff_addRef(&msgHuff.compressor,	(byte)i);			// Do update
-			Huff_addRef(&msgHuff.decompressor,	(byte)i);			// Do update
-		}
-	}
-}
-
-/*
-void MSG_NUinitHuffman() {
-	byte	*data;
-	int		size, i, ch;
-	int		array[256];
-
-	msgInit = qtrue;
-
-	Huff_Init(&msgHuff);
-	// load it in
-	size = FS_ReadFile( "netchan/netchan.bin", (void **)&data );
-
-	for(i=0;i<256;i++) {
-		array[i] = 0;
-	}
-	for(i=0;i<size;i++) {
-		ch = data[i];
-		Huff_addRef(&msgHuff.compressor,	ch);			// Do update
-		Huff_addRef(&msgHuff.decompressor,	ch);			// Do update
-		array[ch]++;
-	}
-	Com_Printf("msg_hData {\n");
-	for(i=0;i<256;i++) {
-		if (array[i] == 0) {
-			Huff_addRef(&msgHuff.compressor,	i);			// Do update
-			Huff_addRef(&msgHuff.decompressor,	i);			// Do update
-		}
-		Com_Printf("%d,			// %d\n", array[i], i);
-	}
-	Com_Printf("};\n");
-	FS_FreeFile( data );
-	Cbuf_AddText( "condump dump.txt\n" );
-}
-*/
 
 //===========================================================================

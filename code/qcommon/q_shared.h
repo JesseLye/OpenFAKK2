@@ -76,7 +76,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define MAX_TEAMNAME		32
 #define MAX_MASTER_SERVERS      5	// number of supported master servers
 
-#define DEMOEXT	"dm_"			// standard demo extension
+#define DEMOEXT	"dm3"			// FAKK2: retail's, with no protocol number (fakk2.exe 0x4e21b4)
 
 #ifdef _MSC_VER
 

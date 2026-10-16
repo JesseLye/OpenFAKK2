@@ -1,6 +1,7 @@
-"""Reads a demo recorded by the retail FAKK2 engine (demos/<name>.dm3) and prints what is
-in it, to check that the retail message format is understood (docs/known-differences.md,
-"Demos"). The format was read from fakk2.exe 1.02; the addresses are that file's.
+"""Reads a demo (demos/<name>.dm3) recorded by the retail FAKK2 engine or by OpenFAKK2,
+which writes the same messages, and prints what is in it (docs/known-differences.md,
+"Demos"). The format was read from fakk2.exe 1.02, apart from this file's code, so it
+checks what OpenFAKK2 writes; the addresses are that file's.
 
     python tools/retail-compare/dm3.py build/demos/retail-zoo.dm3 [-v]
 

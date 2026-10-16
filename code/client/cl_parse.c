@@ -33,11 +33,10 @@ char *svc_strings[256] = {
 	"svc_serverCommand",
 	"svc_download",
 	"svc_snapshot",
-	"svc_EOF",
-	"svc_voipSpeex",
-	"svc_voipOpus",
 	"svc_centerprint",
 	"svc_locprint",
+	"svc_voipSpeex",
+	"svc_voipOpus",
 };
 
 void SHOWNET( msg_t *msg, char *s) {
@@ -195,6 +194,49 @@ void CL_ParsePacketEntities( msg_t *msg, clSnapshot_t *oldframe, clSnapshot_t *n
 
 /*
 ================
+CL_ParseSounds
+
+The sounds the server started or stopped since its last snapshot (fakk2.exe
+0x43ac30). An origin, a volume and a minimum distance are each sent only when
+set: (0 0 0) and -1 otherwise.
+================
+*/
+static void CL_ParseSounds( msg_t *msg, clSnapshot_t *snap ) {
+	int		i;
+
+	snap->number_of_sounds = 0;
+	if ( !MSG_ReadBits( msg, 1 ) ) {
+		return;
+	}
+	snap->number_of_sounds = MSG_ReadBits( msg, MAX_SERVER_SOUNDS_BITS );
+	if ( snap->number_of_sounds > MAX_SERVER_SOUNDS ) {
+		Com_Error( ERR_DROP, "CL_ParseSnapshot: %i sounds", snap->number_of_sounds );
+	}
+	for ( i = 0 ; i < snap->number_of_sounds ; i++ ) {
+		server_sound_t	*sound = &snap->sounds[i];
+
+		Com_Memset( sound, 0, sizeof( *sound ) );
+		if ( MSG_ReadBits( msg, 1 ) ) {
+			sound->stop_flag = qtrue;
+			sound->entity_number = MSG_ReadBits( msg, GENTITYNUM_BITS );
+			sound->channel = MSG_ReadBits( msg, 6 );
+			continue;
+		}
+		if ( MSG_ReadBits( msg, 1 ) ) {
+			sound->origin[0] = MSG_ReadFloat( msg );
+			sound->origin[1] = MSG_ReadFloat( msg );
+			sound->origin[2] = MSG_ReadFloat( msg );
+		}
+		sound->entity_number = MSG_ReadBits( msg, GENTITYNUM_BITS );
+		sound->channel = MSG_ReadBits( msg, 6 );
+		sound->sound_index = MSG_ReadBits( msg, 8 );
+		sound->volume = MSG_ReadBits( msg, 1 ) ? MSG_ReadFloat( msg ) : -1.0f;
+		sound->min_dist = MSG_ReadBits( msg, 1 ) ? MSG_ReadFloat( msg ) : -1.0f;
+	}
+}
+
+/*
+================
 CL_ParseSnapshot
 
 If the snapshot is parsed properly, it will be copied to
@@ -210,9 +252,13 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	int			oldMessageNum;
 	int			i, packetNum;
 
-	// get the reliable sequence acknowledge number
-	// NOTE: now sent with all server to client messages
-	//clc.reliableAcknowledge = MSG_ReadLong( msg );
+	// get the reliable sequence acknowledge number. FAKK2: it comes here,
+	// at the head of the snapshot, as in the retail engine (CL_ParseSnapshot
+	// 0x423820); ioquake3 sends it at the head of every message.
+	clc.reliableAcknowledge = MSG_ReadLong( msg );
+	if ( clc.reliableAcknowledge < clc.reliableSequence - MAX_RELIABLE_COMMANDS ) {
+		clc.reliableAcknowledge = clc.reliableSequence;
+	}
 
 	// read in the new snapshot to a temporary buffer
 	// we will only copy to cl.snap if it is valid
@@ -223,6 +269,8 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	newSnap.serverCommandNum = clc.serverCommandSequence;
 
 	newSnap.serverTime = MSG_ReadLong( msg );
+	// FAKK2: the milliseconds the server had still to run, at most 255
+	newSnap.serverTimeResidual = MSG_ReadByte( msg );
 
 	// if we were just unpaused, we can only *now* really let the
 	// change come into effect or the client hangs.
@@ -285,29 +333,9 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	SHOWNET( msg, "packet entities" );
 	CL_ParsePacketEntities( msg, old, &newSnap );
 
-	// FAKK2: the sounds the game started this frame. The wire format is
-	// OpenFAKK2's own.
+	// FAKK2: the sounds the game started or stopped this frame
 	SHOWNET( msg, "sounds" );
-	newSnap.number_of_sounds = MSG_ReadBits( msg, MAX_SERVER_SOUNDS_BITS );
-	if ( newSnap.number_of_sounds > MAX_SERVER_SOUNDS ) {
-		Com_Error( ERR_DROP, "CL_ParseSnapshot: %i sounds", newSnap.number_of_sounds );
-	}
-	for ( i = 0 ; i < newSnap.number_of_sounds ; i++ ) {
-		server_sound_t	*sound = &newSnap.sounds[i];
-
-		sound->stop_flag = MSG_ReadBits( msg, 1 );
-		sound->entity_number = MSG_ReadBits( msg, GENTITYNUM_BITS );
-		sound->channel = MSG_ReadByte( msg );
-		if ( sound->stop_flag ) {
-			continue;
-		}
-		sound->sound_index = MSG_ReadBits( msg, MAX_SOUNDS_BITS );
-		sound->origin[0] = MSG_ReadFloat( msg );
-		sound->origin[1] = MSG_ReadFloat( msg );
-		sound->origin[2] = MSG_ReadFloat( msg );
-		sound->volume = MSG_ReadFloat( msg );
-		sound->min_dist = MSG_ReadFloat( msg );
-	}
+	CL_ParseSounds( msg, &newSnap );
 
 	// if not valid, dump the entire thing now that it has
 	// been properly read
@@ -327,6 +355,8 @@ void CL_ParseSnapshot( msg_t *msg ) {
 	for ( ; oldMessageNum < newSnap.messageNum ; oldMessageNum++ ) {
 		cl.snapshots[oldMessageNum & PACKET_MASK].valid = qfalse;
 	}
+
+	clc.clientNum = newSnap.ps.clientNum;
 
 	// copy to the current good spot
 	cl.snap = newSnap;
@@ -509,7 +539,9 @@ void CL_ParseGamestate( msg_t *msg ) {
 	while ( 1 ) {
 		cmd = MSG_ReadByte( msg );
 
-		if ( cmd == svc_EOF ) {
+		// FAKK2: the list ends at a 0 (or the end of the data), and no client
+		// number or checksum feed follows (fakk2.exe 0x423b60)
+		if ( cmd <= 0 ) {
 			break;
 		}
 		
@@ -520,7 +552,7 @@ void CL_ParseGamestate( msg_t *msg ) {
 			if ( i < 0 || i >= MAX_CONFIGSTRINGS ) {
 				Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
 			}
-			s = MSG_ReadBigString( msg );
+			s = MSG_ReadString( msg );
 			len = strlen( s );
 
 			if ( len + 1 + cl.gameState.dataCount > MAX_GAMESTATE_CHARS ) {
@@ -536,7 +568,7 @@ void CL_ParseGamestate( msg_t *msg ) {
 			if ( newnum < 0 || newnum >= MAX_GENTITIES ) {
 				Com_Error( ERR_DROP, "Baseline number out of range: %i", newnum );
 			}
-			Com_Memset (&nullstate, 0, sizeof(nullstate));
+			MSG_GetNullEntityState( &nullstate );
 			es = &cl.entityBaselines[ newnum ];
 			MSG_ReadDeltaEntity( msg, &nullstate, es, newnum );
 		} else {
@@ -544,9 +576,10 @@ void CL_ParseGamestate( msg_t *msg ) {
 		}
 	}
 
-	clc.clientNum = MSG_ReadLong(msg);
-	// read the checksum feed
-	clc.checksumFeed = MSG_ReadLong( msg );
+	// the client number comes with each snapshot's player state, and the
+	// server's checksum feed is 0 (SV_SpawnServer)
+	clc.clientNum = 0;
+	clc.checksumFeed = 0;
 
 	// save old gamedir
 	Cvar_VariableStringBuffer("fs_game", oldGame, sizeof(oldGame));
@@ -892,15 +925,10 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 	MSG_Bitstream(msg);
 
-	// get the reliable sequence acknowledge number
-	clc.reliableAcknowledge = MSG_ReadLong( msg );
-	// 
-	if ( clc.reliableAcknowledge < clc.reliableSequence - MAX_RELIABLE_COMMANDS ) {
-		clc.reliableAcknowledge = clc.reliableSequence;
-	}
-
 	//
-	// parse the message
+	// parse the message. FAKK2: it ends where its data does, with no svc_EOF,
+	// and only a snapshot carries the reliable acknowledgement (fakk2.exe
+	// CL_ParseServerMessage 0x423d60)
 	//
 	while ( 1 ) {
 		if ( msg->readcount > msg->cursize ) {
@@ -910,7 +938,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 
 		cmd = MSG_ReadByte( msg );
 
-		if (cmd == svc_EOF) {
+		if ( cmd == -1 ) {
 			SHOWNET( msg, "END OF MESSAGE" );
 			break;
 		}

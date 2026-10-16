@@ -508,8 +508,11 @@ void SV_SpawnServer( char *server, qboolean killBots, qboolean loadGame ) {
 	// make sure we are not paused
 	Cvar_Set("paused", "0");
 
-	// get a new checksum feed and restart the file system
-	sv.checksumFeed = ( ((unsigned int)rand() << 16) ^ (unsigned int)rand() ) ^ Com_Milliseconds();
+	// restart the file system. FAKK2: the checksum feed is 0, as the retail
+	// game state carries none to the client (0x443b70); ioquake3 picks a new
+	// one for each map and sends it. Pure checks and user command keys use it
+	// on both sides.
+	sv.checksumFeed = 0;
 	FS_Restart( sv.checksumFeed );
 
 	// FAKK2: the retail SV_SpawnServer (0x445e90) loads the bsp named before a

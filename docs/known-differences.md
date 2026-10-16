@@ -106,7 +106,7 @@ here; the client's are under "Commands and cvars the retail engine has" below.
 | Cvar | Retail | OpenFAKK2 | Note |
 | --- | --- | --- | --- |
 | `cheats` | 1 after `map` | 1 after `map` | Now the same. Retail's engine names Quake III's `sv_cheats` `cheats` (`Cvar_Init` `0x42fb36`: "1", `ROM`, `SYSTEMINFO`), the name the game reads. Its `SV_Map_f` (`0x4420d0`) sets it before the spawn, only without `developer`: 1 for `devmap`, 0 for `map`; but the client's disconnect during the load (`0x420990`) sets it back to 1, so a local game always has cheats, with `developer` 0 too (a retail run of `+set developer 0 +map zoo` prints 1). OpenFAKK2 had kept Quake III's name and set 0 after the spawn |
-| `protocol` | 1 | 71 | ioquake3's value; the wire format is OpenFAKK2's own for now (retail's is under "Demos") |
+| `protocol` | 1 | 1 | Was ioquake3's 71; the server-to-client messages are now retail's ("Demos") |
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
 | `sv_timeout` | 120 | 200 | |
@@ -1977,110 +1977,106 @@ What is implemented, and on what basis:
 
 ## Demos
 
-Looked at on 2026-10-16, to see whether demos could drive the test suite (screenshots at
-exact frames, `timedemo` as a benchmark) and whether a demo recorded on retail could be
-the reference for both engines. Demos made for this live in `build\demos`, never in git
-(they are made from Ritual's data).
+Demos play on either engine whichever recorded them: since 2026-10-16 OpenFAKK2's server
+writes, and its client reads, the retail engine's server-to-client messages, so a demo is
+the same file on both. A demo recorded on retail is the exact reference for what the
+client side (renderer, client game module, HUD, sound) should make of the same
+snapshots. Demos made for this live in `build\demos`, never in git (they are made from
+Ritual's data).
 
-**Ours plays back its own demos.** `tools\retail-compare\prec.scr` records a session on
-`zoo` (walk, turn, take the shotgun, fire both modes): `record drec` writes
-`demos/drec.dm_71`, `stoprecord` closes it, and `demo drec` plays it through to the end
-and back to the menu with no error: the world, Julie's animations, the HUD and the weapon
-draw all show. `prec2.scr` adds a centre print, a location print, two `playsound`s, a
-looping sound and a `say`: on playback the client starts the same two sounds
-(`s_show 1`), prints the `say` and runs the same server commands as in live play.
-`timedemo 1` works: 179 frames in 0.2 s at 836 fps. That demo is far too short to be a
-benchmark; a real one needs a longer and busier recording.
+Shown on `zoo` with `tools\retail-compare\prec.scr` (walk, turn, take the shotgun, fire
+both modes) and `prec2.scr` (a centre print, a location print, two `playsound`s, a
+looping sound and a `say`), recorded on each engine with `probe-client.ps1 [-Retail]`:
 
-**Retail plays back its own** (`prec.scr` with `probe-client.ps1 -Retail`): 179 frames,
-895 fps, and the same session on screen. Its `record` differs from ours in two ways:
-it refuses to start unless the cvar `g_syncronousClients` (spelled so) is non-zero ("The
-server must have 'g_syncronousClients 1' set for demos", `0x4201f6`), where ours only
-warns about `g_synchronousClients`; and it names the file `demos/<name>.dm3`, or
-`demo0000` and up with no name (`CL_Record_f` `0x420160`). Retail's `demo` takes the name
-with or without `.dm3` (`0x420610`); ours looks for `.dm_<protocol>` and finds no other.
+- Each engine plays its own demos and the other's to the end without an error, with the
+  same pictures (the walk, the turn, the shotgun's fire). On ours, retail's `prec2` demo
+  starts the same two sounds with retail's sound indexes, volume and minimum distance
+  (`s_show 1`) and prints the `say`.
+- `timedemo 1` gives 179 frames each way. That demo is far too short to be a benchmark;
+  a real one needs a longer and busier recording.
+- `tools\retail-compare\dm3.py`, written from the rules below as read from `fakk2.exe`,
+  reads all four demos (181 and 95 messages each) to the last byte of every message,
+  ours as well as retail's. Before the change the two engines stopped on each other's
+  first message ("CL_ParseServerMessage: Illegible server message").
 
-**Neither plays the other's.** Retail's `.dm3` copied in as `drec.dm_71` stops ours on
-the first message with "CL_ParseServerMessage: Illegible server message", and ours
-copied in as `drec.dm3` stops retail the same way. The file layout is the same on both
-(`[int message sequence][int length][message]` records, a length of -1 at the end;
-retail's writer `0x41fff0`, called from `CL_PacketEvent` `0x421e69`, and its reader
-`CL_ReadDemoMessage` `0x4204e0`); the messages inside differ throughout. Retail's are
-Quake III's format from before 1.27, with FAKK2's fields. Read from `fakk2.exe`:
+**Commands.** `record [name]` (`CL_Record_f` `0x420190`) refuses unless the cvar
+`g_syncronousClients` (spelled so) is non-zero ("The server must have
+'g_syncronousClients 1' set for demos"; the client game module reads the same cvar and
+stops predicting), and writes `demos/<name>.dm3`, or the first free `demo0000` to
+`demo9999`. ioquake3 only warned about `g_synchronousClients` and named files
+`.dm_<protocol>`. `demo <name>` (`0x420610`) plays `demos/<name>`, or
+`demos/<name>.dm3` when the name has no `.dm3`. The file is
+`[int message sequence][int length][message]` records with a length of -1 at the end
+(retail's writer `0x41fff0`, called from `CL_PacketEvent` `0x421e69`; reader
+`CL_ReadDemoMessage` `0x4204e0`), as in ioquake3.
 
-- **Protocol 1** (`SV_DirectConnect` `0x443550` turns away anything else); ours is
-  ioquake3's 71.
+**The messages** are Quake III's format from before 1.27 with FAKK2's fields:
+
+- **Protocol 1** (`SV_DirectConnect` `0x443550` turns away anything else); ioquake3's was
+  71.
 - **Bits** (`MSG_WriteBits` `0x439420`, `MSG_ReadBits` `0x439520`): packed least
-  significant first with no Huffman coding; ours Huffman-codes every byte. A string or
-  raw data starts on a byte boundary, and the aligning (`0x439350`, writer `MSG_GetSpace`
-  `0x439370`) skips one byte more than it needs to, on both sides. Strings are read up
-  to 1023 characters, `%` as `.` (`0x4397e0`); configstrings too, where ours uses
-  ioquake3's big strings. Ours' longest configstring on `zoo` is 493 characters.
-- **Message layout** (`CL_ParseServerMessage` `0x423d60`): no leading acknowledgement
-  (ours starts every message with one); the commands are 1 nop, 2 gamestate,
-  5 server command, 7 snapshot, 8 centre print, 9 location print, and the message ends
-  where its data does. There is no `svc_EOF` (ours: 8), no download (6 is refused), and
-  ours numbers its prints 11 and 12, after ioquake3's VoIP commands.
-- **Game state** (`CL_ParseGamestate` `0x423b60`): the command sequence, then
-  configstrings (3, short index, string) and baselines (4, 10-bit number, entity delta)
-  until a 0 byte. No client number or checksum feed follow (ours sends both). A
-  baseline is read against a state that is not all zeros (`0x43a220`): scale and alpha
-  1, `parent` 1023, `constantLight` 0xffffff, `renderfx` 0x10, the five `bone_tag`s -1.
-- **Snapshot** (`CL_ParseSnapshot` `0x423820`): a long (the reliable acknowledgement,
-  sent here rather than at the head of the message), the server time, a byte ours does
-  not send, the delta byte, the flags, the area mask; then the player state, the packet
-  entities (10-bit numbers ending at 1023, as ours, `0x423560`) and the sounds.
+  significant first with no Huffman coding. A string or raw data starts on a byte
+  boundary, and the aligning (`0x439350`, writer `MSG_GetSpace` `0x439370`) passes one
+  byte more than it needs to, on both sides. Strings are read up to 1023 characters, `%`
+  as `.` (`0x4397e0`); configstrings too, where ioquake3 had big strings (ours' longest on
+  `zoo` is 493 characters).
+- **Message layout** (`CL_ParseServerMessage` `0x423d60`): commands 1 nop, 2 gamestate,
+  5 server command, 7 snapshot, 8 centre print, 9 location print, until the data ends:
+  there is no `svc_EOF` and no acknowledgement at the head of every message.
+- **Game state** (`SV_SendClientGameState` `0x443b70`, `CL_ParseGamestate` `0x423b60`):
+  the message holds only the game state: the command sequence, configstrings (3, short
+  index, string) and baselines (4, 10-bit number, entity delta) until a 0 byte. The
+  server commands still pending are not sent first (the client takes its command
+  sequence from the game state and would skip them), and no client number or checksum
+  feed follows: the client takes its number from each snapshot's player state, and
+  ours' server now uses a checksum feed of 0 (the pure checks and the user command key
+  use it on both sides). A baseline is written and read against a state that is not all
+  zeros (`MSG_GetNullEntityState`, `0x43a220`): scale and alpha 1, `parent` 1023,
+  `constantLight` 0xffffff, `renderfx` 0x10, the five `bone_tag`s -1.
+- **Snapshot** (`SV_WriteSnapshotToClient` `0x447a50`, `CL_ParseSnapshot` `0x423820`):
+  the reliable acknowledgement, the server time, `sv.timeResidual` up to 255, the delta
+  byte, the flags, the area mask; then the player state, the packet entities (10-bit
+  numbers ending at 1023, `0x447c50`, `0x423560`), the sounds, the game's print if
+  there is one, and the `sv_padPackets` nops.
 - **Entities** (`MSG_WriteDeltaEntity` `0x439bc0`, reader `0x439e70`): 73 fields
-  (`0x4ea228`: name, offset, bits) in an order and with widths of their own (`eFlags` 16
-  bits, `parent` 16, `tag_num` 10, `anim` and `torso_anim` 11, `frame` 10, `bone_tag`
-  8 signed, ...); which changed is the index of one of 31 common change masks
-  (`0x4e6220`, 5 bits) or 31 followed by the 73-bit mask itself. A float is a bit, then
-  13 bits holding an integral value plus 4096 or its 32 bits. The 32 `surfaces` bytes
-  follow as a 32-bit mask and a byte for each change. Ours is ioquake3's scheme (a count
-  of fields, a bit per field, zero floats in one bit) over a field list of its own.
+  (`0x4ea228`: name, offset, bits; `eFlags` 16 bits, `parent` 16, `tag_num` 10, `anim`
+  and `torso_anim` 11, `frame` 10, `bone_tag` 8 signed, ...); which changed is the index
+  of one of 31 common change masks (`0x4e6220`, 5 bits) or 31 followed by the 73-bit
+  mask itself. A float is a bit, then 13 bits holding an integral value plus 4096, or its
+  32 bits. The 32 `surfaces` bytes follow as a 32-bit mask and a byte for each change.
+  `changeVectors` prints how many masks went as an index (`0x439b80`).
 - **Player state** (`0x43a280`, reader `0x43a680`): 49 fields (`0x4ea598`) with a bit
-  each, without `walking`, `groundPlane` or `falldir` and with widths of their own
-  (`pm_flags` 16, `pm_runtime` 16 signed, `feetfalling` 8, `reverb_type` 6,
-  `camera_flags` 16); then `stats`, `activeItems`, `inventory_name_index`,
-  `ammo_name_index`, `ammo_amount` and `max_ammo_amount`, each a bit, a 32-bit mask and
-  a short per change. Ours sends the arrays' values as longs, behind one more bit.
-- **Sounds** (`0x43ac30`): a bit, a 6-bit count, then per sound a stop bit (stop: entity
-  10 bits, channel 6), or an optional origin (three floats), entity, channel, an 8-bit
-  sound index, and volume and minimum distance each behind a bit (-1 when absent). Ours'
-  layout is its own.
+  each, without `walking`, `groundPlane` or `falldir` (`pm_flags` 16 bits, `pm_runtime`
+  16 signed, `feetfalling` 8, `reverb_type` 6, `camera_flags` 16); then `stats`,
+  `activeItems`, `inventory_name_index`, `ammo_name_index`, `ammo_amount` and
+  `max_ammo_amount`, each a bit, a 32-bit mask and a short per change.
+- **Sounds** (`0x43aaa0`, reader `0x43ac30`): a bit, a 6-bit count, then per sound a stop
+  bit (stop: entity 10 bits, channel 6), or an origin (three floats) behind a bit unless
+  it is (0 0 0), entity, channel, an 8-bit sound index, and volume and minimum distance
+  each behind a bit unless -1.
+- **Prints** (`0x445110`, `0x4451b0`): the server keeps one 256-byte print per client; a
+  centre print fills it, a location print fills it and sets its place and a flag, and
+  the snapshot carries it as whichever the flag says, so the last print of a frame is the
+  one sent. A longer text is cut to 255 characters with a developer message; ours had a
+  record for each kind and dropped the game on a long one.
 
-`tools\retail-compare\dm3.py` reads retail demos by these rules and prints what they
-hold. It reads both demos made here (181 and 95 messages) to the last byte of every
-message: the configstrings, baselines, 180 snapshots of Julie walking +x and turning to
-yaw -41.9, the prints, the server commands, the two sounds (index 84 and 85, volume 1,
-minimum distance 500) and the looping one (`loopSound` 84, 1, 64), as the probe made
-them. The structures the format carries are the SDK's on both engines and the
-configstrings are the game module's, so what a retail demo holds is what ours' client
-already takes.
+Retail's widths limit ours as they limit retail: 16-bit `eFlags` and `parent`, 10-bit
+frames, 8-bit sound indexes, shorts in the player's arrays, 1023-character configstrings.
 
-**Recommendation: retail-compatible.** Everything that differs is in how the server's
-messages are packed, `msg.c` and the code either side of it (`sv_snapshot.c`,
-`sv_client.c`'s game state, `cl_parse.c`, `CL_Record_f`); the snapshots, entities,
-configstrings and the client game module are already the same. The best way is to take
-retail's server-to-client format as ours, protocol 1 and `.dm3`, rather than add a second
-reader for retail demos: then ours' demos play on retail too, `dm3.py` checks every demo
-ours records, and the `protocol` row in "Cvar differences" closes. It means the bit
-layer, the two delta encoders with their tables and change masks, the message,
-game state, snapshot and sound layouts, and the record and demo commands' names and
-checks; a few hundred lines. Retail's widths then limit ours as they limit retail
-(16-bit `eFlags` and `parent`, 10-bit frames, 8-bit sound indexes, shorts in the
-player's arrays, 1023-character configstrings). The client-to-server messages and the
-netchan header do not appear in demos and were not read; a local game does not need them
-to match.
+Still ours: the client-to-server messages (ioquake3's user commands and client commands,
+now in retail's bits) and the netchan header, which demos do not hold and were not read;
+downloads (command 6, which retail refuses) and VoIP (10 and 11), which a local game does
+not send. A demo carries its own configstrings, so the different sound indexes on a first
+load (under "Global aliases before spawning") do not matter on playback.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
   triggers the player must walk into. The test player can now be given key presses, but
   only a forward walk has been compared.
-- What is sent to clients (snapshots, sounds) and what the client game module makes of
-  it. The test player shows `print` text on the console as a client would and discards
-  everything else; the real client draws the module's picture, which has not been
-  compared with the retail game's.
+- What is sent to clients (snapshots, sounds), field by field: the format is now the
+  same on both ("Demos"), so two demos of one session could be compared with `dm3.py`,
+  but no such comparison has been made. What the client makes of retail's own snapshots
+  can now be seen by playing a retail demo on ours.
 - A game saved by OpenFAKK2 loaded in the retail engine, and the save and load round
   trip run on the retail engine to see whether its own attached models come back
   unlinked as well.

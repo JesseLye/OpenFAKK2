@@ -5,7 +5,6 @@ probe:
 waitforplayer
 wait 2
 stuffcmd "set g_syncronousClients 1"
-stuffcmd "set g_synchronousClients 1"
 wait 0.2
 stuffcmd "record drec2"
 wait 0.5
