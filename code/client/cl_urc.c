@@ -1183,9 +1183,58 @@ static void URC_TileST( qhandle_t shader, float w, float h, float *s, float *t )
 	*t = ih > 0 ? h / ih : 1;
 }
 
+/*
+=================
+URC_EdgeTexels
+
+One axis of a picture drawn from screen pixel x0 to x1: moves its texture
+coordinates (c1, c2, in images of size texels) so that the first and last
+pixels it covers sample no further out than the middle of the texel at
+each end that lies on a texel boundary. Retail draws the UI at its size in
+screen pixels, where every pixel samples a texel's middle; enlarged (or
+placed between pixels), an edge pixel samples past it and filtering mixes
+in the texel beyond, which on a "map" image is the opposite edge: the
+water gauge's mask is white at the left and black at the right, so its
+right edge showed a light line, and the weapon windows (weapon_left and
+weapon_right, opaque where they meet and clear at their far sides) a seam
+between them. A side cut off mid-texel (a clip, a drained stat bar) keeps
+what its edge pixel samples; drawn at its size on whole pixels, nothing
+changes.
+=================
+*/
+static void URC_EdgeTexels( float *c1, float *c2, int size, float x0, float x1 ) {
+	float	a = *c1 * size, b = *c2 * size, r, p0, p1, f0, f1;
+
+	if ( size <= 0 || b - a <= 1 ) {
+		return;
+	}
+	// the middles of the first and last pixels covered, and what they sample
+	p0 = ceil( x0 - 0.5f ) + 0.5f;
+	p1 = ceil( x1 - 0.5f ) - 0.5f;
+	if ( p1 - p0 < 1 ) {
+		return;
+	}
+	r = ( b - a ) / ( x1 - x0 );
+	f0 = a + r * ( p0 - x0 );
+	f1 = b - r * ( x1 - p1 );
+	if ( fabs( a - floor( a + 0.5f ) ) < 0.001f && f0 < a + 0.5f ) {
+		f0 = a + 0.5f;
+	}
+	if ( fabs( b - floor( b + 0.5f ) ) < 0.001f && f1 > b - 0.5f ) {
+		f1 = b - 0.5f;
+	}
+	if ( f1 <= f0 ) {
+		return;
+	}
+	r = ( f1 - f0 ) / ( p1 - p0 );
+	*c1 = ( f0 - r * ( p0 - x0 ) ) / size;
+	*c2 = ( f1 + r * ( x1 - p1 ) ) / size;
+}
+
 // a picture, cut to the clip rectangle with its texture coordinates
 static void URC_DrawPicST( float x, float y, float w, float h, float s1, float t1, float s2, float t2, qhandle_t shader, const vec4_t color ) {
 	float	d;
+	int		iw = 0, ih = 0;
 
 	if ( w <= 0 || h <= 0 ) {
 		return;
@@ -1217,6 +1266,11 @@ static void URC_DrawPicST( float x, float y, float w, float h, float s1, float t
 	}
 	re.SetColor( color );
 	SCR_AdjustFrom640( &x, &y, &w, &h );
+	if ( re.ShaderImageSize ) {
+		re.ShaderImageSize( shader, &iw, &ih );
+		URC_EdgeTexels( &s1, &s2, iw, x, x + w );
+		URC_EdgeTexels( &t1, &t2, ih, y, y + h );
+	}
 	re.DrawStretchPic( x, y, w, h, s1, t1, s2, t2, shader );
 	re.SetColor( NULL );
 }
