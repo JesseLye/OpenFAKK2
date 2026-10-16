@@ -1,4 +1,6 @@
 build*
+# ...but not the build script, which the "build*" above would also catch
+!scripts/build-msvc.cmd
 *.swp
 *tags
 *~
