@@ -1328,9 +1328,57 @@ ours now matches. A sandbox `config.cfg` written by an older build still carries
 install's `config.cfg` (see "Strafing after a shot" under "Weapon effects"); delete that
 line or the client keeps running.
 
-What the retail client puts in a movement command has not been read from the binary.
-Established by comparison: the player walks unless `+speed` is held. Assumed: moves of
-127, and a turn rate of 140 degrees per second for `+left` / `+right`.
+What the retail client puts in a movement command's moves has not been read from the
+binary. Established by comparison: the player walks unless `+speed` is held. Assumed:
+moves of 127, and a turn rate of 140 degrees per second for `+left` / `+right`. How and
+when it builds and sends commands has been read: see the next subsection.
+
+### Frame pacing and movement commands
+
+Found by the suite's `fstrafe` check, which failed 7 times in 9 on 2026-10-16 evening
+after passing 19 in 20 that day, with no change to the code: on an idle machine the
+player strafed late, and at `com_maxfps 250` hardly moved at all (1568.0 to 1568.2 where
+retail reaches 1604; `probe-fstrafe` on `zoo`, the same with Ritual's game modules, so the
+engine). Retail at 250 moves as at 85.
+
+Retail builds one movement command per frame and sends it at once in a local game:
+`CL_SendCmd` (`0x41eb00`) calls `CL_CreateNewCommands` (`0x41e730`: `frame_msec` is the
+frame time, capped at 200 and with no lower clamp) and `CL_CreateCmd` (`0x41e5f0`;
+`CL_FinishMove` `0x41e5b0` stamps `cl.serverTime` and the angles, and never sets the
+command's `msec`), and `CL_ReadyToSendPacket` (`0x41e7b0`) is true at once for the
+loopback (`cl_maxpackets` 15 to 100 otherwise; ours allows 125). Its frame loop
+(`Com_Frame`, `0x42e850`) waits for 1000 / `com_maxfps` (default 85, archived) by spinning
+on the clock, with no sleep, so every frame lasts at least that long.
+
+Ours keeps ioquake3's frame loop, which sleeps and carries a *bias*: a frame that
+overslept shortens the next ones, down to none. Windows sleeps in steps of about 15.6 ms,
+so at 85 fps (11 ms) every few frames came 0 to 2 ms after the last, usually just after a
+server frame and its snapshot had moved `cl.serverTime` on. In a frame where no time had
+passed, `CL_KeyState` read every held key as down for 0 ms (`msec / frame_msec` with
+`frame_msec` clamped to 1), so the command said the player had stopped, and the game ran
+it: her legs went to the idle animation for a frame and, her speed coming from the
+animation (`Player::ClientMove`'s `animspeed`), she fell behind; at 250 fps most commands
+were such, and she hardly moved. Whether this happened depended on how sleeps fell on the
+machine at the time. `CL_CreateNewCommands` now makes no command in a frame in which no
+time has passed; the next frame's covers it. Afterwards `fstrafe` passed 14 runs in 14 and
+`strafe` 13 in 14 (the one a late key press, about 3.5 units), and at 250 fps Julie
+strafes as on retail.
+
+Not followed:
+
+- **Retail's spinning wait.** Ours still sleeps and keeps the bias, so its frames are
+  uneven where retail's are not: at 250 fps Julie ends a 0.6 s strafe up to 5 units ahead
+  of retail, varying by run (retail repeats to 0.3). Without the bias and with
+  `com_busyWait 1` (retail's pacing, a CPU core busy all the time), three runs at 85 fps
+  ended at 1602.4 to 1603.0 against retail's 1603.0 and 1603.2, and at 250 within 1 to 2
+  of retail. The suite's `fstrafe-fast` (both games at 250) allows 8 units for this.
+- **Commands run twice.** Retail's `SV_UserMove` (`0x444280`) passes every command in a
+  packet to `SV_ClientThink` (`0x443ff0`), even those an earlier packet carried
+  (`cl_packetdup`); ours keeps ioquake3's check that skips a command no newer than the
+  last one run. The game's `Player::ClientThink` ignores such a command itself (a command
+  time not after the player's). Removing the check alone also let Julie move at 250 fps,
+  though she still dropped to idle at 85; the client fix alone does both, so the check
+  stays.
 
 ### Firing a projectile
 

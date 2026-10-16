@@ -819,6 +819,21 @@ void CL_CreateNewCommands( void ) {
 		return;
 	}
 
+	// OpenFAKK2: no command for a frame in which no time has passed. The frame
+	// limiter in Com_Frame runs a frame at once to make up for frames that
+	// overslept (Windows sleeps in steps of about 15.6 ms, so at com_maxfps 85
+	// that is every third frame or so), usually right after a server frame. That
+	// frame's command reads every held key as down for 0 ms (CL_KeyState), so it
+	// says the player stopped, and as a new snapshot has moved cl.serverTime on,
+	// the game runs it: a strafe or walk dropped to the idle animation for a
+	// moment and, its speed coming from the animation, fell behind, and at 250
+	// fps the player hardly moved at all. Retail's Com_Frame (fakk2.exe
+	// 0x42e850) only ever waits out the full 1000 / com_maxfps, so it never runs
+	// such a frame; the next frame's command covers the time here.
+	if ( com_frameTime == old_com_frameTime ) {
+		return;
+	}
+
 	CL_UpdateFrameMsec();
 
 	// generate a command for this frame
