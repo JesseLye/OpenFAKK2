@@ -2065,6 +2065,21 @@ is off while it records). `demo <name>` (`0x420610`) plays `demos/<name>`, or
 Retail's widths limit ours as they limit retail: 16-bit `eFlags` and `parent`, 10-bit
 frames, 8-bit sound indexes, shorts in the player's arrays, 1023-character configstrings.
 
+The test suite plays two retail demos frame by frame on both games (`demo-zoo`,
+`demo-swamp1`; `tools/suite/README.md`, "Demos"): the same snapshots on both, so what
+differs is the client side. Most frames differ by under 2% of their pixels. The first
+differences they show, not yet investigated:
+
+- The HUD's weapon picture. On `demo-zoo`, recorded after the chaingun was given and
+  drawn, retail's playback shows no weapon in the weapon HUD and ours shows the
+  chaingun, then the rocket launcher. Retail seems to set the picture on something that
+  happened before the recording began; ours takes it from the player state.
+- A rocket's explosion lights Julie bright yellow on ours; on retail she keeps her own
+  colours in front of the fireball (`demo-zoo` frames 17 and 22).
+- In swamp1's cinematic Julie's head is turned differently (up on retail, ahead on ours)
+  and her face is lit warmer on ours (`demo-swamp1` frames 10 to 13).
+- Textures in close-up look blurrier on ours: the creeper's skin and a tree's bark.
+
 Still ours: the client-to-server messages (ioquake3's user commands and client commands,
 now in retail's bits) and the netchan header, which demos do not hold and were not read;
 downloads (command 6, which retail refuses) and VoIP (10 and 11), which a local game does

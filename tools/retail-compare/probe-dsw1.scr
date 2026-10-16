@@ -1,0 +1,39 @@
+// Records the suite's swamp1 demo (demos/probe-dsw1.dm3): the level's opening cinematic
+// from the moment the player arrives (a heavy fly-through of the swamp), then Julie
+// walks, turns and fires rockets. The suite's "demo-swamp1" check plays it back frame by
+// frame and "timedemo" times it (tools/suite/README.md); made on retail by
+// refresh-retail.ps1. record needs g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+// the client is not yet in the level when the player arrives on this big map ("You
+// must be in a level to record.")
+wait 3
+stuffcmd "set g_syncronousClients 1"
+wait 0.5
+stuffcmd "record probe-dsw1"
+wait 22
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+wait 2
+stuffcmd "+forward"
+wait 2
+stuffcmd "-forward"
+stuffcmd "+attackleft"
+wait 0.2
+stuffcmd "-attackleft"
+wait 2
+stuffcmd "+right"
+wait 0.8
+stuffcmd "-right"
+stuffcmd "+forward"
+wait 3
+stuffcmd "-forward"
+stuffcmd "+attackleft"
+wait 0.2
+stuffcmd "-attackleft"
+wait 2.5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

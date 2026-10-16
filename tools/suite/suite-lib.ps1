@@ -84,7 +84,7 @@ function Get-ReferenceStamp([string]$RefDir) {
 # ours' last good result only).
 function Test-HasRetail($c) {
     switch ($c.kind) {
-        { $_ -in 'spawn', 'player', 'capture', 'menus', 'chain', 'sound', 'windowshots' } { return $true }
+        { $_ -in 'spawn', 'player', 'capture', 'menus', 'chain', 'sound', 'windowshots', 'demo' } { return $true }
         'client' { return -not (Get-Prop $c 'oursOnly' $false) }
         'cfgrun' { return [bool](Get-Prop $c 'retailCfg') }
         default { return $false }
@@ -113,6 +113,47 @@ function Install-FxModels([string]$Fakk) {
     Copy-Item (Join-Path $RetailCompare 'fx\*.tik') $dest -Force
     # the probes name them as models/fx/<name>.tik and as <name>.tik; both resolve
     Copy-Item (Join-Path $RetailCompare 'fx\*.tik') (Join-Path $Fakk 'models') -Force
+}
+
+# The retail-recorded demos a check plays: a "demo" check its own (made with its retail
+# reference), a "timedemo" check those of the demo checks it names. Each is
+# @{ check; file }; run-suite.ps1 skips a check whose demo is not there yet.
+function Get-CheckDemos($Check) {
+    $names = switch ($Check.kind) { 'demo' { @($Check.name) } 'timedemo' { @(Get-Prop $Check 'demos' @()) } default { @() } }
+    foreach ($n in $names) { @{ check = $n; file = Join-Path (Get-RefDir $RetailRefs $n) 'demo.dm3' } }
+}
+
+# Plays a demo on either game with cl_avidemo: every frame is 1/$Rate s of the demo and
+# takes a screenshot, on both engines (retail's CL_Frame 0x421f45), so frame n is the
+# same moment on both; nextdemo quits at the end. Keeps every $Every-th shot in $Out as
+# shot-<frame>.tga, and the console log as game.log.
+function Invoke-DemoPlayback([ValidateSet('ours', 'retail')][string]$Side, [string]$Demo, [string]$Out, [int]$Rate, [int]$Every, [int]$Secs, [string]$Extra, [string]$Bin) {
+    $retailDir = Join-Path $Sandbox 'retail'
+    $fakk = if ($Side -eq 'ours') { $TestFakk } else { Join-Path $retailDir 'fakk' }
+    New-Item -ItemType Directory -Force (Join-Path $fakk 'demos') | Out-Null
+    Copy-Item $Demo (Join-Path $fakk 'demos\suite.dm3') -Force
+    $shotDir = Join-Path $fakk 'screenshots'
+    Remove-Item $shotDir -Recurse -Force -ErrorAction SilentlyContinue
+    $console = Join-Path $fakk 'qconsole.log'
+    Remove-Item $console -ErrorAction SilentlyContinue
+    # 640x480 on both, as capture.ps1 runs them, so shots pair; kept short for retail, which
+    # drops the end of a long command line
+    $play = "+set r_fullscreen 0 +set r_mode 3 +set in_mouse 0 +set s_initsound 0 +set logfile 2 $Extra +set cl_avidemo $Rate +set nextdemo quit +demo suite"
+    if ($Side -eq 'ours') { $exe = Join-Path $(if ($Bin) { $Bin } else { $EngineBin }) 'openfakk2.exe'; $wd = Split-Path $exe; $play = "$OursHomeArgs +set in_nograb 1 +set developer 0 $play" }
+    else { $exe = "$retailDir\fakk2.exe"; $wd = $retailDir }
+    $p = $null
+    try {
+        $p = Start-HarnessGame -Side $Side -Exe $exe -WorkDir $wd -Arguments $play -What "suite demo $Side"
+        $state = if (-not $p.WaitForExit($Secs * 1000)) { "stopped after ${Secs}s" } else { "exited with code $($p.ExitCode)" }
+    }
+    finally { Stop-HarnessGame $p }
+    Copy-IfThere $console "$Out\game.log" | Out-Null
+    $n = 0; $kept = 0
+    Get-ChildItem $shotDir -File -Filter 'shot*' -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object {
+        if ($n % $Every -eq 0) { Copy-Item $_.FullName (Join-Path $Out "shot-$n.tga"); $kept++ }
+        $n++
+    }
+    "$Side`: demo played, $state; $n frames, $kept shots kept"
 }
 
 function Copy-IfThere([string]$From, [string]$To) {
@@ -378,6 +419,42 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
             finally { Stop-HarnessGame $p }
             Copy-IfThere $console "$Out\game.log" | Out-Null
         }
+        'demo' {
+            # retail: the probe records demos/<probe>.dm3 and quits; the demo is kept in the
+            # reference and both games play that one (ours from the reference)
+            $rate = [int](Get-Prop $Check 'avidemo' 2); $every = [int](Get-Prop $Check 'every' 1)
+            $play = if ($secs) { $secs } else { 120 }
+            if ($Side -eq 'retail') {
+                $recorded = Join-Path $fakk "demos\$probe.dm3"
+                Remove-Item $recorded -ErrorAction SilentlyContinue
+                $output = @(& $ProbeClient -Probe $probe -Map $map -Name retail -Retail -Secs $(Get-Prop $Check 'recordSecs' 120) -Extra $extra -Classname none -Entity -1)
+                # nothing kept without a demo, so refresh-retail.ps1 leaves the old reference
+                if (-not (Copy-IfThere $recorded "$Out\demo.dm3")) { $output += "no demo: the probe did not record demos/$probe.dm3 (see $LogDir\client-retail-$tag-$probe.log)"; break }
+                Copy-IfThere (Join-Path $LogDir "client-retail-$tag-$probe.log") "$Out\record.log" | Out-Null
+                $output += Invoke-DemoPlayback retail "$Out\demo.dm3" $Out $rate $every $play "$extra $sideExtra".Trim() ''
+            }
+            else {
+                $demo = (Get-CheckDemos $Check | Select-Object -First 1).file
+                if (-not (Test-Path $demo)) { throw "no retail demo at $demo (tools\suite\refresh-retail.ps1 -Only $($Check.name))" }
+                $output = Invoke-DemoPlayback ours $demo $Out $rate $every $play "$extra $sideExtra".Trim() $Bin
+            }
+        }
+        'timedemo' {
+            # ours only: each named demo check's retail demo with timedemo 1, uncapped; the
+            # frame durations are logged (cl_timedemoLog) for the measure
+            $output = @()
+            foreach ($d in @(Get-CheckDemos $Check)) {
+                New-Item -ItemType Directory -Force (Join-Path $TestFakk 'demos') | Out-Null
+                Copy-Item $d.file (Join-Path $TestFakk 'demos\bench.dm3') -Force
+                $durations = Join-Path $TestFakk 'timedemo.txt'
+                Remove-Item $durations -ErrorAction SilentlyContinue
+                $tag2 = $d.check -replace '[\\/]', '-'
+                $output += & (Join-Path $RetailCompare 'run-client.ps1') -Name "suite-timedemo-$tag2" -Bin $Bin -Secs $(if ($secs) { $secs } else { 120 }) `
+                    -Run "+set r_mode 3 +set com_maxfps 0 +set r_swapInterval 0 $extra $sideExtra +set cl_timedemoLog timedemo.txt +set timedemo 1 +set nextdemo quit +demo bench"
+                Copy-IfThere (Join-Path $LogDir "suite-timedemo-$tag2.log") "$Out\game-$tag2.log" | Out-Null
+                Copy-IfThere $durations "$Out\durations-$tag2.txt" | Out-Null
+            }
+        }
         default { throw "unknown check kind '$($Check.kind)'" }
     }
     $output | Out-String -Width 400 | Set-Content "$Out\output.txt"
@@ -531,7 +608,26 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             }
             else { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields $fields -ReadingsOnly -Entities $ents -Classnames $cls }
         }
-        { $_ -in 'capture', 'menus', 'windowshots' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        { $_ -in 'capture', 'menus', 'windowshots', 'demo' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        'timedemo' {
+            # the mean frame time of each demo, without its first frames (where textures are
+            # uploaded as they are first seen); ioquake3's own line for the evidence
+            $metrics = [ordered]@{ finished = 0 }; $ev = @()
+            foreach ($d in @(Get-CheckDemos $Check)) {
+                $tag2 = $d.check -replace '[\\/]', '-'
+                $ms = @(Get-Content (Join-Path $Ours "durations-$tag2.txt") -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+                $line = Select-String -Path (Join-Path $Ours "game-$tag2.log") -Pattern '^\d+ frames .* ms$' -ErrorAction SilentlyContinue | Select-Object -Last 1
+                $skip = [int](Get-Prop $Check 'skipFrames' 20)
+                if ($ms.Count -le $skip -or -not $line) { $metrics.finished = 1; $ev += "$($d.check): the demo did not play to the end"; continue }
+                $rest = @($ms | Select-Object -Skip $skip)
+                $mean = [Math]::Round(($rest | Measure-Object -Average).Average, 3)
+                $sorted = @($rest | Sort-Object)
+                $metrics["ms_$tag2"] = $mean
+                $growth += "ms_$tag2"
+                $ev += "$($d.check): mean $mean ms over frames $skip to $($ms.Count) (median $($sorted[[int]($sorted.Count / 2)]), max $($sorted[-1])); $($line.Line)"
+            }
+            $result = @{ metrics = $metrics; evidence = $ev; images = @() }
+        }
         'cfgrun' {
             $metrics = [ordered]@{}; $ev = @(); $images = @()
             $marker = Get-Prop $Check 'doneMarker'

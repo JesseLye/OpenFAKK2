@@ -113,6 +113,8 @@ check is for.
 | `saveload` | `save-load.ps1` | level variables and readings differing between the saved and the loaded game |
 | `chain` | `level-chain.ps1` | levels reached, autosaves, inventory against retail's run |
 | `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`): the probe tone's plateaus (`tone`), or the 50th, 75th and 90th percentiles of the levels while sound plays (`rms`, music and game sounds, so the two games' start times do not matter) |
+| `demo` | retail: `probe` records `demos/<probe>.dm3` (kept in the reference); both: that demo played with `cl_avidemo` (`avidemo` frames a second, every `every`-th kept) | % of pixels differing per frame, as `capture` |
+| `timedemo` | ours: each of the `demos` checks' retail demos with `timedemo 1`, uncapped | the mean frame time without the first `skipFrames` (20) frames (`cl_timedemoLog`), judged against ours' last good result; whether each played to the end |
 
 The sound checks record the speakers by WASAPI loopback, so they play out loud and record
 anything else playing; run them with `-Sound` when nobody minds. They need pyaudiowpatch
@@ -124,6 +126,30 @@ numbers).
 
 Console warnings are counted without two kinds every run prints by the hundred: the
 `.tga` lookups that fall back to `.ftx`, and the collision model's bevel notes.
+
+## Demos
+
+OpenFAKK2 and the retail engine read each other's demos (`docs/known-differences.md`,
+"Demos"), so a demo recorded on retail is the same input to both clients: same
+snapshots, entities, sounds and prints. A `demo` check's retail reference holds such a
+demo, recorded by its probe on retail (`refresh-retail.ps1`; the probe sets
+`g_syncronousClients`, records, plays and quits), and retail's frames of it. Playing a
+demo with `cl_avidemo N` makes every frame 1/N s of the demo and takes a screenshot of
+it on both engines, so frame n is the same moment on both: no held keys, no frame
+timing. Two runs of ours differed by 0.05 points or less on swamp1 and by 0.3 or less
+on zoo but for two frames of explosions (particles drawn at random, 1.1 and 2.6), where
+probes that aim with `+lookdown` move by tens of points. What still differs from retail
+is the client side: the renderer, the client game module, the HUD.
+
+- `demo-zoo` (`probe-dzoo`): two creepers fight Julie; chaingun, rockets, her death; 15
+  s, 2 frames a second.
+- `demo-swamp1` (`probe-dsw1`): swamp1's opening cinematic, then rockets and a walk into
+  the water; 36 s, 1 frame a second.
+- `timedemo` times both demos, uncapped (1.2 ms a frame on 2026-10-16), in place of a
+  camera over an empty map.
+
+A probe that changes makes its reference stale, as for any check; `refresh-retail.ps1
+-Only demo-zoo` records the demo again and the `timedemo` check uses the new one.
 
 ## The level chain
 
