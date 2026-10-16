@@ -51,6 +51,7 @@ typedef struct {
 	int				snapFlags;		// rate delayed and dropped commands
 
 	int				serverTime;		// server time the message is valid for (in msec)
+	int				serverTimeResidual;	// FAKK2: msec the server had yet to run, at most 255
 
 	int				messageNum;		// copied from netchan->incoming_sequence
 	int				deltaNum;		// messageNum the delta is from

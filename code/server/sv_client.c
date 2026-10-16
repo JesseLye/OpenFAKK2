@@ -728,15 +728,10 @@ static void SV_SendClientGameState( client_t *client ) {
 
 	MSG_Init( &msg, msgBuffer, sizeof( msgBuffer ) );
 
-	// NOTE, MRE: all server->client messages now acknowledge
-	// let the client know which reliable clientCommands we have received
-	MSG_WriteLong( &msg, client->lastClientCommand );
-
-	// send any server commands waiting to be sent first.
-	// we have to do this cause we send the client->reliableSequence
-	// with a gamestate and it sets the clc.serverCommandSequence at
-	// the client side
-	SV_UpdateServerCommandsToClient( client, &msg );
+	// FAKK2: the retail engine's game state message (SV_SendClientGameState
+	// 0x443b70) is the game state alone: no acknowledgement, no server
+	// commands first (the client takes its command sequence from it and skips
+	// those), and no client number or checksum feed after it.
 
 	// send the gamestate
 	MSG_WriteByte( &msg, svc_gamestate );
@@ -747,12 +742,12 @@ static void SV_SendClientGameState( client_t *client ) {
 		if (sv.configstrings[start][0]) {
 			MSG_WriteByte( &msg, svc_configstring );
 			MSG_WriteShort( &msg, start );
-			MSG_WriteBigString( &msg, sv.configstrings[start] );
+			MSG_WriteString( &msg, sv.configstrings[start] );
 		}
 	}
 
 	// write the baselines
-	Com_Memset( &nullstate, 0, sizeof( nullstate ) );
+	MSG_GetNullEntityState( &nullstate );
 	for ( start = 0 ; start < MAX_GENTITIES; start++ ) {
 		base = &sv.svEntities[start].baseline;
 		if ( !base->number ) {
@@ -762,12 +757,8 @@ static void SV_SendClientGameState( client_t *client ) {
 		MSG_WriteDeltaEntity( &msg, &nullstate, base, qtrue );
 	}
 
-	MSG_WriteByte( &msg, svc_EOF );
-
-	MSG_WriteLong( &msg, client - svs.clients);
-
-	// write the checksum feed
-	MSG_WriteLong( &msg, sv.checksumFeed);
+	// the end of the list
+	MSG_WriteByte( &msg, 0 );
 
 	if ( msg.overflowed ) {
 		Com_Error( ERR_DROP, "SV_SendClientGameState: game state exceeds MAX_MSGLEN (%i)", MAX_MSGLEN );
@@ -1191,13 +1182,11 @@ int SV_SendDownloadMessages(void)
 		if(cl->state && *cl->downloadName)
 		{
 			MSG_Init(&msg, msgBuffer, sizeof(msgBuffer));
-			MSG_WriteLong(&msg, cl->lastClientCommand);
 			
 			retval = SV_WriteDownloadToClient(cl, &msg);
 				
 			if(retval)
 			{
-				MSG_WriteByte(&msg, svc_EOF);
 				SV_Netchan_Transmit(cl, &msg);
 				numDLs += retval;
 			}

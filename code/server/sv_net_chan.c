@@ -246,8 +246,6 @@ then buffer them and make sure they get sent in correct order
 
 void SV_Netchan_Transmit( client_t *client, msg_t *msg)
 {
-	MSG_WriteByte( msg, svc_EOF );
-
 	if(client->netchan.unsentFragments || client->netchan_start_queue)
 	{
 		netchan_buffer_t *netbuf;

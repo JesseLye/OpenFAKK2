@@ -1002,7 +1002,6 @@ void CL_WritePacket( void ) {
 				byte fakedata[MAX_MSGLEN];
 				MSG_Init (&fakemsg, fakedata, sizeof (fakedata));
 				MSG_Bitstream (&fakemsg);
-				MSG_WriteLong (&fakemsg, clc.reliableAcknowledge);
 				MSG_WriteByte (&fakemsg, svc_voipOpus);
 				MSG_WriteShort (&fakemsg, clc.clientNum);
 				MSG_WriteByte (&fakemsg, clc.voipOutgoingGeneration);
@@ -1011,7 +1010,6 @@ void CL_WritePacket( void ) {
 				MSG_WriteShort (&fakemsg, clc.voipOutgoingDataSize );
 				MSG_WriteBits (&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
 				MSG_WriteData (&fakemsg, clc.voipOutgoingData, voipSize);
-				MSG_WriteByte (&fakemsg, svc_EOF);
 				CL_WriteDemoMessage (&fakemsg, 0);
 			}
 

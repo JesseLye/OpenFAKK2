@@ -789,10 +789,11 @@ Sound playback and client prints that are not implemented yet.
 =================
 SV_CenterPrintf, SV_LocationPrintf
 
-FAKK2: the retail server (0x4450f0, 0x445190) formats the text, drops it
-when it is over 256 characters ("Centerprint text exceeds buffer size")
-and keeps it in the client's record for the next message to carry
-(svc_centerprint, svc_locprint); SV_SendClientSnapshot writes it.
+FAKK2: the retail server (0x445110, 0x4451b0) formats the text, cuts it to
+255 characters with a developer message when it is longer ("Centerprint
+text exceeds buffer size") and keeps it in the client's record for the next
+snapshot to carry (svc_centerprint, svc_locprint; SV_WriteSnapshotToClient).
+Both prints share the one record, so the last of a frame is the one sent.
 =================
 */
 static client_t *SV_PrintClient( gentity_t *ent ) {
@@ -815,8 +816,8 @@ static void QDECL SV_CenterPrintf( gentity_t *ent, const char *fmt, ... ) {
 	va_start( argptr, fmt );
 	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
 	va_end( argptr );
-	if ( strlen( text ) >= sizeof( cl->centerprint ) ) {
-		Com_Error( ERR_DROP, "Centerprint text exceeds buffer size\n" );
+	if ( strlen( text ) > sizeof( cl->centerprint ) ) {
+		Com_DPrintf( "Centerprint text exceeds buffer size\n" );
 	}
 	Q_strncpyz( cl->centerprint, text, sizeof( cl->centerprint ) );
 }
@@ -832,12 +833,13 @@ static void QDECL SV_LocationPrintf( gentity_t *ent, int x, int y, const char *f
 	va_start( argptr, fmt );
 	Q_vsnprintf( text, sizeof( text ), fmt, argptr );
 	va_end( argptr );
-	if ( strlen( text ) >= sizeof( cl->locprint ) ) {
-		Com_Error( ERR_DROP, "Locationprint text exceeds buffer size\n" );
+	if ( strlen( text ) > sizeof( cl->centerprint ) ) {
+		Com_DPrintf( "Locationprint text exceeds buffer size\n" );
 	}
-	Q_strncpyz( cl->locprint, text, sizeof( cl->locprint ) );
+	Q_strncpyz( cl->centerprint, text, sizeof( cl->centerprint ) );
 	cl->locprintX = x;
 	cl->locprintY = y;
+	cl->locprint = qtrue;
 }
 /*
 ===========================================================================

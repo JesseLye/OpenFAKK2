@@ -204,10 +204,11 @@ typedef struct client_s {
 	int				numPendingSounds;
 	server_sound_t	pendingSounds[MAX_SERVER_SOUNDS];
 
-	// FAKK2: the game's prints, sent with the next snapshot (the retail
-	// server keeps 256 bytes of each in its client; 0x4450f0)
+	// FAKK2: the game's latest print, sent with the next snapshot. The
+	// retail server keeps one in its client (0x4450f0): a location print
+	// sets locprint and its place, and a centre print leaves them as they are.
 	char			centerprint[256];
-	char			locprint[256];
+	qboolean		locprint;
 	int				locprintX, locprintY;
 
 #ifdef LEGACY_PROTOCOL

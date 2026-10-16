@@ -690,6 +690,12 @@ CL_Record_f
 record <demoname>
 
 Begins recording a demo from the current position
+
+FAKK2: the retail engine's (fakk2.exe CL_Record_f 0x420190). It records only
+while g_syncronousClients (spelled so) is set, names the file
+demos/<name>.dm3, or the first free demo0000 to demo9999, and writes the game
+state as the server sends it: configstrings, baselines against the null
+state, and a 0 at the end of the list.
 ====================
 */
 static char		demoName[MAX_QPATH];	// compiler bug workaround
@@ -709,9 +715,7 @@ void CL_Record_f( void ) {
 	}
 
 	if ( clc.demorecording ) {
-		if (!clc.spDemoRecording) {
-			Com_Printf ("Already recording.\n");
-		}
+		Com_Printf ("Already recording.\n");
 		return;
 	}
 
@@ -720,36 +724,22 @@ void CL_Record_f( void ) {
 		return;
 	}
 
-  // sync 0 doesn't prevent recording, so not forcing it off .. everyone does g_sync 1 ; record ; g_sync 0 ..
-	if ( NET_IsLocalAddress( clc.serverAddress ) &&
-		!Cvar_VariableValue( "g_synchronousClients" ) &&
-		// Don't nag if we're simply recording everything automatically.
-		!cl_autoRecordDemo->integer )
-	{
-		Com_Printf (S_COLOR_YELLOW "WARNING: You should set 'g_synchronousClients 1' for smoother demo recording\n");
+	if ( !Cvar_VariableValue( "g_syncronousClients" ) ) {
+		Com_Printf ("The server must have 'g_syncronousClients 1' set for demos\n");
+		return;
 	}
 
 	if ( Cmd_Argc() == 2 ) {
 		s = Cmd_Argv(1);
 		Q_strncpyz( demoName, s, sizeof( demoName ) );
-#ifdef LEGACY_PROTOCOL
-		if(clc.compat)
-			Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_legacyprotocol->integer);
-		else
-#endif
-			Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_protocol->integer);
+		Com_sprintf( name, sizeof( name ), "demos/%s.%s", demoName, DEMOEXT );
 	} else {
 		int		number;
 
 		// scan for a free demo name
 		for ( number = 0 ; number <= 9999 ; number++ ) {
 			CL_DemoFilename( number, demoName, sizeof( demoName ) );
-#ifdef LEGACY_PROTOCOL
-			if(clc.compat)
-				Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_legacyprotocol->integer);
-			else
-#endif
-				Com_sprintf(name, sizeof(name), "demos/%s.%s%d", demoName, DEMOEXT, com_protocol->integer);
+			Com_sprintf( name, sizeof( name ), "demos/%s.%s", demoName, DEMOEXT );
 
 			if (!FS_FileExists_HomeData(name))
 				break;	// file doesn't exist
@@ -765,11 +755,7 @@ void CL_Record_f( void ) {
 		return;
 	}
 	clc.demorecording = qtrue;
-	if (Cvar_VariableValue("ui_recordSPDemo")) {
-	  clc.spDemoRecording = qtrue;
-	} else {
-	  clc.spDemoRecording = qfalse;
-	}
+	clc.spDemoRecording = qfalse;
 
 	Q_strncpyz( clc.demoName, demoName, sizeof( clc.demoName ) );
 
@@ -778,10 +764,6 @@ void CL_Record_f( void ) {
 
 	// write out the gamestate message
 	MSG_Init (&buf, bufData, sizeof(bufData));
-	MSG_Bitstream(&buf);
-
-	// NOTE, MRE: all server->client messages now acknowledge
-	MSG_WriteLong( &buf, clc.reliableSequence );
 
 	MSG_WriteByte (&buf, svc_gamestate);
 	MSG_WriteLong (&buf, clc.serverCommandSequence );
@@ -794,31 +776,22 @@ void CL_Record_f( void ) {
 		s = cl.gameState.stringData + cl.gameState.stringOffsets[i];
 		MSG_WriteByte (&buf, svc_configstring);
 		MSG_WriteShort (&buf, i);
-		MSG_WriteBigString (&buf, s);
+		MSG_WriteString (&buf, s);
 	}
 
 	// baselines
-	Com_Memset (&nullstate, 0, sizeof(nullstate));
+	MSG_GetNullEntityState( &nullstate );
 	for ( i = 0; i < MAX_GENTITIES ; i++ ) {
 		ent = &cl.entityBaselines[i];
 		if ( !ent->number ) {
 			continue;
 		}
-		MSG_WriteByte (&buf, svc_baseline);		
+		MSG_WriteByte (&buf, svc_baseline);
 		MSG_WriteDeltaEntity (&buf, &nullstate, ent, qtrue );
 	}
 
-	MSG_WriteByte( &buf, svc_EOF );
-	
-	// finished writing the gamestate stuff
-
-	// write the client num
-	MSG_WriteLong(&buf, clc.clientNum);
-	// write the checksum feed
-	MSG_WriteLong(&buf, clc.checksumFeed);
-
-	// finished writing the client packet
-	MSG_WriteByte( &buf, svc_EOF );
+	// the end of the game state
+	MSG_WriteByte( &buf, 0 );
 
 	// write it to the demo file
 	len = LittleLong( clc.serverMessageSequence - 1 );
@@ -991,69 +964,6 @@ void CL_ReadDemoMessage( void ) {
 
 /*
 ====================
-CL_WalkDemoExt
-====================
-*/
-static int CL_WalkDemoExt(char *arg, char *name, int *demofile)
-{
-	int i = 0;
-	*demofile = 0;
-
-#ifdef LEGACY_PROTOCOL
-	if(com_legacyprotocol->integer > 0)
-	{
-		Com_sprintf(name, MAX_OSPATH, "demos/%s.%s%d", arg, DEMOEXT, com_legacyprotocol->integer);
-		FS_FOpenFileRead(name, demofile, qtrue);
-		
-		if (*demofile)
-		{
-			Com_Printf("Demo file: %s\n", name);
-			return com_legacyprotocol->integer;
-		}
-	}
-	
-	if(com_protocol->integer != com_legacyprotocol->integer)
-#endif
-	{
-		Com_sprintf(name, MAX_OSPATH, "demos/%s.%s%d", arg, DEMOEXT, com_protocol->integer);
-		FS_FOpenFileRead(name, demofile, qtrue);
-
-		if (*demofile)
-		{
-			Com_Printf("Demo file: %s\n", name);
-			return com_protocol->integer;
-		}
-	}
-
-	Com_Printf("Not found: %s\n", name);
-
-	while(demo_protocols[i])
-	{
-#ifdef LEGACY_PROTOCOL
-		if(demo_protocols[i] == com_legacyprotocol->integer)
-			continue;
-#endif
-		if(demo_protocols[i] == com_protocol->integer)
-			continue;
-	
-		Com_sprintf (name, MAX_OSPATH, "demos/%s.%s%d", arg, DEMOEXT, demo_protocols[i]);
-		FS_FOpenFileRead( name, demofile, qtrue );
-		if (*demofile)
-		{
-			Com_Printf("Demo file: %s\n", name);
-
-			return demo_protocols[i];
-		}
-		else
-			Com_Printf("Not found: %s\n", name);
-		i++;
-	}
-	
-	return -1;
-}
-
-/*
-====================
 CL_CompleteDemoName
 ====================
 */
@@ -1063,7 +973,7 @@ static void CL_CompleteDemoName( char *args, int argNum )
 	{
 		char demoFilter[ 16 ];
 
-		Com_sprintf( demoFilter, sizeof(demoFilter), "*.%s*", DEMOEXT );
+		Com_sprintf( demoFilter, sizeof(demoFilter), "*.%s", DEMOEXT );
 		Field_CompleteFilename( "demos", "", demoFilter, qfalse, qtrue );
 	}
 }
@@ -1074,17 +984,16 @@ CL_PlayDemo_f
 
 demo <demoname>
 
+FAKK2: as the retail engine's (fakk2.exe 0x420610), it plays
+demos/<demoname>, or demos/<demoname>.dm3 when the name has no ".dm3".
 ====================
 */
 void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH];
 	char		arg[MAX_OSPATH];
-	char		*ext_test;
-	int			protocol, i;
-	char		retry[MAX_OSPATH];
 
 	if (Cmd_Argc() != 2) {
-		Com_Printf ("demo <demoname>\n");
+		Com_Printf ("playdemo <demoname>\n");
 		return;
 	}
 
@@ -1097,46 +1006,13 @@ void CL_PlayDemo_f( void ) {
 	
 	CL_Disconnect( qtrue );
 
-	// check for an extension .DEMOEXT_?? (?? is protocol)
-	ext_test = strrchr(arg, '.');
-	
-	if(ext_test && !Q_stricmpn(ext_test + 1, DEMOEXT, ARRAY_LEN(DEMOEXT) - 1))
-	{
-		protocol = atoi(ext_test + ARRAY_LEN(DEMOEXT));
-
-		for(i = 0; demo_protocols[i]; i++)
-		{
-			if(demo_protocols[i] == protocol)
-				break;
-		}
-
-		if(demo_protocols[i] || protocol == com_protocol->integer
-#ifdef LEGACY_PROTOCOL
-		   || protocol == com_legacyprotocol->integer
-#endif
-		  )
-		{
-			Com_sprintf(name, sizeof(name), "demos/%s", arg);
-			FS_FOpenFileRead(name, &clc.demofile, qtrue);
-		}
-		else
-		{
-			int len;
-
-			Com_Printf("Protocol %d not supported for demos\n", protocol);
-			len = ext_test - arg;
-
-			if(len >= ARRAY_LEN(retry))
-				len = ARRAY_LEN(retry) - 1;
-
-			Q_strncpyz(retry, arg, len + 1);
-			retry[len] = '\0';
-			protocol = CL_WalkDemoExt(retry, name, &clc.demofile);
-		}
+	if ( strstr( arg, "." DEMOEXT ) ) {
+		Com_sprintf( name, sizeof( name ), "demos/%s", arg );
+	} else {
+		Com_sprintf( name, sizeof( name ), "demos/%s.%s", arg, DEMOEXT );
 	}
-	else
-		protocol = CL_WalkDemoExt(arg, name, &clc.demofile);
-	
+	FS_FOpenFileRead( name, &clc.demofile, qtrue );
+
 	if (!clc.demofile) {
 		Com_Error( ERR_DROP, "couldn't open %s", name);
 		return;
@@ -1148,13 +1024,6 @@ void CL_PlayDemo_f( void ) {
 	clc.state = CA_CONNECTED;
 	clc.demoplaying = qtrue;
 	Q_strncpyz( clc.servername, arg, sizeof( clc.servername ) );
-
-#ifdef LEGACY_PROTOCOL
-	if(protocol <= com_legacyprotocol->integer)
-		clc.compat = qtrue;
-	else
-		clc.compat = qfalse;
-#endif
 
 	// read demo messages until connected
 	while ( clc.state >= CA_CONNECTED && clc.state < CA_PRIMED ) {
@@ -3096,6 +2965,12 @@ void CL_Frame ( int msec ) {
 
 			Q_strncpyz( mapName, COM_SkipPath( cl.mapname ), sizeof( cl.mapname ) );
 			COM_StripExtension(mapName, mapName, sizeof(mapName));
+
+			// record refuses without it, as retail's does (CL_Record_f); the
+			// player asked for every game recorded, so set it for them
+			if ( !Cvar_VariableValue( "g_syncronousClients" ) ) {
+				Cvar_Set( "g_syncronousClients", "1" );
+			}
 
 			Cbuf_ExecuteText( EXEC_NOW,
 					va( "record %s-%s-%s", nowString, serverName, mapName ) );

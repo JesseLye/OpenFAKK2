@@ -391,7 +391,7 @@ qboolean Netchan_Process( netchan_t *chan, msg_t *msg ) {
 		msg->cursize = chan->fragmentLength + 4;
 		chan->fragmentLength = 0;
 		msg->readcount = 4;	// past the sequence number
-		msg->bit = 32;	// past the sequence number
+		msg->bit = 0;	// on a byte boundary (msg.c counts bits within the byte)
 
 		// TTimo
 		// clients were not acking fragmented messages

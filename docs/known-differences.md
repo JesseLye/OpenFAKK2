@@ -91,7 +91,7 @@ here; the client's are under "Commands and cvars the retail engine has" below.
 | Cvar | Retail | OpenFAKK2 | Note |
 | --- | --- | --- | --- |
 | `cheats` | 1 after `map` | 1 after `map` | Now the same. Retail's engine names Quake III's `sv_cheats` `cheats` (`Cvar_Init` `0x42fb36`: "1", `ROM`, `SYSTEMINFO`), the name the game reads. Its `SV_Map_f` (`0x4420d0`) sets it before the spawn, only without `developer`: 1 for `devmap`, 0 for `map`; but the client's disconnect during the load (`0x420990`) sets it back to 1, so a local game always has cheats, with `developer` 0 too (a retail run of `+set developer 0 +map zoo` prints 1). OpenFAKK2 had kept Quake III's name and set 0 after the spawn |
-| `protocol` | 1 | 71 | ioquake3's value; the wire format is OpenFAKK2's own for now |
+| `protocol` | 1 | 1 | Was ioquake3's 71; the server-to-client messages are now retail's ("Demos") |
 | `nextmap` | `map zoo` | `map_restart 0` | Retail sets it to reload the same map |
 | `sv_pure` | 0 | 0 | Was 1; Quake III's pure checksums cannot account for native game modules |
 | `sv_timeout` | 120 | 200 | |
@@ -1063,7 +1063,12 @@ module on purpose in this way:
   scripts right after the world spawns (`Level::ExecGlobalScripts`), so the first map
   matches a map reached in play. `Precache` still runs them as retail does; adding an
   alias that exists changes nothing. A game saved on a first load in retail keeps its
-  silent doors, as their sounds are saved with them.
+  silent doors, as their sounds are saved with them. It shows in the configstrings
+  too (compared through a retail demo, 2026-10-16): on a first load of `zoo` ours
+  registers `fastpneu.wav` and `sound/environment/switch/locked2.wav` as its first two
+  sounds, 84 to retail's 83 (which has no `fastpneu.wav` and `locked2.wav` later), so
+  every later sound's index is one or two higher than retail's. The models and every
+  other configstring are the same and in the same order.
 
 ## With a player present
 
@@ -2210,14 +2215,125 @@ with their flares) at `r_mode -1` 960x540 and 720x540: the middle 720 columns of
 the HUD, and the flares added the same light to both (within 1%). With
 `cl_widescreenFov 0` the 16:9 shot is retail's crop.
 
+## Demos
+
+Demos play on either engine whichever recorded them: since 2026-10-16 OpenFAKK2's server
+writes, and its client reads, the retail engine's server-to-client messages, so a demo is
+the same file on both. A demo recorded on retail is the exact reference for what the
+client side (renderer, client game module, HUD, sound) should make of the same
+snapshots. Demos made for this live in `build\demos`, never in git (they are made from
+Ritual's data).
+
+Shown on `zoo` with `tools\retail-compare\prec.scr` (walk, turn, take the shotgun, fire
+both modes) and `prec2.scr` (a centre print, a location print, two `playsound`s, a
+looping sound and a `say`), recorded on each engine with `probe-client.ps1 [-Retail]`:
+
+- Each engine plays its own demos and the other's to the end without an error, with the
+  same pictures (the walk, the turn, the shotgun's fire). On ours, retail's `prec2` demo
+  starts the same two sounds with retail's sound indexes, volume and minimum distance
+  (`s_show 1`) and prints the `say`.
+- `timedemo 1` gives 179 frames each way. That demo is far too short to be a benchmark;
+  a real one needs a longer and busier recording.
+- `tools\retail-compare\dm3.py`, written from the rules below as read from `fakk2.exe`,
+  reads all four demos (181 and 95 messages each) to the last byte of every message,
+  ours as well as retail's. Before the change the two engines stopped on each other's
+  first message ("CL_ParseServerMessage: Illegible server message").
+
+**Commands.** `record [name]` (`CL_Record_f` `0x420190`) refuses unless the cvar
+`g_syncronousClients` (spelled so) is non-zero ("The server must have
+'g_syncronousClients 1' set for demos"; the client game module reads the same cvar and
+stops predicting), and writes `demos/<name>.dm3`, or the first free `demo0000` to
+`demo9999`. ioquake3 only warned about `g_synchronousClients` and named files
+`.dm_<protocol>`. ioquake3's `cl_autoRecordDemo`, which retail does not have, sets
+`g_syncronousClients` to 1 itself before it records, so it keeps working (prediction
+is off while it records). `demo <name>` (`0x420610`) plays `demos/<name>`, or
+`demos/<name>.dm3` when the name has no `.dm3`. The file is
+`[int message sequence][int length][message]` records with a length of -1 at the end
+(retail's writer `0x41fff0`, called from `CL_PacketEvent` `0x421e69`; reader
+`CL_ReadDemoMessage` `0x4204e0`), as in ioquake3.
+
+**The messages** are Quake III's format from before 1.27 with FAKK2's fields:
+
+- **Protocol 1** (`SV_DirectConnect` `0x443550` turns away anything else); ioquake3's was
+  71.
+- **Bits** (`MSG_WriteBits` `0x439420`, `MSG_ReadBits` `0x439520`): packed least
+  significant first with no Huffman coding. A string or raw data starts on a byte
+  boundary, and the aligning (`0x439350`, writer `MSG_GetSpace` `0x439370`) passes one
+  byte more than it needs to, on both sides. Strings are read up to 1023 characters, `%`
+  as `.` (`0x4397e0`); configstrings too, where ioquake3 had big strings (ours' longest on
+  `zoo` is 493 characters).
+- **Message layout** (`CL_ParseServerMessage` `0x423d60`): commands 1 nop, 2 gamestate,
+  5 server command, 7 snapshot, 8 centre print, 9 location print, until the data ends:
+  there is no `svc_EOF` and no acknowledgement at the head of every message.
+- **Game state** (`SV_SendClientGameState` `0x443b70`, `CL_ParseGamestate` `0x423b60`):
+  the message holds only the game state: the command sequence, configstrings (3, short
+  index, string) and baselines (4, 10-bit number, entity delta) until a 0 byte. The
+  server commands still pending are not sent first (the client takes its command
+  sequence from the game state and would skip them), and no client number or checksum
+  feed follows: the client takes its number from each snapshot's player state, and
+  ours' server now uses a checksum feed of 0 (the pure checks and the user command key
+  use it on both sides). A baseline is written and read against a state that is not all
+  zeros (`MSG_GetNullEntityState`, `0x43a220`): scale and alpha 1, `parent` 1023,
+  `constantLight` 0xffffff, `renderfx` 0x10, the five `bone_tag`s -1.
+- **Snapshot** (`SV_WriteSnapshotToClient` `0x447a50`, `CL_ParseSnapshot` `0x423820`):
+  the reliable acknowledgement, the server time, `sv.timeResidual` up to 255, the delta
+  byte, the flags, the area mask; then the player state, the packet entities (10-bit
+  numbers ending at 1023, `0x447c50`, `0x423560`), the sounds, the game's print if
+  there is one, and the `sv_padPackets` nops.
+- **Entities** (`MSG_WriteDeltaEntity` `0x439bc0`, reader `0x439e70`): 73 fields
+  (`0x4ea228`: name, offset, bits; `eFlags` 16 bits, `parent` 16, `tag_num` 10, `anim`
+  and `torso_anim` 11, `frame` 10, `bone_tag` 8 signed, ...); which changed is the index
+  of one of 31 common change masks (`0x4e6220`, 5 bits) or 31 followed by the 73-bit
+  mask itself. A float is a bit, then 13 bits holding an integral value plus 4096, or its
+  32 bits. The 32 `surfaces` bytes follow as a 32-bit mask and a byte for each change.
+  `changeVectors` prints how many masks went as an index (`0x439b80`).
+- **Player state** (`0x43a280`, reader `0x43a680`): 49 fields (`0x4ea598`) with a bit
+  each, without `walking`, `groundPlane` or `falldir` (`pm_flags` 16 bits, `pm_runtime`
+  16 signed, `feetfalling` 8, `reverb_type` 6, `camera_flags` 16); then `stats`,
+  `activeItems`, `inventory_name_index`, `ammo_name_index`, `ammo_amount` and
+  `max_ammo_amount`, each a bit, a 32-bit mask and a short per change.
+- **Sounds** (`0x43aaa0`, reader `0x43ac30`): a bit, a 6-bit count, then per sound a stop
+  bit (stop: entity 10 bits, channel 6), or an origin (three floats) behind a bit unless
+  it is (0 0 0), entity, channel, an 8-bit sound index, and volume and minimum distance
+  each behind a bit unless -1.
+- **Prints** (`0x445110`, `0x4451b0`): the server keeps one 256-byte print per client; a
+  centre print fills it, a location print fills it and sets its place and a flag, and
+  the snapshot carries it as whichever the flag says, so the last print of a frame is the
+  one sent. A longer text is cut to 255 characters with a developer message; ours had a
+  record for each kind and dropped the game on a long one.
+
+Retail's widths limit ours as they limit retail: 16-bit `eFlags` and `parent`, 10-bit
+frames, 8-bit sound indexes, shorts in the player's arrays, 1023-character configstrings.
+
+The test suite plays two retail demos frame by frame on both games (`demo-zoo`,
+`demo-swamp1`; `tools/suite/README.md`, "Demos"): the same snapshots on both, so what
+differs is the client side. Most frames differ by under 2% of their pixels. The first
+differences they show, not yet investigated:
+
+- The HUD's weapon picture. On `demo-zoo`, recorded after the chaingun was given and
+  drawn, retail's playback shows no weapon in the weapon HUD and ours shows the
+  chaingun, then the rocket launcher. Retail seems to set the picture on something that
+  happened before the recording began; ours takes it from the player state.
+- A rocket's explosion lights Julie bright yellow on ours; on retail she keeps her own
+  colours in front of the fireball (`demo-zoo` frames 17 and 22).
+- In swamp1's cinematic Julie's head is turned differently (up on retail, ahead on ours)
+  and her face is lit warmer on ours (`demo-swamp1` frames 10 to 13).
+- Textures in close-up look blurrier on ours: the creeper's skin and a tree's bark.
+
+Still ours: the client-to-server messages (ioquake3's user commands and client commands,
+now in retail's bits) and the netchan header, which demos do not hold and were not read;
+downloads (command 6, which retail refuses) and VoIP (10 and 11), which a local game does
+not send. A demo carries its own configstrings, so the different sound indexes on a first
+load (under "Global aliases before spawning") do not matter on playback.
+
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
   triggers the player must walk into. The test player can now be given key presses, but
   only a forward walk has been compared.
-- What is sent to clients (snapshots, sounds) and what the client game module makes of
-  it. The test player shows `print` text on the console as a client would and discards
-  everything else; the real client draws the module's picture, which has not been
-  compared with the retail game's.
+- What is sent to clients (snapshots, sounds), field by field: the format is now the
+  same on both ("Demos"), so two demos of one session could be compared with `dm3.py`,
+  but no such comparison has been made. What the client makes of retail's own snapshots
+  can now be seen by playing a retail demo on ours.
 - A game saved by OpenFAKK2 loaded in the retail engine, and the save and load round
   trip run on the retail engine to see whether its own attached models come back
   unlinked as well.

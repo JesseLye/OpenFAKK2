@@ -154,6 +154,9 @@ foreach ($c in $selected) {
             $hash = Get-CheckInputHash $c
             if ($hash -and $m.input -ne $hash) { $r.status = 'skipped'; $r.reason = "the retail reference was made from an older version of $(Get-Prop $c 'probe' 'its probe') (tools\suite\refresh-retail.ps1 -Only $($c.name))"; throw 'skip' }
         }
+        # the retail-recorded demos it plays (demo, timedemo), which come with references
+        $noDemo = @(Get-CheckDemos $c | Where-Object { -not (Test-Path $_.file) } | Select-Object -First 1)
+        if ($noDemo.Count) { $r.status = 'skipped'; $r.reason = "no retail demo for $($noDemo[0].check) (tools\suite\refresh-retail.ps1 -Only $($noDemo[0].check))"; throw 'skip' }
         # a fresh test home for each check: no saves, screenshots or crash dump from the last
         foreach ($d in 'save', 'screenshots') { Remove-Item (Join-Path $TestFakk $d) -Recurse -Force -ErrorAction SilentlyContinue }
         Remove-Item (Join-Path $TestFakk 'crash.dmp') -Force -ErrorAction SilentlyContinue

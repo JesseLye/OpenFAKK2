@@ -35,12 +35,18 @@ A normal server packet will look like:
 1	svc_snapshot
 4	last client reliable command
 4	serverTime
+1	the server's time residual, at most 255 (FAKK2)
 1	lastframe for delta compression
 1	snapFlags
 1	areaBytes
 <areabytes>
 <playerstate>
 <packetentities>
+<sounds> (FAKK2)
+<optional centre or location print> (FAKK2)
+
+FAKK2: the retail engine's layout (fakk2.exe SV_WriteSnapshotToClient
+0x447a50), the bits as msg.c writes them.
 
 =============================================================================
 */
@@ -116,6 +122,60 @@ static void SV_EmitPacketEntities( clientSnapshot_t *from, clientSnapshot_t *to,
 
 /*
 ==================
+SV_WriteSounds
+
+FAKK2 (fakk2.exe 0x43aaa0): a bit for whether there are any, then their count
+and each sound. A stop is the entity and channel; a start has its origin
+unless it is (0 0 0), and its volume and minimum distance unless they are -1.
+==================
+*/
+static void SV_WriteSounds( msg_t *msg, const server_sound_t *sounds, int count ) {
+	int		i;
+
+	if ( !count ) {
+		MSG_WriteBits( msg, 0, 1 );
+		return;
+	}
+	MSG_WriteBits( msg, 1, 1 );
+	MSG_WriteBits( msg, count, MAX_SERVER_SOUNDS_BITS );
+	for ( i = 0 ; i < count ; i++ ) {
+		const server_sound_t	*sound = &sounds[i];
+
+		if ( sound->stop_flag ) {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteBits( msg, sound->entity_number, GENTITYNUM_BITS );
+			MSG_WriteBits( msg, sound->channel, 6 );
+			continue;
+		}
+		MSG_WriteBits( msg, 0, 1 );
+		if ( sound->origin[0] == 0.0f && sound->origin[1] == 0.0f && sound->origin[2] == 0.0f ) {
+			MSG_WriteBits( msg, 0, 1 );
+		} else {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteFloat( msg, sound->origin[0] );
+			MSG_WriteFloat( msg, sound->origin[1] );
+			MSG_WriteFloat( msg, sound->origin[2] );
+		}
+		MSG_WriteBits( msg, sound->entity_number, GENTITYNUM_BITS );
+		MSG_WriteBits( msg, sound->channel, 6 );
+		MSG_WriteBits( msg, sound->sound_index, 8 );
+		if ( sound->volume != -1.0f ) {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteFloat( msg, sound->volume );
+		} else {
+			MSG_WriteBits( msg, 0, 1 );
+		}
+		if ( sound->min_dist != -1.0f ) {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteFloat( msg, sound->min_dist );
+		} else {
+			MSG_WriteBits( msg, 0, 1 );
+		}
+	}
+}
+
+/*
+==================
 SV_WriteSnapshotToClient
 ==================
 */
@@ -154,9 +214,9 @@ static void SV_WriteSnapshotToClient( client_t *client, msg_t *msg ) {
 
 	MSG_WriteByte (msg, svc_snapshot);
 
-	// NOTE, MRE: now sent at the start of every message from server to client
-	// let the client know which reliable clientCommands we have received
-	//MSG_WriteLong( msg, client->lastClientCommand );
+	// let the client know which reliable clientCommands we have received.
+	// FAKK2: here, as retail sends it, not at the head of every message
+	MSG_WriteLong( msg, client->lastClientCommand );
 
 	// send over the current server time so the client can drift
 	// its view of time to try to match
@@ -171,6 +231,9 @@ static void SV_WriteSnapshotToClient( client_t *client, msg_t *msg ) {
 	} else {
 		MSG_WriteLong (msg, sv.time);
 	}
+
+	// FAKK2: the milliseconds SV_Frame has yet to run
+	MSG_WriteByte( msg, sv.timeResidual < 255 ? sv.timeResidual : 255 );
 
 	// what we are delta'ing from
 	MSG_WriteByte (msg, lastframe);
@@ -199,24 +262,21 @@ static void SV_WriteSnapshotToClient( client_t *client, msg_t *msg ) {
 	// delta encode the entities
 	SV_EmitPacketEntities (oldframe, frame, msg);
 
-	// FAKK2: the sounds the game started since the last snapshot. The wire
-	// format is OpenFAKK2's own.
-	MSG_WriteBits( msg, frame->number_of_sounds, MAX_SERVER_SOUNDS_BITS );
-	for ( i = 0 ; i < frame->number_of_sounds ; i++ ) {
-		const server_sound_t	*sound = &frame->sounds[i];
+	// FAKK2: the sounds the game started or stopped since the last snapshot
+	SV_WriteSounds( msg, frame->sounds, frame->number_of_sounds );
 
-		MSG_WriteBits( msg, sound->stop_flag ? 1 : 0, 1 );
-		MSG_WriteBits( msg, sound->entity_number & ( MAX_GENTITIES - 1 ), GENTITYNUM_BITS );
-		MSG_WriteByte( msg, sound->channel );
-		if ( sound->stop_flag ) {
-			continue;
+	// FAKK2: the game's latest print (0x447bb4)
+	if ( client->centerprint[0] ) {
+		if ( client->locprint ) {
+			MSG_WriteByte( msg, svc_locprint );
+			MSG_WriteShort( msg, client->locprintX );
+			MSG_WriteShort( msg, client->locprintY );
+			MSG_WriteString( msg, client->centerprint );
+			client->locprint = qfalse;
+		} else {
+			MSG_WriteByte( msg, svc_centerprint );
+			MSG_WriteString( msg, client->centerprint );
 		}
-		MSG_WriteBits( msg, sound->sound_index & ( MAX_SOUNDS - 1 ), MAX_SOUNDS_BITS );
-		MSG_WriteFloat( msg, sound->origin[0] );
-		MSG_WriteFloat( msg, sound->origin[1] );
-		MSG_WriteFloat( msg, sound->origin[2] );
-		MSG_WriteFloat( msg, sound->volume );
-		MSG_WriteFloat( msg, sound->min_dist );
 	}
 
 	// padding for rate debugging
@@ -705,30 +765,13 @@ void SV_SendClientSnapshot( client_t *client ) {
 	MSG_Init (&msg, msg_buf, sizeof(msg_buf));
 	msg.allowoverflow = qtrue;
 
-	// NOTE, MRE: all server->client messages now acknowledge
-	// let the client know which reliable clientCommands we have received
-	MSG_WriteLong( &msg, client->lastClientCommand );
-
 	// (re)send any reliable server commands
 	SV_UpdateServerCommandsToClient( client, &msg );
 
 	// send over all the relevant entityState_t
 	// and the playerState_t
 	SV_WriteSnapshotToClient( client, &msg );
-
-	// FAKK2: the game's prints since the last message
-	if ( client->centerprint[0] ) {
-		MSG_WriteByte( &msg, svc_centerprint );
-		MSG_WriteString( &msg, client->centerprint );
-		client->centerprint[0] = 0;
-	}
-	if ( client->locprint[0] ) {
-		MSG_WriteByte( &msg, svc_locprint );
-		MSG_WriteShort( &msg, client->locprintX );
-		MSG_WriteShort( &msg, client->locprintY );
-		MSG_WriteString( &msg, client->locprint );
-		client->locprint[0] = 0;
-	}
+	client->centerprint[0] = 0;
 
 #ifdef USE_VOIP
 	SV_WriteVoipToClient( client, &msg );

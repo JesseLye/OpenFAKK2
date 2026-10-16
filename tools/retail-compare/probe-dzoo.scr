@@ -1,0 +1,43 @@
+// Records the suite's zoo fight demo (demos/probe-dzoo.dm3): two creepers spawned ahead of
+// Julie, who fires the chaingun at them, then rockets, then turns away. The suite's
+// "demo" checks play it back frame by frame (tools/suite/README.md, "Demos"); made on
+// retail by refresh-retail.ps1. record needs g_syncronousClients (fakk2.exe 0x4201f6).
+probe:
+waitforplayer
+wait 2
+stuffcmd "set g_syncronousClients 1"
+spawn creeper.tik origin "-1900 1540 0" angles "0 180 0" targetname "cr1"
+spawn creeper.tik origin "-1850 1610 0" angles "0 180 0" targetname "cr2"
+stuffcmd "give weapon_chaingun.tik"
+wait 0.5
+stuffcmd "use Chaingun dual"
+wait 0.5
+stuffcmd "record probe-dzoo"
+wait 1.5
+stuffcmd "+attackleft"
+wait 3
+stuffcmd "-attackleft"
+wait 1
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+wait 2
+stuffcmd "+attackleft"
+wait 0.2
+stuffcmd "-attackleft"
+wait 2
+stuffcmd "+attackleft"
+wait 0.2
+stuffcmd "-attackleft"
+wait 2
+stuffcmd "+right"
+wait 0.5
+stuffcmd "-right"
+stuffcmd "+forward"
+wait 1.5
+stuffcmd "-forward"
+wait 1
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end
