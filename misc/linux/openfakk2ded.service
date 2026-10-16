@@ -1,0 +1,11 @@
+[Unit]
+Description=This service spawns an OpenFAKK2 dedicated server
+# A map will need to be loaded for players to be able to join.
+
+[Service]
+User=openfakk2
+ExecStart=/opt/openfakk2/openfakk2ded +set dedicated 2
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.openfakk2.openfakk2</id>
+  <launchable type="desktop-id">org.openfakk2.openfakk2.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+  <name>OpenFAKK2</name>
+  <summary>Source port of Heavy Metal: F.A.K.K. 2</summary>
+  <description>
+    <p>
+      OpenFAKK2 is a free and open-source source port of Ritual Entertainment's Heavy Metal: F.A.K.K. 2,
+      built on the ioquake3 engine and checked against the retail game's behaviour.
+    </p>
+    <p>
+      It needs the data files of the original game (fakk/pak0.pk3 and fakk/pak1.pk3), which are not included.
+    </p>
+  </description>
+  <developer_name>The OpenFAKK2 contributors</developer_name>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-realistic">intense</content_attribute>
+    <content_attribute id="violence-bloodshed">intense</content_attribute>
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+  </content_rating>
+</component>
