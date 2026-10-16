@@ -272,6 +272,27 @@ function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, 
             }
             Copy-IfThere (Join-Path $LogDir "capture-$label-$tag-$probe.log") "$Out\game.log" | Out-Null
         }
+        'widescreen' {
+            # ours only, at a wide window and at a 4:3 one of its height: wide-<n>.tga and
+            # narrow-<n>.tga, and each run's saved game picture (the probe's "savegame
+            # <saveShot>") as wide-save.tga and narrow-save.tga
+            if ($Side -ne 'ours') { throw 'a widescreen check has no retail side' }
+            foreach ($s in 'wide', 'narrow') {
+                $size = @(Get-Prop $Check $s)
+                $label = "suite-$s"
+                $cap = @{ Probe = $probe; Map = $map; Side = 'ours'; Name = $label; Mode = -1; Secs = $(if ($secs) { $secs } else { 120 })
+                    OursExtra = "+set r_customwidth $($size[0]) +set r_customheight $($size[1]) $extra $sideExtra".Trim() }
+                if ($Bin) { $cap.Bin = $Bin }
+                Remove-Item (Join-Path $TestFakk 'save') -Recurse -Force -ErrorAction SilentlyContinue
+                $output += & $CaptureScript @cap
+                Get-ChildItem (Join-Path $LogDir "captures\$probe-$tag") -File -Filter "$label-*.tga" -ErrorAction SilentlyContinue | ForEach-Object {
+                    Copy-Item $_.FullName (Join-Path $Out ($_.Name -replace "^suite-", '')) -Force
+                }
+                $saveShot = Get-Prop $Check 'saveShot'
+                if ($saveShot) { Get-ChildItem (Join-Path $TestFakk 'save') -File -Filter "*_$saveShot.tga" -ErrorAction SilentlyContinue | Select-Object -First 1 | Copy-Item -Destination "$Out\$s-save.tga" -Force }
+                Copy-IfThere (Join-Path $LogDir "capture-$label-$tag-$probe.log") $(if ($s -eq 'wide') { "$Out\game.log" } else { "$Out\game-$s.log" }) | Out-Null
+            }
+        }
         'menus' {
             $menu = $Check.menu
             if ($Side -eq 'retail' -and $menu -eq 'loadsave') {
@@ -467,6 +488,41 @@ function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [strin
     @{ metrics = $metrics; evidence = $lines; images = $images }
 }
 
+# A widescreen check's shots: each wide shot's middle against the 4:3 one of its height,
+# below the HUD (suite.json "top", in the shots' pixels), and the two saved game pictures
+# whole. Both should match whatever the scene: the 3D view keeps the 4:3 view's height,
+# and a saved game's picture is the 4:3 middle.
+function Measure-Widescreen($Check, [string]$Ours, [string]$Evidence) {
+    $metrics = [ordered]@{}; $lines = @(); $images = @()
+    $top = [int](Get-Prop $Check 'top' 0)
+    $names = @(Get-ChildItem $Ours -File -Filter 'wide-*.tga' | Where-Object Name -match '^wide-\d+\.tga$' | ForEach-Object Name | Sort-Object { [int]($_ -replace '\D', '') })
+    if (-not $names.Count) { $metrics['shots'] = 100; return @{ metrics = $metrics; evidence = @('no wide screenshots'); images = @() } }
+    foreach ($n in $names) {
+        $i = [int]($n -replace '\D', '')
+        $narrow = Join-Path $Ours "narrow-$i.tga"
+        if (-not (Test-Path $narrow)) { $metrics["shot$i"] = 100; $lines += "shot $i`: the 4:3 run did not take it"; continue }
+        $png = Join-Path $Evidence "middle-$i.png"
+        $text = & $Python -I $ShotsPy middle (Join-Path $Ours $n) $narrow $png --top $top 2>&1
+        $pct = Get-Percent $text
+        $metrics["shot$i"] = if ($null -eq $pct) { 100 } else { $pct }
+        $lines += "shot $i, the wide one's middle against the 4:3 one below row $top`: $(@($text | Select-String 'mean abs|pixels differing') -join '; ')"
+        $images += $png
+    }
+    if (Get-Prop $Check 'saveShot') {
+        $a = Join-Path $Ours 'wide-save.tga'; $b = Join-Path $Ours 'narrow-save.tga'
+        if ((Test-Path $a) -and (Test-Path $b)) {
+            $png = Join-Path $Evidence 'save.png'
+            $text = & $Python -I $ShotsPy pair $a $b $png 2>&1
+            $pct = Get-Percent $text
+            $metrics['save'] = if ($null -eq $pct) { 100 } else { $pct }
+            $lines += "saved game pictures, wide against 4:3: $(@($text | Select-String 'mean abs|pixels differing') -join '; ')"
+            $images += $png
+        }
+        else { $metrics['save'] = 100; $lines += 'a run made no saved game picture' }
+    }
+    @{ metrics = $metrics; evidence = $lines; images = $images }
+}
+
 function Measure-PlayerLogs([string]$RetailLog, [string]$OursLog, [double]$Tol, [string[]]$Fields = @(), [switch]$ReadingsOnly, [int[]]$Entities = @(), [string[]]$Classnames = @()) {
     $metrics = [ordered]@{}; $evidence = @()
     if (-not $ReadingsOnly) {
@@ -532,6 +588,7 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             else { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields $fields -ReadingsOnly -Entities $ents -Classnames $cls }
         }
         { $_ -in 'capture', 'menus', 'windowshots' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        'widescreen' { $result = Measure-Widescreen $Check $Ours $Evidence }
         'cfgrun' {
             $metrics = [ordered]@{}; $ev = @(); $images = @()
             $marker = Get-Prop $Check 'doneMarker'

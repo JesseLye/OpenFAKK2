@@ -73,7 +73,9 @@ Check names or groups, wildcards allowed, then why. `run-suite.ps1` reads these
 trailers from the commits since the branch's merge base with main (or `-Since`), and a
 check one names that comes out worse is reported as **moved as declared**, not newly
 failing, so the branch can pass `verify`. After the merge, `-AcceptMoves` makes its
-result the new last good one. A run's statuses: newly failing, could not run, moved as
+result the new last good one. A new check is declared the same way, so its first result
+on main is kept even when it passes; otherwise a check without a last good result that
+later differs is only reported as unmatched. A run's statuses: newly failing, could not run, moved as
 declared, known (differs from retail as before), unmatched (no last good result yet),
 pass, skipped; and a check whose numbers dropped is also listed as better than its last
 good result.
@@ -108,6 +110,7 @@ check is for.
 | `client` | `probe-client.ps1` on both real clients | the readings of `select`ed entities, `fields` within `valueTolerance`; `oursOnly`: whether the probe finished |
 | `capture` | `capture.ps1` | % of pixels differing per shot (`--mask-notify`) |
 | `menus` | `capture-menus.ps1` | the same |
+| `widescreen` | `capture.ps1` on ours only, at the `wide` and `narrow` sizes (`r_mode -1`) | % of pixels differing between each wide shot's middle and the narrow shot below row `top` (`shots.py middle`), and between the two runs' saved game pictures (`saveShot`, the name the probe saves under) |
 | `windowshots` | the client, pictures of its window at `times` seconds | the same (the startup intro, which a config's waits would hold up) |
 | `cfgrun` | the client with a config (`cfg`, `{maps} ...` or `{each} ...` per map) | `doneMarker` reached; console warnings (`countWarnings`); frame times (`frameTimes`, com_speeds) |
 | `saveload` | `save-load.ps1` | level variables and readings differing between the saved and the loaded game |

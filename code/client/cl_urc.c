@@ -2181,7 +2181,7 @@ static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, float 
 URC_MenuOrigin, URC_WidgetRect
 
 Where a menu and its widgets are this frame, in 640x480 units. On a window
-wider than 4:3 (scr_keepAspect) the screen reaches past 0 and 640: a menu
+wider than 4:3 (cl_widescreenHud) the screen reaches past 0 and 640: a menu
 aligned left or right goes to that side of the window (the HUD to its
 corners), and one with no horizontal alignment (the full-screen menus)
 stays in the 4:3 frame in the middle. A menu slides in from off the

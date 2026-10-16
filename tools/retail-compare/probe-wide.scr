@@ -1,0 +1,41 @@
+// A wide window's picture, for comparing it with a 4:3 one of the same height
+// (ours only: retail ran at 4:3). On training: the entry cinematic's letterbox,
+// the player's view with the sword in the HUD's weapon window, a script camera
+// on the shooting range, a saved game (its picture is save/config_probewide.tga),
+// a script camera under the rope pool's water, and the full-screen inventory.
+// The suite's widescreen check runs it at both sizes and compares them.
+// .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-wide -Map training -Side ours -Name w169 -Mode -1 `
+//     -OursExtra "+set r_customwidth 1280 +set r_customheight 720"
+probe:
+waitforplayer
+wait 3
+stuffcmd "screenshot"
+wait 22
+stuffcmd "give weapon_sword.tik"
+wait 1
+stuffcmd "use GreenSword righthand"
+wait 2
+stuffcmd "screenshot"
+wait 1
+spawn Camera targetname widecam origin "-16 2620 200" angles "8 270 0"
+wait .2
+cuecamera $widecam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "savegame probewide"
+wait 2
+spawn Camera targetname watercam origin "-1600 -2032 70" angles "15 0 0"
+wait .2
+cuecamera $watercam
+wait 1
+stuffcmd "screenshot"
+wait 1
+cuecamera $widecam
+wait 1
+stuffcmd "inventory"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

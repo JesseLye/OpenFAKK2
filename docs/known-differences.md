@@ -1939,7 +1939,7 @@ What is implemented, and on what basis:
   menu is up, so the main menu comes up clear.
 - **The 2D layer on a wide window (deliberate, beyond 4:3 only).** Retail lays out the
   HUD, menus, prints and inventory in 640x480 units and stretches them over the window,
-  so on a 16:9 one everything 2D is a third too wide. With `scr_keepAspect` (archived,
+  so on a 16:9 one everything 2D is a third too wide. With `cl_widescreenHud` (archived,
   default 1; 0 stretches as retail) a window wider than 4:3 keeps the 640x480 layer's
   shape: it is scaled by the height and centred (`SCR_AdjustFrom640`), the cursor goes
   back through the inverse (`SCR_AdjustTo640`), and the window's edges lie past 0 and
@@ -1962,7 +1962,8 @@ What is implemented, and on what basis:
   4:3 window, or a narrower one (5:4), is laid out exactly as before. Checked at
   1280x720 with `probe-hud`, `probe-printpos`, `capture-menus.ps1 -OursExtra` and a
   posted-mouse run over the main menu (the cursor over CONTROLS lights it up, and the
-  click uses the same hit test).
+  click uses the same hit test). The 3D view widens to the window on its own; see "Views
+  wider than 4:3" below.
 - **Shader parameters from the entity.** FAKK2's shader scripts may write
   `fromEntity` for a wave parameter (`alphaGen wave sin 0 fromEntity 0 0.6` on
   `textures/training/floor_voobing`, the training hall's flashing floor pads) and for
@@ -2209,6 +2210,20 @@ with their flares) at `r_mode -1` 960x540 and 720x540: the middle 720 columns of
 16:9 shots matched the 4:3 shots to a mean of 0.11 per channel, the difference all in
 the HUD, and the flares added the same light to both (within 1%). With
 `cl_widescreenFov 0` the 16:9 shot is retail's crop.
+
+With the 2D layer kept at 4:3 (`cl_widescreenHud`, "The 2D layer on a wide window" above),
+a wide window shows the same picture as a 4:3 one of its height in the middle and more
+of the world at the sides, the HUD in the window's corners. `probe-wide` (ours only) on
+`training` at 1280x720 and 960x720: the entry cinematic's letterbox, the player's view
+with the sword in the HUD's weapon window, a script camera, a camera in the rope pool's
+water (the warp), and the full-screen inventory each matched the 4:3 shot in the middle
+960 columns below the HUD to a mean of 0.03 to 0.08 per channel (1.0 for the moving
+cinematic camera, 0.58 under water, where the warp's phase differs between runs), and
+the saved game's picture to 0.10. The two cvars are independent: with either at 0 the
+other's layer is unchanged (0.03 to 0.07 per channel), and with both at 0 the window is
+retail's, cropped and stretched. The suite's `widescreen` check runs `probe-wide` at both
+sizes and fails when they stop matching (with `cl_widescreenFov 0` the player's view
+differs on 45% of the pixels).
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
