@@ -904,6 +904,167 @@ char *Key_KeynumToString( int keynum ) {
 	return tinystr;
 }
 
+/*
+=============================================================================
+
+GAME CONTROLLERS
+
+OpenFAKK2: a controller's buttons, stick directions and triggers are the
+PAD0_ keys (sdl_input.c). The controls menu shows them by the names below;
+"bind" and the config keep the PAD0_ names.
+
+=============================================================================
+*/
+
+static const keyname_t padDisplayNames[] = {
+	{ "Pad A", K_PAD0_A },
+	{ "Pad B", K_PAD0_B },
+	{ "Pad X", K_PAD0_X },
+	{ "Pad Y", K_PAD0_Y },
+	{ "Pad Back", K_PAD0_BACK },
+	{ "Pad Guide", K_PAD0_GUIDE },
+	{ "Pad Start", K_PAD0_START },
+	{ "Pad L3", K_PAD0_LEFTSTICK_CLICK },
+	{ "Pad R3", K_PAD0_RIGHTSTICK_CLICK },
+	{ "Pad LB", K_PAD0_LEFTSHOULDER },
+	{ "Pad RB", K_PAD0_RIGHTSHOULDER },
+	{ "D-Pad Up", K_PAD0_DPAD_UP },
+	{ "D-Pad Down", K_PAD0_DPAD_DOWN },
+	{ "D-Pad Left", K_PAD0_DPAD_LEFT },
+	{ "D-Pad Right", K_PAD0_DPAD_RIGHT },
+	{ "LS Left", K_PAD0_LEFTSTICK_LEFT },
+	{ "LS Right", K_PAD0_LEFTSTICK_RIGHT },
+	{ "LS Up", K_PAD0_LEFTSTICK_UP },
+	{ "LS Down", K_PAD0_LEFTSTICK_DOWN },
+	{ "RS Left", K_PAD0_RIGHTSTICK_LEFT },
+	{ "RS Right", K_PAD0_RIGHTSTICK_RIGHT },
+	{ "RS Up", K_PAD0_RIGHTSTICK_UP },
+	{ "RS Down", K_PAD0_RIGHTSTICK_DOWN },
+	{ "Pad LT", K_PAD0_LEFTTRIGGER },
+	{ "Pad RT", K_PAD0_RIGHTTRIGGER },
+	{ "Pad Share", K_PAD0_MISC1 },
+	{ "Paddle 1", K_PAD0_PADDLE1 },
+	{ "Paddle 2", K_PAD0_PADDLE2 },
+	{ "Paddle 3", K_PAD0_PADDLE3 },
+	{ "Paddle 4", K_PAD0_PADDLE4 },
+	{ "Touchpad", K_PAD0_TOUCHPAD },
+	{ NULL, 0 }
+};
+
+qboolean Key_IsPadKey( int keynum ) {
+	return keynum >= K_PAD0_A && keynum <= K_PAD0_TOUCHPAD;
+}
+
+/*
+===================
+Key_KeynumToDisplayString
+
+A key's name for the controls menu: a controller's by what is printed on it.
+===================
+*/
+const char *Key_KeynumToDisplayString( int keynum ) {
+	const keyname_t	*kn;
+
+	if ( Key_IsPadKey( keynum ) ) {
+		for ( kn = padDisplayNames ; kn->name ; kn++ ) {
+			if ( kn->keynum == keynum ) {
+				return kn->name;
+			}
+		}
+	}
+	return Key_KeynumToString( keynum );
+}
+
+// what a controller is bound to until the player binds it: the triggers are
+// FAKK2's two hands, the shoulders step through the inventory and the D-pad
+// jumps to four of its slots; Start is the escape key (CL_KeyEvent)
+static const struct {
+	int			keynum;
+	const char	*binding;
+} padDefaultBindings[] = {
+	{ K_PAD0_LEFTSTICK_UP,		"+forward" },
+	{ K_PAD0_LEFTSTICK_DOWN,	"+back" },
+	{ K_PAD0_LEFTSTICK_LEFT,	"+moveleft" },
+	{ K_PAD0_LEFTSTICK_RIGHT,	"+moveright" },
+	{ K_PAD0_RIGHTSTICK_LEFT,	"+left" },
+	{ K_PAD0_RIGHTSTICK_RIGHT,	"+right" },
+	{ K_PAD0_RIGHTSTICK_UP,		"+lookup" },
+	{ K_PAD0_RIGHTSTICK_DOWN,	"+lookdown" },
+	{ K_PAD0_LEFTTRIGGER,		"+attackleft" },
+	{ K_PAD0_RIGHTTRIGGER,		"+attackright" },
+	{ K_PAD0_A,					"+moveup" },
+	{ K_PAD0_B,					"+movedown" },
+	{ K_PAD0_X,					"+use" },
+	{ K_PAD0_Y,					"inventory" },
+	{ K_PAD0_LEFTSHOULDER,		"previnv" },
+	{ K_PAD0_RIGHTSHOULDER,		"nextinv" },
+	{ K_PAD0_DPAD_UP,			"warpinv swords" },
+	{ K_PAD0_DPAD_RIGHT,		"warpinv guns" },
+	{ K_PAD0_DPAD_DOWN,			"warpinv health" },
+	{ K_PAD0_DPAD_LEFT,			"warpinv defense" },
+	{ K_PAD0_LEFTSTICK_CLICK,	"+speed" },
+	{ K_PAD0_RIGHTSTICK_CLICK,	"+cameralook" },
+	{ K_PAD0_BACK,				"holster" },
+};
+
+/*
+===================
+Key_PadDefaultBindings
+
+Called as a controller starts being used: when none of its keys is bound
+(the first time, or after unbindall), it gets the bindings above. The
+keyboard's and the mouse's are left alone.
+===================
+*/
+void Key_PadDefaultBindings( void ) {
+	int		k;
+
+	for ( k = K_PAD0_A ; k <= K_PAD0_TOUCHPAD ; k++ ) {
+		if ( keys[k].binding && keys[k].binding[0] ) {
+			return;
+		}
+	}
+	for ( k = 0 ; k < ARRAY_LEN( padDefaultBindings ) ; k++ ) {
+		Key_SetBinding( padDefaultBindings[k].keynum, padDefaultBindings[k].binding );
+	}
+	Com_Printf( "The controller has no bindings: it gets the default ones\n" );
+}
+
+/*
+===================
+Key_PadMenuKey
+
+While a menu is up the controller works it as the mouse and keyboard do:
+A clicks, B goes back, the D-pad is the arrows (the left stick moves the
+cursor, sdl_input.c). Start is escape everywhere, so it brings the main
+menu up and takes it down. A bind list cell waiting for its key gets the
+controller's own.
+===================
+*/
+static int Key_PadMenuKey( int key ) {
+	if ( key == K_PAD0_START ) {
+		return K_ESCAPE;
+	}
+	if ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) {
+		return key;
+	}
+	if ( !URC_HasMenus() && !( Key_GetCatcher( ) & KEYCATCH_UI ) ) {
+		return key;
+	}
+	if ( URC_BindWaiting() ) {
+		return key;
+	}
+	switch ( key ) {
+	case K_PAD0_A:			return K_MOUSE1;
+	case K_PAD0_B:			return K_ESCAPE;
+	case K_PAD0_DPAD_UP:	return K_UPARROW;
+	case K_PAD0_DPAD_DOWN:	return K_DOWNARROW;
+	case K_PAD0_DPAD_LEFT:	return K_LEFTARROW;
+	case K_PAD0_DPAD_RIGHT:	return K_RIGHTARROW;
+	default:				return key;
+	}
+}
+
 
 /*
 ===================
@@ -1575,6 +1736,21 @@ Called by the system for both key up and key down events
 ===================
 */
 void CL_KeyEvent (int key, qboolean down, unsigned time) {
+	// OpenFAKK2: a controller key is let go as what it went down as
+	static int	padKeyAs[MAX_KEYS];
+
+	if ( Key_IsPadKey( key ) ) {
+		if ( down ) {
+			padKeyAs[key] = Key_PadMenuKey( key );
+			key = padKeyAs[key];
+		} else if ( padKeyAs[key] ) {
+			int		as = padKeyAs[key];
+
+			padKeyAs[key] = 0;
+			key = as;
+		}
+	}
+
 	// FAKK2 (0x41fa1f): ALT and CTRL are followed while their switches are on,
 	// and a key pressed meanwhile is marked for that binding
 	if ( key == K_ALT ) {

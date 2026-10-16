@@ -3709,6 +3709,15 @@ void CL_Init( void ) {
 	Cvar_CheckRange(j_side_axis, 0, MAX_JOYSTICK_AXIS-1, qtrue);
 	Cvar_CheckRange(j_up_axis, 0, MAX_JOYSTICK_AXIS-1, qtrue);
 
+	// OpenFAKK2: a game controller's look speeds, in degrees a second with
+	// the stick all the way over (a negative pitch speed inverts it), and
+	// the push that runs (more than 1: only the speed key and cl_run do)
+	pad_yawSpeed =     Cvar_Get ("pad_yawSpeed",     "200", CVAR_ARCHIVE);
+	pad_pitchSpeed =   Cvar_Get ("pad_pitchSpeed",   "140", CVAR_ARCHIVE);
+	pad_lookExponent = Cvar_Get ("pad_lookExponent", "2", CVAR_ARCHIVE);
+	pad_runThreshold = Cvar_Get ("pad_runThreshold", "0.7", CVAR_ARCHIVE);
+	Cvar_CheckRange(pad_lookExponent, 1, 4, qfalse);
+
 	cl_motdString = Cvar_Get( "cl_motdString", "", CVAR_ROM );
 
 	Cvar_Get( "cl_maxPing", "800", CVAR_ARCHIVE );

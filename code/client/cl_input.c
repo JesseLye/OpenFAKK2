@@ -490,6 +490,92 @@ void CL_JoystickMove( usercmd_t *cmd ) {
 }
 
 /*
+===============================================================================
+
+GAME CONTROLLERS
+
+OpenFAKK2: the stick directions bound to the movement and look commands
+arrive as SE_GAMEPAD_AXIS events (sdl_input.c), past the stick's dead
+zone. Retail read only a Windows joystick through winmm (joyGetPosEx),
+as Quake III did.
+
+===============================================================================
+*/
+
+qboolean	in_padConnected;
+
+cvar_t	*pad_yawSpeed;
+cvar_t	*pad_pitchSpeed;
+cvar_t	*pad_lookExponent;
+cvar_t	*pad_runThreshold;
+
+// kept outside cl, which a map change clears: a stick held through it
+// sends nothing new
+static int	padAxis[PAD_ANALOG_MAX];
+
+// a stick held this close to an axis moves along it alone, so a slightly
+// crooked push does not turn walking into a sideways step
+#define PAD_MOVE_SNAP	0.3f
+
+void CL_GamepadAxisEvent( int channel, int value ) {
+	if ( channel < 0 || channel >= PAD_ANALOG_MAX ) {
+		Com_Error( ERR_DROP, "CL_GamepadAxisEvent: bad channel %i", channel );
+	}
+	padAxis[channel] = value;
+}
+
+/*
+=================
+CL_GamepadMove
+
+Julie moves at full speed in the stick's direction, and runs when it is
+pushed past pad_runThreshold (the speed key turns that around, as it
+does cl_run). The view turns at up to pad_yawSpeed and pad_pitchSpeed
+degrees a second, along a curve (pad_lookExponent) for fine aim near
+the middle.
+=================
+*/
+static void CL_GamepadMove( usercmd_t *cmd ) {
+	float	forward = padAxis[PAD_FORWARD] / 32767.0f;
+	float	side = padAxis[PAD_SIDE] / 32767.0f;
+	float	yaw = padAxis[PAD_YAW] / 32767.0f;
+	float	pitch = padAxis[PAD_PITCH] / 32767.0f;
+	float	mag, most, scale;
+
+	mag = sqrt( forward * forward + side * side );
+	if ( mag > 0 ) {
+		qboolean	run;
+
+		most = MAX( fabs( forward ), fabs( side ) );
+		if ( fabs( forward ) < most * PAD_MOVE_SNAP ) {
+			forward = 0;
+		}
+		if ( fabs( side ) < most * PAD_MOVE_SNAP ) {
+			side = 0;
+		}
+		cmd->forwardmove = ClampChar( cmd->forwardmove + (int)( 127 * forward / most ) );
+		cmd->rightmove = ClampChar( cmd->rightmove + (int)( 127 * side / most ) );
+
+		run = cl_run->integer || ( pad_runThreshold->value <= 1 && mag >= pad_runThreshold->value );
+		if ( in_speed.active ) {
+			run = !run;
+		}
+		if ( run ) {
+			cmd->buttons |= BUTTON_RUN;
+		} else {
+			cmd->buttons &= ~BUTTON_RUN;
+		}
+	}
+
+	mag = sqrt( yaw * yaw + pitch * pitch );
+	if ( mag > 0 ) {
+		scale = pow( MIN( mag, 1 ), pad_lookExponent->value ) / mag * 0.001f * cls.frametime;
+		cl.viewangles[YAW] -= pad_yawSpeed->value * yaw * scale;
+		cl.viewangles[PITCH] += pad_pitchSpeed->value * pitch * scale;
+	}
+}
+
+/*
 =================
 CL_MouseMove
 =================
@@ -673,6 +759,9 @@ usercmd_t CL_CreateCmd( void ) {
 
 	// get basic movement from joystick
 	CL_JoystickMove( &cmd );
+
+	// and from a game controller's sticks
+	CL_GamepadMove( &cmd );
 
 	// check to make sure the angles haven't wrapped
 	if ( cl.viewangles[PITCH] - oldAngles[PITCH] > 90 ) {

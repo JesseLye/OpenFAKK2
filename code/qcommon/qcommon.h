@@ -812,7 +812,8 @@ typedef enum {
 	SE_MOUSE,		// evValue and evValue2 are relative signed x / y moves
 	SE_JOYSTICK_AXIS,	// evValue is an axis number and evValue2 is the current state (-127 to 127)
 	SE_MOUSE_ABS,	// FAKK2: evValue and evValue2 are the cursor's window position, for the menus
-	SE_CONSOLE		// evPtr is a char*
+	SE_CONSOLE,		// evPtr is a char*
+	SE_GAMEPAD_AXIS	// OpenFAKK2: evValue is a padAnalog_t (client.h), evValue2 its value (-32767 to 32767)
 } sysEventType_t;
 
 typedef struct {
@@ -1018,6 +1019,7 @@ void CL_MouseEvent( int dx, int dy, int time );
 void CL_MouseAbsEvent( int x, int y );	// FAKK2: the window cursor, for the menus
 
 void CL_JoystickEvent( int axis, int value, int time );
+void CL_GamepadAxisEvent( int channel, int value );	// OpenFAKK2: a controller's stick, bound to moving or looking
 
 void CL_PacketEvent( netadr_t from, msg_t *msg );
 

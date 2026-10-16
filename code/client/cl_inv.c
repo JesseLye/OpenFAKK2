@@ -490,7 +490,8 @@ INV_KeyEvent
 
 Retail 0x408dc0: the keys bound to the attack commands take the item while
 the bar is up; the arrows and the wheel's keys move through it. Escape
-closes the inventory screen.
+closes the inventory screen. OpenFAKK2: a controller's D-pad moves
+through the screen as the arrows do, and its B button closes it.
 =================
 */
 qboolean INV_KeyEvent( int key ) {
@@ -499,7 +500,7 @@ qboolean INV_KeyEvent( int key ) {
 	if ( !INV_Open() || key < 0 || key >= MAX_KEYS ) {
 		return qfalse;
 	}
-	if ( key == K_ESCAPE ) {
+	if ( key == K_ESCAPE || ( key == K_PAD0_B && inv_fullScreen ) ) {
 		if ( inv_fullScreen ) {
 			INV_Close();
 			return qtrue;
@@ -507,11 +508,11 @@ qboolean INV_KeyEvent( int key ) {
 		return qfalse;
 	}
 	if ( inv_fullScreen ) {
-		if ( key == K_RIGHTARROW || key == K_DOWNARROW ) {
+		if ( key == K_RIGHTARROW || key == K_DOWNARROW || key == K_PAD0_DPAD_RIGHT || key == K_PAD0_DPAD_DOWN ) {
 			INV_Step( 1 );
 			return qtrue;
 		}
-		if ( key == K_LEFTARROW || key == K_UPARROW ) {
+		if ( key == K_LEFTARROW || key == K_UPARROW || key == K_PAD0_DPAD_LEFT || key == K_PAD0_DPAD_UP ) {
 			INV_Step( -1 );
 			return qtrue;
 		}
