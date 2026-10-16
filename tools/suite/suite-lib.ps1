@@ -46,6 +46,7 @@ function Get-Prop($Object, [string]$Name, $Default = $null) {
 # makes that check a quick one.
 function Get-SuiteChecks($Config) {
     foreach ($c in $Config.checks) {
+        Get-CheckLockMode $c | Out-Null      # a misspelt "exclusive" stops the run here, not mid-way
         $items = @($null); $field = $null
         $maps = Get-Prop $c 'maps'
         $menus = Get-Prop $c 'menus'
@@ -256,7 +257,24 @@ function Set-GameCfg([string]$Fakk, [string]$Name, [string[]]$Lines) {
 # console log), shot-<n>.tga, output.txt (what the runner printed) and kind-specific
 # files. Returns a short note.
 # ------------------------------------------------------------------------------------
+# How a check's games take the harness lock (common.ps1): alone when suite.json says
+# "exclusive" and why (timing: frame times or held keys, which a busy machine moves; sound:
+# the loopback recording takes every game's sound; focus: the game must be the window in
+# front), and every sound check; otherwise shared with other worktrees' games.
+function Get-CheckLockMode($Check) {
+    $why = [string](Get-Prop $Check 'exclusive' '')
+    if ($why -and $why -notin 'timing', 'sound', 'focus') { throw "check $($Check.name): ""exclusive"" is '$why'; it takes timing, sound or focus" }
+    if ($why -or (Get-Prop $Check 'sound' $false)) { 'exclusive' } else { 'shared' }
+}
+
 function Invoke-CheckSide($Check, [ValidateSet('ours', 'retail')][string]$Side, [string]$Out, [string]$Bin = '') {
+    $saved = $env:FAKK2_HARNESS_MODE
+    $env:FAKK2_HARNESS_MODE = Get-CheckLockMode $Check
+    try { Invoke-CheckSideGames $Check $Side $Out $Bin }
+    finally { $env:FAKK2_HARNESS_MODE = $saved }
+}
+
+function Invoke-CheckSideGames($Check, [ValidateSet('ours', 'retail')][string]$Side, [string]$Out, [string]$Bin = '') {
     New-Item -ItemType Directory -Force $Out | Out-Null
     Get-ChildItem $Out -File -ErrorAction SilentlyContinue | Remove-Item -Force
     $map = $Check.map

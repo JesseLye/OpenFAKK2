@@ -29,8 +29,9 @@ Run it from a session in the **main checkout**: a worktree session cannot touch 
   Each `Suite-moves: <checks>: <why>` line names checks whose results change on purpose.
 - **Probes it changed:** `git diff --name-only main...<branch> -- tools/retail-compare/*.scr`.
   Their retail references must be made again (step 3).
-- Main is clean (`git status`), and nobody is mid-run: the harness lock
-  (`build\harness.lock.owner`) shows another session's run; wait for it.
+- Main is clean (`git status`). Other sessions' runs may be going on
+  (`build\harness.holders` lists them); the suite run in step 4 shares the machine with
+  them and waits for them only around its exclusive checks.
 
 ## 2. Merge
 

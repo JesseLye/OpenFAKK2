@@ -89,7 +89,15 @@ good result.
 Each check: `name`, `areas`, `level` (quick, standard, full), `kind`, and what the kind
 needs. `maps` (a list, or `"all"`) or `menus` expands one entry into a check per item
 (`spawn/zoo`); `quickMaps` makes some of those quick and `skipMaps` leaves some out. `always: true` runs it at every
-level. `sound: true` runs it only with `-Sound`. `tolerance` per measure (or `"*"`), a
+level. `sound: true` runs it only with `-Sound`. `exclusive` runs its games with no
+other harness game on the machine, and says why: `timing` (it measures frame times, or
+moves the player with held keys, which a busy machine shifts: `frametime`, `timedemo`,
+the strafe checks), `sound` (it records the speakers; every `sound: true` check is
+exclusive anyway) or `focus` (its game must be the window in front). Any other value
+stops the run. Without it a check's games share the machine with other worktrees'
+(`tools/retail-compare/README.md`, "Games side by side, or alone"); give a new check
+`exclusive` when its result would move under load, and say so in its `note`.
+`tolerance` per measure (or `"*"`), a
 number or `"N%"` of the last good value; by default 0, and 1 percentage point for
 screenshots; `toleranceMin` (per measure or `"*"`) is the smallest tolerance allowed,
 for a percentage of numbers so small that machine load moves them more (`frametime`'s

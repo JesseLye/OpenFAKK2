@@ -46,7 +46,7 @@ else {
 }
 # the lock is taken before the recording starts, so the game it records is not left
 # waiting on another session's run while the recorder runs
-Enter-HarnessLock "sound-record $Engine $what"
+Enter-HarnessLock "sound-record $Engine $what" -Mode exclusive   # the loopback records every game's sound
 $capture = $null
 try {
     $capture = Start-Process -FilePath $Python -ArgumentList "`"$(Join-Path $PSScriptRoot 'sound_capture.py')`" `"$out`" $Secs" -PassThru -WindowStyle Hidden -RedirectStandardOutput "$out.txt"
