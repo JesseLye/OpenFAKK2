@@ -299,6 +299,7 @@ Not retail's: in a view wider than 4:3 a half-width is measured against the
 width of a 4:3 view of the same height, so a quad keeps the shape and size it
 has at 4:3 instead of stretching with the screen (the view shows more to the
 sides there, see CL_CG_R_RenderScene). Retail's 4:3 views are unchanged.
+The full-screen blend does not come here (LF_DrawFullscreen).
 =================
 */
 static void LF_DrawQuad( const viewParms_t *view, float x, float y, float sx, float sy, const vec4_t color, shader_t *shader ) {
@@ -404,7 +405,7 @@ static void LF_DrawFullscreen( lfSet_t *set, const viewParms_t *view ) {
 	float	alpha;
 	vec4_t	white = { 1, 1, 1, 1 };
 
-	if ( !set->fullscreen || !set->fullActive ) {
+	if ( !set->fullscreen || set->fullscreen == tr.defaultShader || !set->fullActive ) {
 		return;
 	}
 	elapsed = tr.refdef.time - set->fullTime;
@@ -421,7 +422,11 @@ static void LF_DrawFullscreen( lfSet_t *set, const viewParms_t *view ) {
 		return;
 	}
 	white[3] = alpha;
-	LF_DrawQuad( view, 0, 0, 1, 1, white, set->fullscreen );
+
+	// the whole view, not LF_DrawQuad's 4:3 box on a wide screen
+	RE_SetColor( white );
+	RE_StretchPic( view->viewportX, glConfig.vidHeight - ( view->viewportY + view->viewportHeight ),
+		view->viewportWidth, view->viewportHeight, 0, 0, 1, 1, set->fullscreen->index );
 }
 
 /*
