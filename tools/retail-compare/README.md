@@ -60,6 +60,11 @@ for a change.
 - `bsp_entities.py <pak> <map> <regex>` prints matching entities from a map's entity lump.
 - `check_tiki_against_cik.py <pak0> <pak1>` checks the model bounds and radius rules
   against the definitions the retail engine cached in `.cik` files.
+- `dm3.py <demo.dm3> [-v]` reads a demo recorded by the retail engine and prints its
+  configstrings, snapshots and server commands; it fails on any message it cannot read
+  to the last byte. `prec.scr` and `prec2.scr` record one on either game
+  (`probe-client.ps1 -Probe prec [-Retail]`; ours writes `.dm_71`, which it cannot read).
+  The format is under "Demos" in `docs/known-differences.md`.
 
 ## With a player
 

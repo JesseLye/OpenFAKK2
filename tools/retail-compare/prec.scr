@@ -1,0 +1,36 @@
+// Records a demo of a short session: walk, then fire the shotgun's primary and its
+// grenade. The demo is demos/drec.dm3 on retail and demos/drec.dm_<protocol> on
+// OpenFAKK2. Retail's record refuses unless "g_syncronousClients" (spelled so,
+// fakk2.exe 0x4201f6) is non-zero; ioquake3's spelling is set too, for ours.
+// Run with probe-client.ps1 [-Retail]; play back with "+demo drec".
+probe:
+waitforplayer
+wait 2
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "set g_synchronousClients 1"
+wait 0.2
+stuffcmd "record drec"
+wait 0.5
+stuffcmd "+forward"
+wait 1.5
+stuffcmd "-forward"
+stuffcmd "give weapon_shotgun.tik"
+wait 0.5
+stuffcmd "use Shotgun dual"
+wait 2
+stuffcmd "+right"
+wait 0.3
+stuffcmd "-right"
+stuffcmd "+attackleft"
+wait 0.1
+stuffcmd "-attackleft"
+wait 1.5
+stuffcmd "+attackright"
+wait 0.1
+stuffcmd "-attackright"
+wait 2.5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "pendingevents"
+stuffcmd "quit"
+end

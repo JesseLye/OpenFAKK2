@@ -1,0 +1,31 @@
+// Records demos/drec2: what prec.scr's demo lacks, so dm3.py's readers for them get
+// tested: a centre print, a location print, sounds the server starts (playsound), a
+// looping sound (an entity field) and a server command (say).
+probe:
+waitforplayer
+wait 2
+stuffcmd "set g_syncronousClients 1"
+stuffcmd "set g_synchronousClients 1"
+wait 0.2
+stuffcmd "record drec2"
+wait 0.5
+centerprint "DEMO"
+wait 0.5
+locprint 40 100 "LOCATION"
+wait 0.5
+$player playsound sound/environment/machine/singles/mechmove30a.wav 1 1 500
+wait 0.5
+$player playsound sound/environment/machine/singles/metalboom4.wav 1 1 500
+wait 0.5
+spawn script_origin targetname t1 origin "-2320 1568 80"
+wait 0.2
+$t1 loopsound sound/environment/machine/singles/mechmove30a.wav 1 64
+wait 1
+$t1 remove
+stuffcmd "say hello"
+wait 1
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "pendingevents"
+stuffcmd "quit"
+end
