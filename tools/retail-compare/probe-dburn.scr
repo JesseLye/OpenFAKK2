@@ -1,0 +1,38 @@
+// Records demos/probe-dburn.dm3 on zoo: a creeper (health raised so it lives) 70 units
+// ahead of Julie is hurt by the fire sword six times, so it catches fire (half of the hits
+// light it, Sentient::TryLightOnFire), then she backs away while it burns, for the
+// sound of a burning creature (fx_catchfire.tik's flame2.wav loops) as its distance grows.
+// Play it on both games with the retail-demo skill's sound mode.
+probe:
+waitforplayer
+wait 3
+stuffcmd "set g_syncronousClients 1"
+spawn creeper.tik origin "-2282 1568 0" angles "0 180 0" targetname "cr1"
+wait 0.2
+$cr1 health 3000
+stuffcmd "give weapon_firesword.tik"
+wait 0.5
+stuffcmd "use FireSword right"
+wait 1.5
+stuffcmd "record probe-dburn"
+wait 0.5
+$cr1 hurt 1 firesword
+wait 0.3
+$cr1 hurt 1 firesword
+wait 0.3
+$cr1 hurt 1 firesword
+wait 0.3
+$cr1 hurt 1 firesword
+wait 0.3
+$cr1 hurt 1 firesword
+wait 0.3
+$cr1 hurt 1 firesword
+wait 0.3
+stuffcmd "+back"
+wait 3
+stuffcmd "-back"
+wait 6
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

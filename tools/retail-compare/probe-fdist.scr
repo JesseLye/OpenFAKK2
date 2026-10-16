@@ -1,0 +1,63 @@
+// The fire a burning creature carries (fx_catchfire.tik, a hidden model attached to one of
+// its tags that loops sound/environment/fire/flame2.wav: volume .8, the default minimum
+// distance of 160, "maxfactor 1" in global/sound0.txt) at four distances, for a recording
+// at zoo's start. First a bare loop on a script_origin, then the fire attached to a model's
+// tag as Sentient::TryLightOnFire attaches it, each 4 s at 80, 240, 640 and 1280 units
+// ahead with 2 s of silence between. The player starts at -2352 1568 0 facing +x.
+probe:
+waitforplayer
+wait 2
+spawn script_origin targetname o1 origin "-2272 1568 80"
+wait 0.2
+$o1 loopsound sound/environment/fire/flame2.wav
+wait 4
+$o1 remove
+wait 2
+spawn script_origin targetname o2 origin "-2112 1568 80"
+wait 0.2
+$o2 loopsound sound/environment/fire/flame2.wav
+wait 4
+$o2 remove
+wait 2
+spawn script_origin targetname o3 origin "-1712 1568 80"
+wait 0.2
+$o3 loopsound sound/environment/fire/flame2.wav
+wait 4
+$o3 remove
+wait 2
+spawn script_origin targetname o4 origin "-1072 1568 80"
+wait 0.2
+$o4 loopsound sound/environment/fire/flame2.wav
+wait 4
+$o4 remove
+wait 2
+spawn script_model model gruff.tik targetname g1 origin "-2272 1568 0" angles "0 180 0"
+wait 0.2
+$g1 attachmodel fx_catchfire.tik tag_cherry 1
+wait 4
+$g1 removeattachedmodel tag_cherry 0 models/fx_catchfire.tik
+$g1 remove
+wait 2
+spawn script_model model gruff.tik targetname g2 origin "-2112 1568 0" angles "0 180 0"
+wait 0.2
+$g2 attachmodel fx_catchfire.tik tag_cherry 1
+wait 4
+$g2 removeattachedmodel tag_cherry 0 models/fx_catchfire.tik
+$g2 remove
+wait 2
+spawn script_model model gruff.tik targetname g3 origin "-1712 1568 0" angles "0 180 0"
+wait 0.2
+$g3 attachmodel fx_catchfire.tik tag_cherry 1
+wait 4
+$g3 removeattachedmodel tag_cherry 0 models/fx_catchfire.tik
+$g3 remove
+wait 2
+spawn script_model model gruff.tik targetname g4 origin "-1072 1568 0" angles "0 180 0"
+wait 0.2
+$g4 attachmodel fx_catchfire.tik tag_cherry 1
+wait 4
+$g4 removeattachedmodel tag_cherry 0 models/fx_catchfire.tik
+$g4 remove
+wait 2
+stuffcmd "pendingevents"
+end

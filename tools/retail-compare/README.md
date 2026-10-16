@@ -350,6 +350,13 @@ sound; play a tone of known level through it first if in doubt. The probes put
   units ahead, then three of them, then one put out and another lit, 4 s each; the
   retail engine plays loops of one sound as one, so all three stretches should read
   alike with `rms`.
+- `probe-fdist`: the same fire 80, 240, 640 and 1280 units ahead, 4 s each with 2 s of
+  silence between, first bare on a `script_origin`, then attached to a model's tag as a
+  burning creature carries it; the levels fall with the inverse of the distance.
+- `probe-dburn`, `probe-dbfar`: record demos of a creeper set alight with `hurt 1
+  firesword` (half of the hits light it) 70 units ahead of Julie; in `probe-dbfar` its AI
+  is off and she walks backwards for 7 s, so the fire should fade as she goes (the
+  retail-demo skill's sound mode).
 
 `-Demo <file.dm3>` plays a demo at its own speed instead of a probe, with each game
 logging the sounds it starts (retail's `s_show_sounds`; ours' `s_show`, software mixer
