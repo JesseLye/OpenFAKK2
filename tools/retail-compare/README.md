@@ -228,7 +228,8 @@ Screenshot probes end with `stuffcmd "quit"` instead and are run on both games b
 `retail-capture` skill (`.claude\skills\retail-capture\scripts\capture.ps1 -Probe <p>
 -Map <m>`), which pairs the shots. `probe-crosshair` wields the shotgun in `training` and
 shoots the crosshair on a target and on the floor; `probe-swbranch` cues three cameras on
-`swamp1`; `probe-hud` steps the health and water gauges; `probe-font` puts up a centre
+`swamp1`; `probe-hud` steps the health and water gauges; `probe-h2w` shows the gauges
+and both weapon HUDs (with `-Mode 6`, the HUD's edges enlarged); `probe-font` puts up a centre
 print and a location print in `facfont-20` (glyph spacing and height); `probe-menu`
 brings up the weapon bar and then the main menu over it (the menu pauses the game, so its
 shots and the quit are chained client commands with frame waits; `capture.ps1`'s warning

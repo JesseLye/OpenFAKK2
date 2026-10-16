@@ -863,6 +863,17 @@ Not read, done another way:
   is still stretched. The renderer's new
   `ShaderImageSize` tells the UI an image's size. Captured at 100, 75, 50, 25 and 5
   health and water (`probe-hud.scr`), the gauges match the retail captures.
+- **The HUD's edges, enlarged.** Retail draws the HUD at its size in screen pixels, so
+  every pixel samples a texel's middle. This port enlarges it with the window, and an edge
+  pixel then sampled past the last texel, which filtering mixed with the texel beyond: on a
+  `map` image (repeating) that is the opposite edge. The water gauge's mask
+  (`water_gradient4_mask`, white at the left, black at the right) showed a light line down
+  the gauge's right edge, and the weapon windows (`weapon_left` and `weapon_right`, opaque
+  where they meet at x 96 and clear at their far sides) a dark seam between them. The UI's
+  pictures (`URC_DrawPicST`) now pull their texture coordinates in at every side that lies
+  on a texel boundary, so the first and last pixels covered sample no further out than the
+  edge texels' middles; at 640x480 nothing changes. Captured at 1024x768 with
+  `probe-h2w.scr`: the line and the seam are gone, the rest moves by under a pixel.
 - **The stat bars' flash** (health, water, ammo): when a bar's fill changes, retail
   (UIFakkLabel's bar, 0x418270) draws the bar and then adds its
   `statbar_tileshader_flash` over it in SetColor(i, i, i, i), i fading from 1 to 0 over

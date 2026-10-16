@@ -1,0 +1,24 @@
+// The HUD's edges: the health and water gauges at full and half, then the rocket
+// launcher's two-handed weapon window (its frame and the model inside it).
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-h2w -Map training -Mode 3
+probe:
+waitforplayer
+wait 25
+$player health 100
+$player waterpower 100
+wait 1.5
+stuffcmd "screenshot"
+wait 3.5
+$player health 50
+$player waterpower 50
+wait 1.5
+stuffcmd "screenshot"
+wait 3.5
+stuffcmd "give weapon_rlauncher.tik"
+wait 0.5
+$player use "Rocket Launcher" dual
+wait 3
+stuffcmd "screenshot"
+wait 3.5
+stuffcmd "quit"
+end
