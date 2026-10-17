@@ -17,12 +17,12 @@
     },
     {
       "id": 1,
-      "prompt": "Did my renderer change alter how the swamp branches look in swamp1? Compare this build with the main checkout's build at C:\\Users\\Chse\\Desktop\\OpenFAKK2, and with retail.",
+      "prompt": "Did my renderer change alter how the swamp branches look in swamp1? Compare this build with the main checkout's build, and with retail.",
       "expected_output": "Three captures of probe-swbranch on swamp1 from its script cameras: retail, this build, and the main checkout's build (via -Bin and -Name before); a report that compares each build with retail using the difference figures and says whether the change moved the picture towards or away from retail.",
       "files": [],
       "expectations": [
         "The capture uses script cameras (probe-swbranch.scr or an equivalent spawn Camera / cuecamera probe) so the views match exactly",
-        "One OpenFAKK2 capture uses the main checkout's build (-Bin pointing under C:\\Users\\Chse\\Desktop\\OpenFAKK2\\build) with a distinct -Name, and one uses this worktree's build",
+        "One OpenFAKK2 capture uses the main checkout's build (-Bin pointing under the main checkout's build folder) with a distinct -Name, and one uses this worktree's build",
         "Retail was captured with the same probe",
         "The report gives difference figures for each build against retail, taken from the runner's output or shots.py, and its verdict follows from them",
         "Neither run put +wait on the command line or used an edited copy of the probe without waitforplayer"

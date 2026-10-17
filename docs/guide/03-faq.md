@@ -77,7 +77,9 @@ FAKK2 is single-player only. The dedicated server is there for testing.
 
 ### Where do I report a bug?
 
-Describe what you did and what you saw, the level, and your settings if they matter, and
-attach the console log (`+set logfile 2` writes `fakk\qconsole.log` in the home folder)
-and, after a crash, `crash.dmp` from the same folder. If the original game does the same
-thing, say so: OpenFAKK2 aims to behave like the original, oddities included.
+Open an issue on OpenFAKK2's GitHub page (a crash or hole someone could exploit goes
+privately instead: see [`SECURITY.md`](../../SECURITY.md)). Describe what you did and
+what you saw, the level, and your settings if they matter, and attach the console log
+(`+set logfile 2` writes `fakk\qconsole.log` in the home folder) and, after a crash,
+`crash.dmp` from the same folder. If the original game does the same thing, say so:
+OpenFAKK2 aims to behave like the original, oddities included.

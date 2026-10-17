@@ -1,10 +1,12 @@
-## ioquake3 Security
-We take security very seriously at ioquake3. We welcome any peer review of our 100% free software source code to ensure nobody's ioquake3 clients or servers are ever compromised or hacked.
+# Security
 
-### Where should I report security issues?
+OpenFAKK2 reads files and network data that can come from anyone: maps, models, scripts,
+saves and demos, and what a server or client sends. A bug that lets one of them crash the
+game or run code is a security issue.
 
-In order to give the community time to respond and upgrade we strongly urge you report all security issues privately.
-Please e-mail jack@ioquake.org directly to provide details and repro steps and we will respond as soon as possible, but please note:
+Report it privately, with the steps to reproduce it, through GitHub's **Report a
+vulnerability** button on the repository's Security tab, not in a public issue.
 
-### This is an entirely free software project without much in the way of external funding or sponsorships.
-### We cannot guarantee quick responses but we very much appreciate your discretion when reporting security vulnerabilities.
+OpenFAKK2 is a one-person hobby project: expect a reply when there is time, not a deadline.
+
+The engine starts from ioquake3. If the bug is also in ioquake3, tell them too.

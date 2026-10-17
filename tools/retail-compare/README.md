@@ -7,10 +7,10 @@ under `build\sandbox`, and logs go to `build\compare`.
 
 `common.ps1` holds the shared paths. `$GameInstall` is the retail install
 (`FAKK2_INSTALL` overrides it). `$RitualTools` is a clone of Ritual's Tools 1.02 release
-(github.com/Sporesirius/fakk2; `FAKK2_TOOLS` overrides it): design documents, tool
-sources, example maps and the tools. Read from it, but never commit anything taken from
-it: Ritual's licence does not allow copying it, and its Miles files are not
-redistributable. `tools\ritual-docs.ps1` converts its design documents into searchable
+(github.com/Sporesirius/fakk2), named by the `FAKK2_TOOLS` environment variable: design
+documents, tool sources, example maps and the tools. Only `tools\ritual-docs.ps1` and
+`install-example-maps.ps1` need it. Read from it, but never commit anything taken from it:
+Ritual's licence does not allow copying it, and its Miles files are not redistributable. `tools\ritual-docs.ps1` converts its design documents into searchable
 text in `build\ritual-docs`.
 
     # one map, developer-level spawn output

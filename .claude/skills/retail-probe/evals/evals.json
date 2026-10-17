@@ -17,13 +17,13 @@
     },
     {
       "id": 1,
-      "prompt": "Someone says the gas-pod sling (weapon_sling_gas) still hits Julie when she fires it standing still and looking down. Is that fixed in this build? Compare with the build in the main checkout at C:\\Users\\Chse\\Desktop\\OpenFAKK2.",
+      "prompt": "Someone says the gas-pod sling (weapon_sling_gas) still hits Julie when she fires it standing still and looking down. Is that fixed in this build? Compare with the build in the main checkout.",
       "expected_output": "A probe that holds +lookdown before firing, run through the real client (not the headless test player, which cannot pitch) against both this worktree's build and the main checkout's build; a report stating where the pod ended up in each run relative to Julie and a clear fixed/not-fixed verdict with evidence.",
       "files": [],
       "expectations": [
         "The probe holds +lookdown (press, wait, release) before firing, so the shot is aimed steeply down",
         "The probe was run through the real client (openfakk2.exe) rather than the headless dedicated server, since the test player cannot pitch",
-        "Two runs were made with the same probe: one against the main checkout's build under C:\\Users\\Chse\\Desktop\\OpenFAKK2\\build and one against this worktree's build",
+        "Two runs were made with the same probe: one against the main checkout's build and one against this worktree's build",
         "The report gives the pod's position relative to Julie's position for each run, as numbers taken from the logs",
         "The report's fixed/not-fixed verdict follows from those numbers (a pod within Julie's 30x30x96 box or bouncing at her counts as hitting her; one well past her counts as flying)",
         "Any retail comparison for the pitched shot comes from the real retail client (probe-client.ps1 -Retail), not from compare-player.ps1, whose headless test player cannot pitch"
