@@ -101,11 +101,11 @@ In `code/thirdparty`, built with the engine:
 The engine (`code/`, apart from `code/fakk/`) is ioquake3's and GPLv2+ (`COPYING.txt`).
 
 The code under `code/fakk/` is **not**: it is Ritual's FAKK2 1.02 SDK game code (`fgame`,
-`cgame`) and the four engine headers it shipped with, patched only as far as needed to
-compile with a standard C++ compiler, and covered by Ritual's SDK licence
-(`code/fakk/LICENSE-re.MD`), which does not permit redistribution of modified copies and
-is not GPL compatible. Keep the two apart, and resolve this before publishing the
-repository or any binaries.
+`cgame`) and the four engine headers it shipped with, copyright Ritual Entertainment and
+under Ritual's terms (`code/fakk/LICENSE-re.MD`), not the GPL. It is included as Ritual
+released it, patched to compile with a standard C++ compiler and for a few bugs, each
+change in its own commit. The game modules built from it carry the same terms. If you
+reuse OpenFAKK2, keep the two apart.
 
 ## Credits
 

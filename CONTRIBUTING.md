@@ -1,6 +1,7 @@
 # Contributing to OpenFAKK2
 
-OpenFAKK2 is not public yet and has no issue tracker; this is how work on it is done today.
+Bugs go to the GitHub issues (see the [FAQ](docs/guide/03-faq.md#where-do-i-report-a-bug)),
+changes come as pull requests. This is how work on it is done.
 
 **Read [How OpenFAKK2 is made and checked](docs/guide/08-development.md) first.** In short:
 

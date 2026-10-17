@@ -4,11 +4,12 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $GameInstall = if ($env:FAKK2_INSTALL) { $env:FAKK2_INSTALL } else { 'C:\Program Files (x86)\Ritual Entertainment\Heavy Metal - FAKK2' }
 # Ritual's "Heavy Metal FAKK 2 Tools" 1.02 release (a clone of github.com/Sporesirius/fakk2):
 # design documents in docs\, tool sources in source\utils, example maps in fakk\maps\example,
-# the tools in bin\. Override with FAKK2_TOOLS. It stays outside the repository: Ritual's
-# licence (LICENSE-re.MD there) does not allow copying it, and bin\ holds Miles files that
-# are not redistributable. Read from it; never commit anything taken from it.
-$RitualTools = if ($env:FAKK2_TOOLS) { $env:FAKK2_TOOLS } else { 'C:\Users\Chse\Desktop\git-repos\fakk2' }
-if (-not (Test-Path (Join-Path $RitualTools 'readme-re.txt'))) {
+# the tools in bin\. Set FAKK2_TOOLS to its clone; only the scripts that read it (ritual-docs,
+# install-example-maps) need it. It stays outside the repository: Ritual's licence
+# (LICENSE-re.MD there) does not allow copying it, and bin\ holds Miles files that are not
+# redistributable. Read from it; never commit anything taken from it.
+$RitualTools = $env:FAKK2_TOOLS
+if ($RitualTools -and -not (Test-Path (Join-Path $RitualTools 'readme-re.txt'))) {
     Write-Warning "Ritual's tools release is not at $RitualTools; set FAKK2_TOOLS to its clone"
 }
 $Sandbox = Join-Path $RepoRoot 'build\sandbox'
@@ -322,6 +323,7 @@ function Stop-HarnessGame($Process) {
 # repository (see $RitualTools above). Files already there with the same size and time are
 # left alone.
 function Install-ExampleMaps {
+    if (-not $RitualTools) { throw "set FAKK2_TOOLS to a clone of Ritual's tools release" }
     $source = Join-Path $RitualTools 'fakk\maps\example'
     if (-not (Test-Path $source)) { throw "no example maps at $source; set FAKK2_TOOLS to a clone of Ritual's tools release" }
     $files = Get-ChildItem $source -File | Where-Object { $_.Extension -in '.bsp', '.scr', '.pth' }

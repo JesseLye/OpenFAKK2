@@ -18,6 +18,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'retail-compare\common.ps1')
 if (-not $OutDir) { $OutDir = Join-Path $RepoRoot 'build\ritual-docs' }
 
+if (-not $RitualTools) { throw "Set FAKK2_TOOLS to the clone of Ritual's tools release" }
 $docs = Join-Path $RitualTools 'docs'
 if (-not (Test-Path $docs)) { throw "No docs folder in $RitualTools; set FAKK2_TOOLS to the clone of Ritual's tools release" }
 
