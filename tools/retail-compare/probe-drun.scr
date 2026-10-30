@@ -1,0 +1,44 @@
+// Recording probe for the "Julie jitters" report: on fakkhouse, from the spawn on the
+// dock, turn round to face the house, walk towards it past the pier's end, then run
+// diagonally (+speed with +forward and +moveright) for two seconds and strafe right
+// running for one. Records demos/probe-drun.dm3 (g_syncronousClients on, as record
+// needs). Started on intro: a startup +map fakkhouse on retail gives way to the startup
+// intro, so the first thread gamemaps over and queues the run (as chain.scr).
+// fakkhouse's worldspawn starts the level in cinematic mode: the run ends it first.
+// .claude\skills\retail-demo\scripts\demo.ps1 -Probe probe-drun -Map intro -Mode diff
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-drun.scr::run"
+end
+
+run:
+wait 3
+removefakeplayer
+noncinematic
+clearletterbox 0
+cueplayer 0
+wait 1
+stuffcmd "set g_syncronousClients 1"
+wait 0.5
+stuffcmd "record probe-drun"
+wait 0.5
+stuffcmd "+left"
+wait 1.29
+stuffcmd "-left"
+wait 0.3
+stuffcmd "+forward"
+wait 10
+stuffcmd "+speed"
+stuffcmd "+moveright"
+wait 2
+stuffcmd "-forward"
+wait 1
+stuffcmd "-moveright"
+stuffcmd "-speed"
+wait 0.5
+stuffcmd "stoprecord"
+wait 0.2
+stuffcmd "quit"
+end

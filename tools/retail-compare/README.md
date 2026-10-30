@@ -164,6 +164,16 @@ retail game again. Choose the probe with `-Probe`:
   `probe-fbob` is its picture probe for the `retail-capture` skill (`-Map intro -Secs
   150`), forty shots one rendered frame apart while she crosses the model; the shots come
   too slowly (one or two a snapshot) to show the bob.
+- `probe-pier2` is the "Julie jitters" run: on `fakkhouse` from `intro` (the cinematic
+  ended), turn round, walk ten seconds towards the house past the pier's end, then run
+  diagonally (`+speed` with `+forward` and `+moveright`), with a burst of screenshots
+  0.05 s apart through the run (`capture.ps1 -Map intro -Secs 150`). Its use was with
+  `probe-client.ps1` and `+set cg_showmiss 2`, which logs the predicted origin, the
+  player entity, the camera and the frame time every frame (`VIEWLOG` lines; the
+  predicted step followed the frame before's duration until the frame was reordered,
+  "The frame's user command" in `docs/known-differences.md`). `probe-drun` records the
+  same run as a demo (`demo.ps1 -Probe probe-drun -Map intro -Mode diff`: both servers
+  agree on the path within 5.5 units; played on both clients, within 2% a frame).
 - `probe-savedmenu` saves the game on `zoo`, shoots the "GAME SAVED" print and then the
   main menu over it, which must hide it (retail draws the prints under the menus):
   `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-savedmenu -Map zoo

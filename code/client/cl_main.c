@@ -3009,14 +3009,27 @@ void CL_Frame ( int msec ) {
 	// drop the connection
 	CL_CheckTimeout();
 
+	// decide on the serverTime to render. OpenFAKK2: before the frame's user
+	// command is made, not after it as ioquake3 and the retail client
+	// (CL_Frame, 0x421f30: CL_SendCmd, 0x41eb00, then CL_SetCGameTime,
+	// 0x41d590) have it. Made first, the command carries the time the frame
+	// before was drawn at, so the player state the client game module
+	// predicts from it stops one frame short of the time this frame is drawn
+	// at: Julie stood where she was a frame ago while the camera, moved by
+	// this frame's time, was current. With steady frame times the gap is a
+	// fixed lag; when they vary (2560x1600 with 8x multisampling: 8 ms frames
+	// with 13 to 30 ms hitches) she hops against the camera by the difference,
+	// ten units on a 30 ms frame at a diagonal run's 345 u/s, 60 pixels at
+	// that width. With the time set first the command ends at the drawn time
+	// and the predicted state is current (cg_showmiss 2's "[cmd : cg.time]"
+	// print shows the two equal).
+	CL_SetCGameTime();
+
 	// send intentions now
 	CL_SendCmd();
 
 	// resend a connection request if necessary
 	CL_CheckForResend();
-
-	// decide on the serverTime to render
-	CL_SetCGameTime();
 
 	// update the screen
 	CL_Viewer_Frame();

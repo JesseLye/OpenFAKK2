@@ -619,6 +619,19 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 		CG_AddMarks();
 	   }
 
+	// OpenFAKK2 (debug): cg_showmiss 2 logs the view and the player each frame
+	if ( cg_showmiss->integer > 1 )
+	   {
+	   centity_t *pl = &cg_entities[ cg.snap->ps.clientNum ];
+
+	   cgi.Printf( "VIEWLOG t %d dt %d snap %d lerp %.3f pred %.2f %.2f %.2f ent %.2f %.2f %.2f cam %.2f %.2f %.2f yaw %.2f legs %d/%d\n",
+	      cg.time, cg.time - cg.oldTime, cg.snap->serverTime, cg.frameInterpolation,
+	      cg.predicted_player_state.origin[0], cg.predicted_player_state.origin[1], cg.predicted_player_state.origin[2],
+	      pl->lerpOrigin[0], pl->lerpOrigin[1], pl->lerpOrigin[2],
+	      cg.refdef.vieworg[0], cg.refdef.vieworg[1], cg.refdef.vieworg[2],
+	      cg.refdefViewAngles[1], pl->currentState.anim, pl->currentState.frame );
+	   }
+
 	// finish up the rest of the refdef
 #if 0
 	if ( cg.testModelEntity.hModel )
