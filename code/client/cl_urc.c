@@ -2953,9 +2953,6 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
 	vec4_t	color;
 
 	elapsed = URC_MenuElapsed( menu );
-	if ( elapsed < 0 ) {
-		return;		// the menu beneath a popped one comes up when the pop's motion ends
-	}
 	alpha = menu->hiding ? URC_FadeOutAlpha( menu->fadein, elapsed ) : URC_FadeAlpha( menu->fadein, elapsed );
 	if ( menu->hasBgfill ) {
 		// the whole window: a full-screen menu on a wide one has its colour
@@ -3261,10 +3258,15 @@ void URC_PopMenu( void ) {
 	URC_FadeOutMenu( menu );
 	if ( hideTime > 0 ) {
 		urc_lockTime = cls.realtime + hideTime;
-		if ( urc_stackDepth ) {
-			urc_menus[urc_stack[urc_stackDepth - 1]].showTime = cls.realtime + hideTime;
-		}
 	}
+	// the menu beneath is left as it is: it was never hidden, so it stands at
+	// full strength the frame the pop lands, and the popped menu goes out
+	// under it (URC_Draw draws a menu off the stack before the stack).
+	// Retail's Back on the options page shows the main menu whole on the
+	// next frame, with no fade of either (menupop.ps1: sixteen shots after
+	// "popmenu 1" alike to the pixel); OpenFAKK2 had held the menu beneath
+	// back until the popped one had gone and then faded it in, half a
+	// second of black between two pages.
 	URC_ReleaseInput();
 }
 
@@ -6792,6 +6794,7 @@ static void URC_CheckRestart_f( void ) {
 			continue;
 		}
 		latched = Cvar_LatchedString( w->linkcvar );
+		Com_DPrintf( "ui_checkrestart: %s latched \"%s\" snapshot \"%s\"\n", w->linkcvar, latched ? latched : "-", w->linkSnapshot );
 		if ( !latched || !Q_stricmp( latched, w->linkSnapshot ) ) {
 			continue;
 		}
