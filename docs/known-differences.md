@@ -2158,7 +2158,19 @@ What is implemented, and on what basis:
   when nothing solid is in the way. Each vertex takes the three faces its normal points at,
   weighted by the normal's components (`0x48e6e0`); with dynamic lights in the scene
   those are added per vertex instead and the colour is held to 255 by scaling
-  (`0x48e2e0`). `r_light_emphasize` and `r_light_emphasizePercent` scale the cube as
+  (`0x48e2e0`). Without them the cube takes the lightmaps' overbright shift and a face
+  with a channel over 255 is scaled so that its brightest channel is 255 (`0x48e090`;
+  the "normalize" it calls, `0x43bc90`, divides by the largest channel, not by the
+  length). OpenFAKK2 had read that as a vector normalize and brought such a face back
+  to a length of 255, which puts its brightest channel near 150: a face just under the
+  cap stood at 254 and one just over fell to 155, so as a model turned each face
+  crossing the cap jumped by a third, and a lit model stood darker than retail's.
+  Reported as Julie's lighting flickering; `pingas.dm3` (a hand-made demo of her turning
+  on fakkhouse's dock, in `build\demos`), played on both games at 20 frames a second,
+  put her torso at 42 against retail's 57 with jumps of 7 to 8 between frames before
+  the fix, and `r_debugLight 3` logged the faces flipping between 254 and 155 as her
+  yaw crossed the cap with the lights, leaves and position unchanged.
+  `r_light_emphasize` and `r_light_emphasizePercent` scale the cube as
   retail's cvars do (both 0); `r_entityLights 0` turns the lights off. Julie seen from
   the same camera matches the retail capture within a unit or two on every patch
   measured; `r_debugLight 3` prints each model's cube and the lights that went into it.

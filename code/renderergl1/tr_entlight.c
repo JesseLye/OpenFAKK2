@@ -631,23 +631,38 @@ void R_SetupEntityLightCube( trRefEntity_t *ent, const vec3_t origin, const vec3
 		}
 	}
 
-	// the overbright shift the lightmaps get, and a face brighter than 255
-	// is brought back to that length, keeping its hue
+	// the overbright shift the lightmaps get, and a face with a channel over
+	// 255 is scaled so that its brightest channel is 255, keeping its hue
+	// (0x48e090: the "normalize" it calls, 0x43bc90, divides by the largest
+	// channel, not by the length). OpenFAKK2 had brought such a face back to
+	// a length of 255, which puts its brightest channel near 150: a face
+	// just under the cap stood at 254 and one just over fell to 155, so as a
+	// model turned, each face crossing the cap jumped by a third, Julie
+	// flickering and standing a quarter darker than on retail (pingas.dm3).
 	if ( !ent->lightCubeDlights ) {
 		scale = 1 << ( r_mapOverBrightBits->integer - tr.overbrightBits );
 		for ( i = 0 ; i < 6 ; i++ ) {
+			float	max;
+
 			VectorScale( ent->lightCube[i], scale, ent->lightCube[i] );
-			if ( ent->lightCube[i][0] > 255 || ent->lightCube[i][1] > 255 || ent->lightCube[i][2] > 255 ) {
-				VectorNormalize( ent->lightCube[i] );
-				VectorScale( ent->lightCube[i], 255, ent->lightCube[i] );
+			max = ent->lightCube[i][0];
+			if ( ent->lightCube[i][1] > max ) {
+				max = ent->lightCube[i][1];
+			}
+			if ( ent->lightCube[i][2] > max ) {
+				max = ent->lightCube[i][2];
+			}
+			if ( max > 255 ) {
+				VectorScale( ent->lightCube[i], 255.0f / max, ent->lightCube[i] );
 			}
 		}
 	}
 
 	if ( r_debugLight->integer > 1 ) {
-		ri.Printf( PRINT_ALL, "cube: ent %d at %.0f %.0f %.0f lit at %.0f %.0f %.0f radius %.0f leaves %d%s: +x %.0f %.0f %.0f -x %.0f %.0f %.0f +y %.0f %.0f %.0f -y %.0f %.0f %.0f +z %.0f %.0f %.0f -z %.0f %.0f %.0f\n",
+		ri.Printf( PRINT_ALL, "cube: ent %d at %.0f %.0f %.0f lit at %.0f %.0f %.0f radius %.0f leaves %d%s yaw %.1f pitch %.1f roll %.1f t %d: +x %.0f %.0f %.0f -x %.0f %.0f %.0f +y %.0f %.0f %.0f -y %.0f %.0f %.0f +z %.0f %.0f %.0f -z %.0f %.0f %.0f\n",
 			ent->e.entityNumber, ent->e.origin[0], ent->e.origin[1], ent->e.origin[2],
 			origin[0], origin[1], origin[2], radius, numLeaves, ent->lightCubeDlights ? " (dlights per vertex)" : "",
+			RAD2DEG( atan2( ent->e.axis[0][1], ent->e.axis[0][0] ) ), RAD2DEG( asin( -ent->e.axis[0][2] ) ), RAD2DEG( atan2( ent->e.axis[1][2], ent->e.axis[2][2] ) ), tr.refdef.time,
 			ent->lightCube[0][0], ent->lightCube[0][1], ent->lightCube[0][2],
 			ent->lightCube[1][0], ent->lightCube[1][1], ent->lightCube[1][2],
 			ent->lightCube[2][0], ent->lightCube[2][1], ent->lightCube[2][2],
