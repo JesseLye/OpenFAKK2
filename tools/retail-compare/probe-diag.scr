@@ -1,0 +1,35 @@
+// Walks and runs Julie straight, then diagonally (+forward with +moveright), two seconds
+// each, reading her between the phases (a reading arrives after the next phase's marker).
+// Run on the real client with cg_showmiss 1 to count the client game module's prediction
+// misses in each phase (the report of Julie jittering when moving diagonally). Any open
+// map does: zoo. On fakkhouse (the report's map) start on intro and gamemap over, and end
+// the cinematic its worldspawn starts (removefakeplayer, noncinematic, cueplayer 0) first.
+probe:
+waitforplayer
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "echo ==== straight walk"
+stuffcmd "+forward"
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "echo ==== diagonal walk"
+stuffcmd "+moveright"
+wait 2
+stuffcmd "-moveright"
+stuffcmd "whatis 0"
+stuffcmd "echo ==== straight run"
+stuffcmd "+speed"
+wait 2
+stuffcmd "whatis 0"
+stuffcmd "echo ==== diagonal run"
+stuffcmd "+moveright"
+wait 2
+stuffcmd "-moveright"
+stuffcmd "-speed"
+stuffcmd "-forward"
+stuffcmd "echo ==== stopped"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

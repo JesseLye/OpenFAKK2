@@ -698,7 +698,18 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             $fields = @(Get-Prop $Check 'fields' @())
             if (Get-Prop $Check 'oursOnly' $false) {
                 $done = [bool](Select-String -Path $oursLog -Pattern 'pending events as of' -Quiet -ErrorAction SilentlyContinue)
-                $result = @{ metrics = [ordered]@{ finished = $(if ($done) { 0 } else { 1 }) }; evidence = @($(if ($done) { 'the probe finished' } else { 'the probe did not finish' })); images = @() }
+                $metrics = [ordered]@{ finished = $(if ($done) { 0 } else { 1 }) }
+                $ev = @($(if ($done) { 'the probe finished' } else { 'the probe did not finish' }))
+                # logCount: how many lines of the log match a pattern (a count that is judged
+                # against the last good result, so give it a tolerance when it varies)
+                $lc = Get-Prop $Check 'logCount'
+                if ($lc) {
+                    $pattern = Get-Prop $lc 'pattern'
+                    $matches = @(Select-String -Path $oursLog -Pattern $pattern -ErrorAction SilentlyContinue).Count
+                    $metrics['matches'] = $matches
+                    $ev += "lines matching '$pattern': $matches"
+                }
+                $result = @{ metrics = $metrics; evidence = $ev; images = @() }
             }
             else { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields $fields -ReadingsOnly -Entities $ents -Classnames $cls }
         }

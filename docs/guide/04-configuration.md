@@ -35,8 +35,11 @@ behaviour back.
 | Borderless | `r_noborder` | 0 | a window with no border (restart) |
 | Record Demos | `cl_autoRecordDemo` | 0 | records a demo of every level ([Running](02-running.md#demos)) |
 
-Not on the page: `pad_lookExponent` (2, the right stick's curve, 1 to 4) and
-`pad_runThreshold` (0.7, how far the left stick goes before Julie runs).
+Not on the page: `pad_lookExponent` (2, the right stick's curve, 1 to 4),
+`pad_runThreshold` (0.7, how far the left stick goes before Julie runs) and
+`cg_exactbounds` (1: Julie's movement is predicted against a model's exact bounds, so she
+does not bob while standing on one such as the hovercraft at the start of `fakkhouse`; 0
+is the original's prediction, which bobs there).
 
 ## Video
 

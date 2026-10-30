@@ -1,0 +1,34 @@
+// Pictures of Julie walking across the hovercraft at the start of fakkhouse, one every
+// rendered frame for forty frames (retail-capture, -Map intro -Secs 150): the model's
+// top is at a fractional height, which the client's prediction box truncates, so she is
+// predicted falling the fraction and put back every snapshot (the diagonal jitter report).
+// Started on intro, gamemapped over, with the cinematic the worldspawn starts ended first.
+// The shots are stuffed eight to a line (a script string holds about 256 characters);
+// each line queues behind the waits of the one before.
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-fbob.scr::walk"
+end
+
+walk:
+wait 3
+removefakeplayer
+noncinematic
+clearletterbox 0
+cueplayer 0
+wait 1
+stuffcmd "+forward"
+wait 2.6
+stuffcmd "screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait"
+stuffcmd "screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait"
+stuffcmd "screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait"
+stuffcmd "screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait"
+stuffcmd "screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot;wait;screenshot"
+wait 2
+stuffcmd "-forward"
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "quit"
+end

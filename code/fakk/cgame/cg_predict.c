@@ -162,6 +162,47 @@ void CG_BuildSolidList( void )
 
 /*
 ====================
+CG_ExactModelBounds
+
+OpenFAKK2: the box the server packs into entityState_t->solid for a model entity
+keeps whole units only (BoundingBoxToInteger: the x and y extents truncated and
+made symmetric, the top truncated), while the server itself clips the player to
+the entity's real bounds, which for a model are the TIKI's bounds at the entity's
+scale (Entity::setModel, gi.CalculateBounds). Where the two differ the client
+predicts the player wrongly every frame: standing on a model whose top is at a
+fractional height (fakkhouse's hovercraft, 154.94 at scale 1.3, packed as 154),
+the client has no ground within the 0.25 the ground trace looks down, lets her
+fall the fraction and is put back by every snapshot, a bob of a unit 20 times a
+second. Ritual's client does the same. With cg_exactbounds the client uses the
+model's own bounds instead, when they pack to the very box the server sent (so an
+entity the game gave its own size keeps the packed box).
+====================
+*/
+static void CG_ExactModelBounds( const entityState_t *ent, vec3_t bmins, vec3_t bmaxs )
+   {
+   int      tiki;
+   vec3_t   mins, maxs;
+
+   if ( !cg_exactbounds->integer || ent->modelindex <= 0 || ent->modelindex >= MAX_MODELS )
+      {
+      return;
+      }
+   tiki = cgs.model_tiki[ ent->modelindex ];
+   if ( tiki < 0 )
+      {
+      return;
+      }
+   cgi.CalculateBounds( tiki, ent->scale, mins, maxs );
+   if ( BoundingBoxToInteger( mins, maxs ) != ent->solid )
+      {
+      return;
+      }
+   VectorCopy( mins, bmins );
+   VectorCopy( maxs, bmaxs );
+   }
+
+/*
+====================
 CG_ClipMoveToEntities
 
 ====================
@@ -207,6 +248,7 @@ static void CG_ClipMoveToEntities
       else 
          {
          IntegerToBoundingBox( ent->solid, bmins, bmaxs );
+         CG_ExactModelBounds( ent, bmins, bmaxs );
 			cmodel = cgi.CM_TempBoxModel( bmins, bmaxs, CONTENTS_BODY ); //CONTENTS_SOLID | CONTENTS_BODY );
 			VectorCopy( vec3_origin, angles );
 			VectorCopy( cent->lerpOrigin, origin );
