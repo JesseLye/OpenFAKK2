@@ -1,0 +1,34 @@
+// The smoke of fakkhouse's centre chimney (SFX_Smoke_Smokestack at 2048 -960 888,
+// fx_smokestack.tik: an originemitter of explsmokewhite.spr rising at 80 u/s for 6 s)
+// seen from the landing pad, where ours cut the puffs off flat at the sky brush
+// over the house (a portalsky face at z 1344).
+// Runs on intro: a startup "+map fakkhouse" on the retail game is replaced by the
+// startup intro, so the probe starts on intro and moves to fakkhouse by gamemap, the
+// way chain.scr does; the thread for fakkhouse is queued behind the gamemap.
+// Both games, shots paired: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-chimney -Map intro -MaskNotify
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-chimney.scr::shots"
+end
+
+shots:
+wait 30
+spawn Camera targetname probecam1 origin "3900 -1140 -200" angles "-28 174 0"
+spawn Camera targetname probecam2 origin "3000 -1000 500" angles "-10 172 0"
+wait .2
+cuecamera $probecam1
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "screenshot"
+wait 1
+cuecamera $probecam2
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

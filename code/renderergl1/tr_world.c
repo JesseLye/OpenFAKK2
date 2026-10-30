@@ -294,11 +294,28 @@ static void R_AddWorldSurface( msurface_t *surf, int dlightBits ) {
 		return;
 	}
 
+	// FAKK2: a portalsky surface is never drawn. The retail world walk
+	// (fakk2.exe R_RecursiveWorldNode 0x486440, R_AddBrushModelSurfaces
+	// 0x485d40) hands it to 0x47be10 instead of R_AddDrawSurf, which only
+	// lists it so that the sky portal's view is drawn under this one
+	// (R_RenderSkyPortal); its own stage, $whiteimage with GL_ZERO GL_ONE
+	// and depthWrite, never runs. Drawn as a surface, that stage wrote the
+	// sky brush's depth and cut off whatever rose behind it: fakkhouse's
+	// chimney smoke ended flat at the sky brush over the house
+	// (probe-chimney).
 	if ( surf->shader->isPortalSky ) {
 		if ( tr.viewParms.isPortalSky ) {
-			return;		// no sky within the sky
+			// fakk2.exe 0x47be10: once a second at most
+			static int	lastWarning = -1000;
+
+			if ( tr.refdef.time - 1000 > lastWarning ) {
+				ri.Printf( PRINT_WARNING, "WARNING: sky being drawn in a sky portal!  Bad!  Bad!\n" );
+				lastWarning = tr.refdef.time;
+			}
+			return;
 		}
 		tr.portalSkyVisible = qtrue;
+		return;
 	}
 
 	// check for dlighting
