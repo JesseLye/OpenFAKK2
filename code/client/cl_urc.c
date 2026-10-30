@@ -5941,9 +5941,11 @@ URC_BuildModeList
 
 What a "popupsource videomodes" pulldown lists (OpenFAKK2's: retail's
 video menu lists r_mode 3 to 9, 4:3 and 5:4 only): the desktop's size,
-then every size the display reports (r_availableModes) and the common
-wide ones, at least 640x480, smallest first, each with its shape. As many
-as fit on the screen in verdana-14 are kept, the largest.
+then every size the display supports (r_availableModes, the window's
+display's modes), at least 640x480, smallest first, each with its shape.
+Only when the display reports no modes (it takes any size, or SDL could
+not ask it) are the common sizes listed instead. As many as fit on the
+screen in verdana-14 are kept, the largest.
 =================
 */
 #define URC_MAX_MODES		33		// ( 480 - 2 * URC_POPUP_PAD ) / 14
@@ -5981,7 +5983,8 @@ static const char *URC_ShapeName( int w, int h ) {
 }
 
 static void URC_BuildModeList( void ) {
-	// the wide sizes OpenFAKK2's options offered, and retail's list's
+	// the wide sizes OpenFAKK2's options offered, and retail's list's:
+	// the fallback for a display that reports no modes
 	static const int	common[][2] = {
 		{ 1280, 720 }, { 1366, 768 }, { 1600, 900 }, { 1920, 1080 }, { 2560, 1440 }, { 3840, 2160 },
 		{ 1680, 1050 }, { 1920, 1200 }, { 2560, 1600 }, { 2560, 1080 }, { 3440, 1440 },
@@ -5996,10 +5999,12 @@ static void URC_BuildModeList( void ) {
 			numSizes++;
 		}
 	}
-	for ( i = 0 ; i < ARRAY_LEN( common ) && numSizes < ARRAY_LEN( sizes ) ; i++ ) {
-		sizes[numSizes][0] = common[i][0];
-		sizes[numSizes][1] = common[i][1];
-		numSizes++;
+	if ( !numSizes ) {
+		for ( i = 0 ; i < ARRAY_LEN( common ) ; i++ ) {
+			sizes[numSizes][0] = common[i][0];
+			sizes[numSizes][1] = common[i][1];
+			numSizes++;
+		}
 	}
 	qsort( sizes, numSizes, sizeof( sizes[0] ), URC_CompareSizes );
 	for ( i = j = 0 ; i < numSizes ; i++ ) {

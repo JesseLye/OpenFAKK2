@@ -402,9 +402,10 @@ HRTF, which it does on headphones only.
   adds an "OpenFAKK2 Options" button beside Back, and gives the screen resolution's list
   every size: retail's lists 640x480 to 1600x1200 (`r_mode` 3 to 9) and has no way back
   to the desktop's. The list (`popupsource videomodes`, `URC_BuildModeList`) is
-  "Desktop" (`r_mode -2`), then the display's sizes (`r_availableModes`) and the common
-  wide ones (16:9, 16:10, 21:9) at least 640x480, smallest first with their shape, as many
-  as fit the screen (33); a size is set with `r_mode -1`, `r_customwidth` and
+  "Desktop" (`r_mode -2`), then only the sizes the display supports (`r_availableModes`,
+  the window's display's modes) at least 640x480, smallest first with their shape, as many
+  as fit the screen (33); a display that reports no modes (one that takes any size) gets
+  the common sizes instead. A size is set with `r_mode -1`, `r_customwidth` and
   `r_customheight`. Its label shows `ui_resolution`, which `URC_UpdateOptionCvars` keeps
   from those cvars while a menu is up, and two hidden labels link the custom width and
   height so Apply restarts for them and Default resets them.
