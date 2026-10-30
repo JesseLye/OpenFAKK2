@@ -1,0 +1,58 @@
+// probe-pier's steps with a burst of screenshots through a diagonal run: turn round,
+// walk ten seconds towards the house past the pier's end, then run diagonally (+speed
+// with +forward and +moveright), shot every 0.05 s for 0.6 s from 0.6 s into it. Both
+// games live (prediction on), for Julie's pose and place against the camera frame to
+// frame: capture.ps1 -Probe probe-pier2 -Map intro -Secs 150 -Mode 6 -OursExtra "..."
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-pier2.scr::walk"
+end
+
+walk:
+wait 3
+removefakeplayer
+noncinematic
+clearletterbox 0
+cueplayer 0
+wait 1
+stuffcmd "+left"
+wait 1.29
+stuffcmd "-left"
+wait 0.3
+stuffcmd "+forward"
+wait 10
+stuffcmd "+speed"
+stuffcmd "+moveright"
+wait 0.6
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.05
+stuffcmd "screenshot"
+wait 0.5
+stuffcmd "-moveright"
+stuffcmd "-forward"
+stuffcmd "-speed"
+wait 0.5
+stuffcmd "quit"
+end

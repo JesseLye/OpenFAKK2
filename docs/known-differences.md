@@ -1200,6 +1200,26 @@ Not read, done another way:
   loops left out until then), leaving the music's streams alone. Not followed: the
   same update halves the sound volume (`0x43ed10`) while the snapshot's
   `STAT_CINEMATIC` (`0xb129ec`, the stat Escape reads to send `skipcinematic`) is set.
+- **The frame's user command is made after the render time is set (deliberate).** Retail's
+  `CL_Frame` (`0x421f30`), like ioquake3's, sends the frame's command (`CL_SendCmd`,
+  `0x41eb00`, which makes it from `cl.serverTime` as it stands) before it decides the time
+  to draw at (`CL_SetCGameTime`, `0x41d590`), so the command carries the time the frame
+  before was drawn at, and the player state the client game module predicts from the
+  commands (`CG_PredictPlayerState`, which runs them up to the newest) stops one frame
+  short of the time the frame is drawn at; the SDK's own `cg_showmiss 2` print,
+  `[cmd : cg.time]`, shows the two a frame apart. The camera, moved by `cg.time`
+  (`CG_InterpolateView`), is current, so Julie stands a frame behind it: a fixed lag while
+  frame times are steady, and when they vary she hops against the camera by the
+  difference. Reported as "Julie jitters" running diagonally at 2560x1600 with 8x
+  multisampling, where 8 ms frames come with 13 to 30 ms hitches: a diagonal run is the
+  fastest ground speed (345 u/s against 290), so a 30 ms frame moved the camera 10 units
+  and Julie 3, and she caught up the next frame, 60 pixels at that width (logged frame by
+  frame with `cg_showmiss 2` on `probe-pier2`, which also showed the predicted step
+  following the frame before's duration). OpenFAKK2 sets the render time first and makes
+  the command after it, so the predicted state is at the drawn time and each frame's step
+  is that frame's: the two times in the print are equal and the step follows the frame.
+  The server sees the same commands a frame later in game time; the demo of the run
+  (`probe-drun`) recorded on both games agrees on the player's path within 5.5 units.
 - **The client's clock under a pause (deliberate).** Retail's `CL_SetCGameTime`
   (`0x41d590`) leaves `cl.serverTime` alone while paused but lets `cls.realtime` run on
   (`CL_Frame`, `0x421f30`), so when the pause ends `cl.serverTime` jumps by its length
