@@ -585,13 +585,44 @@ function Get-Percent([string[]]$Text) {
     if ($m.Success) { [double]$m.Groups[1].Value } else { $null }
 }
 
-function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [string]$Baseline = '', [string]$Label = 'retail') {
+# Whether an uncompressed TGA is black (no byte of its pixels above 24): the frame a
+# demo's capture takes before the first active snapshot draws.
+function Test-BlackShot([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 18) { return $false }
+    $idLength = $bytes[0]
+    [Linq.Enumerable]::Max([byte[]]$bytes[(18 + $idLength)..($bytes.Length - 1)]) -le 24
+}
+
+# How many leading shot-<n>.tga in a folder are black.
+function Get-LeadingBlack([string]$Dir) {
+    $k = 0
+    foreach ($f in @(Get-ChildItem $Dir -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue | Sort-Object { [int]($_.Name -replace '\D', '') })) {
+        if (-not (Test-BlackShot $f.FullName)) { break }
+        $k++
+    }
+    $k
+}
+
+# -AlignBlack (demo frames): the frames before the first one with a picture are dropped on
+# each side and the rest paired in order, as frame i of each. Whether a black frame is
+# captured before the demo's first active snapshot draws depends on load timing, in both
+# engines: the same build took one in one run and none an hour later (2026-10-31).
+function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [string]$Baseline = '', [string]$Label = 'retail', [switch]$AlignBlack) {
     $metrics = [ordered]@{}; $lines = @(); $images = @()
+    $skipA = 0; $skipB = 0; $skipBase = 0
+    if ($AlignBlack) {
+        $skipA = Get-LeadingBlack $Retail; $skipB = Get-LeadingBlack $Ours
+        if ($Baseline) { $skipBase = Get-LeadingBlack $Baseline }
+        if ($skipA -or $skipB -or $skipBase) { $lines += "leading black frames dropped: $Label $skipA, ours $skipB" + $(if ($Baseline) { ", last good $skipBase" } else { '' }) }
+    }
     $names = @(Get-ChildItem $Retail, $Ours -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object -Unique { [int]($_ -replace '\D', '') })
     if (-not $names.Count) { $metrics['shots'] = 100; return @{ metrics = $metrics; evidence = @('no screenshots on either side'); images = @() } }
-    foreach ($n in $names) {
-        $i = [int]($n -replace '\D', '')
-        $a = Join-Path $Retail $n; $b = Join-Path $Ours $n
+    $count = $names.Count - [Math]::Max($skipA, [Math]::Max($skipB, $skipBase))
+    foreach ($i in 0..($count - 1)) {
+        if ($i -lt 0) { break }
+        $n = "shot-$i.tga"
+        $a = Join-Path $Retail "shot-$($i + $skipA).tga"; $b = Join-Path $Ours "shot-$($i + $skipB).tga"
         if (-not (Test-Path $a)) { $metrics["shot$i"] = 100; $lines += "shot $i`: ours took it, retail did not"; continue }
         if (-not (Test-Path $b)) { $metrics["shot$i"] = 100; $lines += "shot $i`: missing (retail took it)"; continue }
         $png = Join-Path $Evidence "pair-$Label-$i.png"
@@ -600,9 +631,9 @@ function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [strin
         $metrics["shot$i"] = if ($null -eq $pct) { 100 } else { $pct }
         $lines += "shot $i`: $(@($text | Select-String 'mean abs|pixels differing') -join '; ')"
         $images += $png
-        if ($Baseline -and (Test-Path (Join-Path $Baseline $n))) {
+        if ($Baseline -and (Test-Path (Join-Path $Baseline "shot-$($i + $skipBase).tga"))) {
             $png2 = Join-Path $Evidence "pair-lastgood-$i.png"
-            $t2 = & $Python -I $ShotsPy pair (Join-Path $Baseline $n) $b $png2 --mask-notify 2>&1
+            $t2 = & $Python -I $ShotsPy pair (Join-Path $Baseline "shot-$($i + $skipBase).tga") $b $png2 --mask-notify 2>&1
             $p2 = Get-Percent $t2
             $lines += "shot $i against ours' last good: $p2% of pixels differ"
             $images += $png2
@@ -703,7 +734,7 @@ function Measure-Against($Check, [string]$Ours, [string]$Other, [string]$Evidenc
     New-Item -ItemType Directory -Force $Evidence | Out-Null
     $oursLog = Join-Path $Ours 'game.log'; $otherLog = Join-Path $Other 'game.log'
     $shots = @(Get-ChildItem $Other -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue)
-    if ($shots.Count -and @(Get-ChildItem $Ours -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue).Count) { return Measure-Shots $Other $Ours $Evidence -Label x86 }
+    if ($shots.Count -and @(Get-ChildItem $Ours -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue).Count) { return Measure-Shots $Other $Ours $Evidence -Label x86 -AlignBlack:($Check.kind -eq 'demo') }
     if (-not (Test-Path $oursLog) -or -not (Test-Path $otherLog)) { return $null }
     $sel = Get-Prop $Check 'select'
     $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
@@ -769,7 +800,8 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             }
             else { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields $fields -ReadingsOnly -Entities $ents -Classnames $cls }
         }
-        { $_ -in 'capture', 'menus', 'windowshots', 'demo' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        { $_ -in 'capture', 'menus', 'windowshots' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        'demo' { $result = Measure-Shots $Retail $Ours $Evidence $Baseline -AlignBlack }
         'timedemo' {
             # the mean frame time of each demo, without its first frames (where textures are
             # uploaded as they are first seen); ioquake3's own line for the evidence

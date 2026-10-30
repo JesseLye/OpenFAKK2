@@ -125,7 +125,7 @@ $noiseFile = Join-Path $SuiteShared 'reference\noise.json'
 $noiseAll = @{}
 if (Test-Path $noiseFile) { $j = Get-Content $noiseFile -Raw | ConvertFrom-Json; foreach ($p in $j.PSObject.Properties) { $noiseAll[$p.Name] = $p.Value } }
 
-# The tolerance for one measure: suite.json's "tolerance" (by name, or "*"; a number or
+# The tolerance for one measure: suite.json's "tolerance" (by name, by map, or "*"; a number or
 # "N%" of ours' last good value), the kind's default, no less than "toleranceMin" (by
 # name or "*"; for a percentage of a value so small that machine load moves it more),
 # and at least 1.5 times the noise measured for it (-Noise) or, for the match with
@@ -134,7 +134,8 @@ function Get-Tolerance($c, [string]$metric, $base, [string]$which = 'base') {
     $t = 0.0
     if (($c.kind -in 'capture', 'menus') -or $metric -like 'shot*') { $t = 1.0 }
     $cfg = Get-Prop $c 'tolerance'
-    $v = Get-Prop $cfg $metric (Get-Prop $cfg '*' $null)
+    # by measure, else by map (a "maps" check's item: shots/training), else "*"
+    $v = Get-Prop $cfg $metric (Get-Prop $cfg ([string](Get-Prop $c 'map' '')) (Get-Prop $cfg '*' $null))
     if ($null -ne $v) {
         if ([string]$v -match '^([\d.]+)%$') { $t = if ($null -ne $base) { [double]$base * [double]$Matches[1] / 100 } else { [double]::MaxValue } }
         else { $t = [double]$v }
@@ -238,6 +239,8 @@ foreach ($c in $selected) {
                     foreach ($key in $ag.metrics.Keys) {
                         $v = [double]$ag.metrics[$key]
                         $t = Get-Tolerance $c $key $null 'base'
+                        # a menu's clouds drift between two shots: 1.1 points between two runs of one build
+                        if ($c.kind -eq 'menus') { $t = [Math]::Max($t, 2.0) }
                         if ($v -gt $t) { $x86Worse += "$key $v (tolerance $([Math]::Round($t, 2)))" }
                         $r.metrics["x86_$key"] = $v
                     }

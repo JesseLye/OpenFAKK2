@@ -100,7 +100,7 @@ exclusive anyway) or `focus` (its game must be the window in front). Any other v
 stops the run. Without it a check's games share the machine with other worktrees'
 (`tools/retail-compare/README.md`, "Games side by side, or alone"); give a new check
 `exclusive` when its result would move under load, and say so in its `note`.
-`tolerance` per measure (or `"*"`), a
+`tolerance` per measure (or per map of a `maps` check, or `"*"`), a
 number or `"N%"` of the last good value; by default 0, and 1 percentage point for
 screenshots; `toleranceMin` (per measure or `"*"`) is the smallest tolerance allowed,
 for a percentage of numbers so small that machine load moves them more (`frametime`'s
@@ -175,8 +175,9 @@ other, and `-Against x86` (on by default with `-Arch x64`; `-Against none` turns
 runs every check on the x86 build too, right after, and compares the two results
 directly: readings, level variables, pending events and game lines exactly, shots within
 the check's own tolerance (a live shot moves by a frame of animation between two runs of
-one build), and a check that holds keys on the real client (`exclusive: timing`) within
-its own `valueTolerance`, since its two runs cannot be frame-exact. Lines that name the
+one build; a menu's clouds drift by about a point, so menus get 2), and a check that
+holds keys on the real client (`exclusive: timing`) within its own `valueTolerance`,
+since its two runs cannot be frame-exact. Lines that name the
 build (the module's file and checksums, the version string) are left out. A difference
 is newly failing, "against x86" in the evidence, with the pair pictures under
 `checks\<name>\against-x86`. A count that only must not grow (build warnings, console
@@ -214,7 +215,11 @@ demo, recorded by its probe on retail (`refresh-retail.ps1`; the probe sets
 demo with `cl_avidemo N` makes every frame 1/N s of the demo and takes a screenshot of
 it on both engines, so frame n is the same moment on both: no held keys, no frame
 timing. What still differs from retail is the client side: the renderer, the client
-game module, the HUD.
+game module, the HUD. One thing is not fixed by the demo: whether a black frame is
+captured before the first active snapshot draws depends on load timing, in both engines
+(the same build took one in one run and none an hour later), so the frames are paired
+from the first one with a picture on each side, and the evidence says how many were
+dropped.
 
 The client game module draws its effects (particles, smoke, flash bursts, an
 explosion's streaks) with `rand()`, which the engine seeds from the OS at start, so two
