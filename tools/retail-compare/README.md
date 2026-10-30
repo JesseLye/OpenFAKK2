@@ -291,7 +291,8 @@ way, and `probe-lochnar` spawns `lochnar.tik` on `zoo` and reads it, which crash
 cannot draw without a stencil buffer) and `cg_shadows 3` (projected).
 `probe-fogvol` frames `cemetery`'s blood and water entrance fogs from three script cameras,
 40 seconds in (after the level's own cameras), each cued twice. `probe-uihud` takes `zoo`
-with the HUD and after `ui_hud 0`. `probe-dialog` brings up a `dialog` on `zoo`; retail
+with the HUD and after `ui_hud 0`; `probe-up` looks up at `zoo`'s bright ceiling through
+a camera, the weapon windows' edges against it (with `-Mode 6`, the HUD enlarged). `probe-dialog` brings up a `dialog` on `zoo`; retail
 crashes on quitting with it open, which the capture survives. `probe-tlist` does the same
 with `ui_testlist`; retail shows only the first floating window of a run. `probe-vidmode`
 runs `vidmode 4` on `zoo` and shoots at 800x600. `probe-resetcv` prints two of the GameCamera menu's cvars before and

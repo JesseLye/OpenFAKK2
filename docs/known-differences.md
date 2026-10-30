@@ -875,6 +875,23 @@ Not read, done another way:
   on a texel boundary, so the first and last pixels covered sample no further out than the
   edge texels' middles; at 640x480 nothing changes. Captured at 1024x768 with
   `probe-h2w.scr`: the line and the seam are gone, the rest moves by under a pixel.
+- **The HUD's edges, enlarged: the dark halo.** FAKK2's pictures hold black in their
+  transparent texels (`weapon_left.ftx`: 32 clear black columns, then the art from texel
+  33, which is also where the `weaphud` menu's left edge falls). Drawn at its size, as
+  retail draws the HUD, no pixel ever samples between a clear texel and the art; enlarged
+  with the window, the pixels across the art's edge mix that black in with the edge's
+  alpha, and the edge darkens the scene behind it by about a third over a pixel: a dark
+  line down the left of the weapon windows against the sky at 1024x768 (reported from
+  play; `probe-up.scr` shows it over `zoo`'s ceiling). The renderer now keeps a bled copy
+  of each picture a 2D shader blends by its alpha (`IMGFLAG_BLEED`, `R_BleedAlpha`: eight
+  passes giving every clear texel the mean colour of its coloured neighbours, the alpha
+  untouched; a `map`, `clampmap` or `animMap` stage of a `RegisterShaderNoMip` shader with
+  `blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA`, and the stage made for a plain image),
+  so the edge fades the art's own colour out. Additive 2D stages (the stat bars' flash
+  shaders, whose clear texels must add nothing) and every 3D surface keep the image as it
+  is, since retail filters those the same way at any size. Captured with `probe-up` at
+  1024x768: the halo is gone; with `cl_hudScale 0.625` (the HUD back at its pixel size)
+  the shot is the same as before the change, pixel for pixel, and the same as retail's.
 - **The stat bars' flash** (health, water, ammo): when a bar's fill changes, retail
   (UIFakkLabel's bar, 0x418270) draws the bar and then adds its
   `statbar_tileshader_flash` over it in SetColor(i, i, i, i), i fading from 1 to 0 over

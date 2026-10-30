@@ -1,0 +1,13 @@
+// The HUD over the bright ceiling: a camera on zoo looks up and screenshots, for
+// comparing the weapon windows edges against a bright background.
+probe:
+waitforplayer
+wait 2
+spawn Camera targetname upcam origin "-2310 1568 56" angles "-40 0 0"
+wait .2
+cuecamera $upcam
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end
