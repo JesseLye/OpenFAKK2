@@ -114,14 +114,14 @@ check is for.
 | `cik` | `check_tiki_against_cik.py` | models whose bounds or radius differ from the .cik caches |
 | `tiki` | the client's `cachealltikis` | warnings and errors loading every .tik |
 | `spawn` | `run-openfakk2.ps1` / `run-retail.ps1` on a map | game lines only one side prints (compare.ps1's filter); console warnings |
-| `player` | `compare-player.ps1` (headless test player / retail client) | level variables, pending event kinds, whatis readings |
+| `player` | `compare-player.ps1` (headless test player / retail client) | level variables, pending event kinds, whatis readings (all of them, or those of `select`ed entities and their `fields`, as for `client`) |
 | `client` | `probe-client.ps1` on both real clients | the readings of `select`ed entities, `fields` within `valueTolerance`; `oursOnly`: whether the probe finished, and with `logCount` the lines of the log matching its `pattern` (as `matches`, judged against the last good result) |
 | `capture` | `capture.ps1` | % of pixels differing per shot (`--mask-notify`) |
 | `menus` | `capture-menus.ps1` | the same |
 | `widescreen` | `capture.ps1` on ours only, at the `wide` and `narrow` sizes (`r_mode -1`) | % of pixels differing between each wide shot's middle and the narrow shot below row `top` (`shots.py middle`), and between the two runs' saved game pictures (`saveShot`, the name the probe saves under) |
 | `windowshots` | the client, pictures of its window at `times` seconds | the same (the startup intro, which a config's waits would hold up) |
 | `cfgrun` | the client with a config (`cfg`, `{maps} ...` or `{each} ...` per map) | `doneMarker` reached; console warnings (`countWarnings`); frame times (`frameTimes`, com_speeds) |
-| `saveload` | `save-load.ps1` | level variables and readings differing between the saved and the loaded game |
+| `saveload` | `save-load.ps1` (`probe` and `thread` name the script that saves; `probe-save`'s `probe` by default) | level variables and readings differing between the saved and the loaded game |
 | `chain` | `level-chain.ps1` | levels reached, autosaves, inventory against retail's run |
 | `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`): the probe tone's plateaus (`tone`), or the 50th, 75th and 90th percentiles of the levels while sound plays (`rms`, music and game sounds, so the two games' start times do not matter) |
 | `demo` | retail: `probe` records `demos/<probe>.dm3` (kept in the reference); both: that demo played with `cl_avidemo` (`avidemo` frames a second, every `every`-th kept, only those in the `keep` windows when it has them), ours with `cl_demoSeed 1` | % of pixels differing per frame, as `capture` |
@@ -137,6 +137,25 @@ numbers).
 
 Console warnings are counted without two kinds every run prints by the hundred: the
 `.tga` lookups that fall back to `.ftx`, and the collision model's bevel notes.
+
+## The example maps
+
+The `x*` checks run on Ritual's example maps (`tools\retail-compare\maps\example`, one
+small map per feature; `tools\retail-compare\probe-scripting.md` lists them), one
+subsystem of the game code each, so a change to the port (the x64 build above all) that
+breaks one shows up by name: `xdoor` an actor walking through a `func_door`, `xpatrol` an
+actor patrolling, killed and removed, `xpickup` an actor carrying and throwing another
+entity, `xphys` script-thrown physics objects, `xexpl` a `func_multi_exploder`'s delayed
+events, `xspawn` a `func_spawn`, `xcam` orbit and spline cameras, `xevent` an actor
+removed with its thread and events pending. Each is a `player` check (the probe's
+`probe` thread against retail) with an `x*-save` sibling (`saveload` on the probe's
+`save` thread: the same drive saved part way and loaded in a new process). The two
+things the save checks showed from the start, in every one of them, are the game
+module's: a trigger's or exploder's `Contents` comes back as `ffffffff` after a load
+(0 when saved), and a float level variable (`playerammo_edenwater = 50.000000`) comes
+back as an integer. What a death or an idle leaves is drawn at random, so `xpatrol`
+compares the creeper and the player only and its save thread does not kill; `xcam`
+compares the cameras and the player (Gruff's idle nods).
 
 ## Demos
 

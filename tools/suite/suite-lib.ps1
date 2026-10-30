@@ -385,8 +385,10 @@ function Invoke-CheckSideGames($Check, [ValidateSet('ours', 'retail')][string]$S
             Copy-IfThere "$Out\console.log" "$Out\game.log" | Out-Null
         }
         'saveload' {
-            $output = & (Join-Path $RetailCompare 'save-load.ps1') -Map $map -Bin $Bin -Extra $extra
-            foreach ($n in 'saved', 'loaded') { Copy-IfThere (Join-Path $LogDir "save-load-$tag-$n.log") "$Out\$n.log" | Out-Null }
+            # probe and thread: which script saves the game (probe-save's probe thread by default)
+            $sp = if ($probe) { $probe } else { 'probe-save' }; $st = [string](Get-Prop $Check 'thread' 'probe')
+            $output = & (Join-Path $RetailCompare 'save-load.ps1') -Map $map -Probe $sp -Thread $st -Bin $Bin -Extra $extra
+            foreach ($n in 'saved', 'loaded') { Copy-IfThere (Join-Path $LogDir "save-load-$tag-$sp-$n.log") "$Out\$n.log" | Out-Null }
             if (Test-Path "$Out\loaded.log") { Get-Content "$Out\saved.log", "$Out\loaded.log" | Set-Content "$Out\game.log" }
         }
         'sound' {
@@ -691,7 +693,12 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             $ev += Format-WarningGroups $warn 4
             $result = @{ metrics = $metrics; evidence = $ev; images = @() }
         }
-        'player' { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol }
+        'player' {
+            # select and fields, as for client: which readings are compared, and which of their fields
+            $sel = Get-Prop $Check 'select'
+            $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
+            $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields @(Get-Prop $Check 'fields' @()) -Entities $ents -Classnames $cls
+        }
         'client' {
             $sel = Get-Prop $Check 'select'
             $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
