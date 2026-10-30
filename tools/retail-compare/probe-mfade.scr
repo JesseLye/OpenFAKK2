@@ -1,0 +1,22 @@
+// Brings the main menu up over the game and shoots it 250 ms into its fade-in on retail
+// (about a second in on ours: the waits in the one command line count milliseconds on
+// retail and frames, about 4 ms each, on ours), then pops it and shoots the game three
+// times, about 0.3 s, 0.45 s and 1.45 s after the pop. Retail fades the popped menu out
+// over its 0.5 s with the game running under it, so the first two shots must show the
+// menu going and the third must not. The waits after the pop are the level script's:
+// the menu pauses the game, so they run only once it is off the stack, the same on both
+// games (the first also covers the 50 ms or so before the client pauses the game).
+//   .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-mfade -Map zoo -MaskNotify
+probe:
+waitforplayer
+wait 2
+stuffcmd "pushmenu main; wait 250; screenshot; wait 1500; popmenu"
+wait 0.35
+stuffcmd "screenshot"
+wait 0.15
+stuffcmd "screenshot"
+wait 1
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

@@ -158,6 +158,12 @@ retail game again. Choose the probe with `-Probe`:
   as the menu's waits count milliseconds on retail and frames on ours; compare whether
   the print shows. Retail's own "Wrote screenshots/..." takes the print's place, so its
   second shot shows that rather than "GAME SAVED".
+- `probe-mfade` brings the main menu up over the game on `zoo`, shoots it 250 ms into
+  its fade-in (retail only: that wait is the client's), pops it and shoots the game
+  about 0.3, 0.45 and 1.45 s later (timed by the level script, which the menu holds
+  paused): the first shot shows the menu fading out over the running game on both,
+  the others the game alone:
+  `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-mfade -Map zoo -MaskNotify`.
 - `probe-oneprint` puts up a centre print and, a second later, a location print, which
   replaces it (retail keeps one print), then a location print of
   `@textures/menu/gamesaved`, which retail writes as text:
