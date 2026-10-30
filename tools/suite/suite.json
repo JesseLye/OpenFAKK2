@@ -126,6 +126,8 @@
     { "name": "cine", "areas": ["rendering", "server"], "level": "full", "kind": "capture", "probe": "probe-cine", "map": "training" },
     { "name": "button", "areas": ["rendering"], "level": "full", "kind": "capture", "probe": "probe-button", "map": "training" },
     { "name": "intro-shots", "areas": ["rendering"], "level": "full", "kind": "capture", "probe": "probe-shot-seq", "map": "intro" },
+    { "name": "chimney", "areas": ["rendering"], "level": "standard", "kind": "capture", "probe": "probe-chimney", "map": "intro", "secs": 150,
+      "note": "fakkhouse's centre chimney smoke rising through the sky brush over the house (a portalsky surface writes no depth); starts on intro and moves to fakkhouse by gamemap, since a startup +map fakkhouse on retail gives way to the startup intro" },
     { "name": "demo-zoo", "areas": ["rendering", "interface"], "level": "standard", "kind": "demo", "probe": "probe-dzoo", "map": "zoo", "avidemo": 2,
       "note": "retail's demo of a fight on zoo (two creepers, chaingun, rockets, Julie's death) played frame by frame on both games: the same snapshots, so what differs is the client side (renderer, client game module, HUD)" },
     { "name": "demo-swamp1", "areas": ["rendering"], "level": "standard", "kind": "demo", "probe": "probe-dsw1", "map": "swamp1", "avidemo": 1, "secs": 180,

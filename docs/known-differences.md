@@ -1741,7 +1741,23 @@ What is implemented, and on what basis:
   renderer (`0x47bee0`) turns the camera the same way, the viewer's axes times the sky
   axes. Its developer cvars: `r_skyportal 1` puts the camera at `r_skyportal_origin`
   ("x y z", warning "Invalid sky portal origin" otherwise) and keeps the viewer's axes
-  as they are (`0x47bf76`).
+  as they are (`0x47bf76`). The `portalsky` surface itself is never drawn: retail's world
+  walk (`R_RecursiveWorldNode` `0x486440`, brush models `0x485d40`) hands a surface whose
+  shader has `portalsky` (`0x47733d`, which also sorts it with the sky) to `0x47be10`
+  instead of `R_AddDrawSurf`, and that only lists it (32 at most; in the sky's own view
+  it warns "sky being drawn in a sky portal", once a second) for `0x47bee0` to draw the
+  sky's view first. Both games print that warning once on a level's first frame: the
+  client game module copies its sky origin into the scene before it has seen the sky
+  entity (`CG_CalcViewValues` runs before `CG_AddPacketEntities`, Ritual's own
+  `cgamex86.dll` the same), so the first sky view is drawn from the origin, in solid,
+  where every leaf is marked visible (retail with `r_showcluster 1`: `cluster:-1` then
+  the warning, on `training`). So its stage, `$whiteimage` with `GL_ZERO GL_ONE` and `depthWrite`,
+  never runs. OpenFAKK2 drew it as a surface, and that stage wrote the sky brush's depth
+  over whatever rose behind it: the smoke of `fakkhouse`'s centre chimney
+  (`fx_smokestack.tik`, puffs climbing at 80 units a second for six seconds) ended flat
+  at the sky brush 456 units over its top (`textures/eden/sky/morningsky` at z 1344),
+  where retail's puffs rise on (`probe-chimney`, through the intro map because a startup
+  `+map fakkhouse` on retail gives way to the startup intro).
 - **`r_drawsprites`** (cheat, 1): 0 leaves the scene's sprites out (`0x4643c0`, the
   sprites the client game module adds as `.spr` models). `probe-sprites` with
   `+set r_drawsprites 0` drew none of its sprites on either game.
