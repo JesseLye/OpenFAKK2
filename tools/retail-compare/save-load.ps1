@@ -30,7 +30,7 @@ Remove-Item (Join-Path $homeDir 'fakk\save\config_server_probesave.*') -ErrorAct
 function Run-Ours($name, $run) {
     $log = Join-Path $LogDir "save-load-$(Get-MapTag $Map)-$probe-$name.log"
     Remove-Item "$log.stdout", "$log.stderr" -ErrorAction SilentlyContinue
-    $arguments = "$OursHomeArgs +set developer 1 +set sv_testplayer 1 $Extra $run"
+    $arguments = "$OursHomeArgs +set developer 1 +set sv_testplayer 1 +set sv_randomSeed 1 $Extra $run"
     $p = $null; $done = $false
     try {
         $p = Start-HarnessGame -Side ours -Exe "$Bin\openfakk2ded.exe" -Arguments $arguments -NoNewWindow -Stdout "$log.stdout" -Stderr "$log.stderr" -What "save-load $Map $name"

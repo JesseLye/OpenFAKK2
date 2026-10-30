@@ -135,7 +135,11 @@ client console command as well: `+lookup`, `+lookdown`, `centerview`, `screensho
 
 Held keys are timed by rendered frames, and the two games render at different rates, so
 the same hold lands a little differently on each. Run each side twice to see its own
-spread before calling a gap that size a bug.
+spread before calling a gap that size a bug. Random choices (an actor's idle animation,
+what a death drops, which gib flies) are the same every run on ours under
+`compare-player.ps1` and `save-load.ps1`, which seed them (`sv_randomSeed 1`, not
+retail's); retail draws its own each run, so a reading that moves on retail alone is
+one of those.
 
 ## Weapons
 

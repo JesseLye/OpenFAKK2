@@ -2771,6 +2771,12 @@ random numbers with it before the client game module loads (`CL_PlayDemo_f`), so
 playback draws the same random effects every time. The client game module's `rand()`
 shares the engine's C runtime, whose state is per thread, so the one seed covers it. The
 test suite plays its demos with it; retail has nothing like it, and draws its own.
+`sv_randomSeed` (default 0, not archived) is its server-side twin: when it is set, the
+game module is given it as its random seed instead of the millisecond clock
+(`SV_InitGameProgs`), so an actor's idle animation, what a death drops and which gib
+model flies are the same every run. The harness's test-player runs (`compare-player.ps1`,
+`save-load.ps1`) set it to 1; retail's choices vary between runs, as its own references
+show.
 
 The test suite plays retail demos frame by frame on both games (`demo-zoo`,
 `demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`, `demo-melee`,

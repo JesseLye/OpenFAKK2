@@ -70,7 +70,7 @@ $homeMaps = Get-ProbeDir $TestHome $Map
 New-Item -ItemType Directory -Force $homeMaps | Out-Null
 Copy-Item $probeFile "$homeMaps\$Probe.scr" -Force
 Remove-Item "$ourLog.stdout", "$ourLog.stderr" -ErrorAction SilentlyContinue
-$arguments = "$OursHomeArgs +set developer 1 +set sv_testplayer 1 $Extra +map $Map $after"
+$arguments = "$OursHomeArgs +set developer 1 +set sv_testplayer 1 +set sv_randomSeed 1 $Extra +map $Map $after"
 $p = $null; $done = $false; $exited = $false
 try {
     $p = Start-HarnessGame -Side ours -Exe "$Bin\openfakk2ded.exe" -Arguments $arguments -NoNewWindow -Stdout "$ourLog.stdout" -Stderr "$ourLog.stderr" -What "compare-player ours $Map $Probe"

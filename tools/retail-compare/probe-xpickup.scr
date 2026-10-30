@@ -113,6 +113,7 @@ stuffcmd "whatis 31"
 wait 0.5
 $dude throwent shgliek_toss
 waitfor $dude
+$dude idle STAND_IDLE
 wait 1
 stuffcmd "echo ==== thrown"
 stuffcmd "whatis 0"
@@ -197,6 +198,7 @@ stuffcmd "whatis 31"
 wait 0.5
 $dude throwent shgliek_toss
 waitfor $dude
+$dude idle STAND_IDLE
 wait 1
 stuffcmd "echo ==== thrown"
 stuffcmd "whatis 0"
