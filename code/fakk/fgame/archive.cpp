@@ -532,13 +532,16 @@ inline void Archiver::CheckWrite
 		}
 	}
 
+// Sizes are 32 bits in the file whatever the build's size_t: the format is retail's
+// (x86, 4-byte sizes), and the .pth files in the paks and the saves of one build are
+// read by the other (OpenFAKK2's x64 build; see docs/known-differences.md, "x64").
 inline size_t Archiver::ReadSize
    (
    void
    )
 
    {
-   size_t s;
+   unsigned int s;
 
    s = 0;
    if ( !fileerror )
@@ -564,7 +567,7 @@ inline void Archiver::CheckSize
 
       if ( size != s )
          {
-         FileError( "Invalid data size of %d on %s.", s, typenames[ type ] );
+         FileError( "Invalid data size of %d on %s.", ( int )s, typenames[ type ] );
          }
       }
    }
@@ -575,7 +578,9 @@ inline void Archiver::WriteSize
    )
 
    {
-   gi.FS_Write( &size, sizeof( size ), file );
+   unsigned int s = ( unsigned int )size;
+
+   gi.FS_Write( &s, sizeof( s ), file );
    }
 
 inline int Archiver::ReadType
@@ -770,7 +775,7 @@ void Archiver::ArchiveSafePointer
       {
       pointer_fixup_t *fixup;
 
-	   ArchiveData( ARC_SafePointer, &index, sizeof( &index ) );
+	   ArchiveData( ARC_SafePointer, &index, sizeof( index ) );   // was sizeof( &index ): 4 on x86 by luck, 8 on x64
 
       // Check for a NULL pointer
       assert( ptr );

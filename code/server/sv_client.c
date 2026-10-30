@@ -326,7 +326,7 @@ void SV_DirectConnect( netadr_t from ) {
 	int			challenge;
 	char		*password;
 	int			startIndex;
-	intptr_t		denied;
+	const char		*denied;
 	int			count;
 	char		*ip;
 #ifdef LEGACY_PROTOCOL

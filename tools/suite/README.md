@@ -178,15 +178,23 @@ the check's own tolerance (a live shot moves by a frame of animation between two
 one build). A difference is newly failing, "against x86" in the evidence, with the pair
 pictures under `checks\<name>\against-x86`. It needs the x86 build to exist and doubles
 the run time. With the x86 build standing in for x64 (`-Bin build\x86-Release\Release`),
-every check came out the same, pictures included (2026-10-31), which is the floor the
-real x64 build is held to.
+every check came out the same, pictures included, and the real x64 build then did too on
+its first day (2026-10-31: spawn output on zoo and training, walk-jump, the eight
+example-map checks, save-load and two saves, shots/zoo to 0.03% of pixels).
 
 The cross-build save checks (`save-cross`, `xdoor-cross`, `xphys-cross`, `xexpl-cross`,
 `xcam-cross`: `"loadArch": "other"`) save the game with the lane's build and load it with
 the other architecture's (`save-load.ps1 -LoadBin`), so the x86 lane has x64 load x86's
-saves and the x64 lane the reverse. They are skipped until the other build exists. The
-save format writes some structures raw (`gclient_t`, the listener info), whose layout
-changes with the pointer size; these checks are where that shows.
+saves and the x64 lane the reverse. They are skipped until the other build exists. They
+are where a layout difference in the save format shows: the raw-archived client
+structure was 16 bytes longer from x64 until it was archived run by run
+(`docs/known-differences.md`, "The x64 build"); since then both directions give the same
+results as a same-build load.
+
+To set the lane up on main, run it once over everything and keep the results:
+`tools\suite\run-suite.ps1 -Arch x64 -Level full -UpdateBaseline` (the one use of
+`-UpdateBaseline` that is not a re-baseline: the lane has no results to lose). After
+that the merge skill keeps its results as it does x86's.
 
 `verify-gate.ps1 -Stamp` records the last run whichever lane it was; while the port is
 in progress, verifying a change means running both lanes. The merge skill runs

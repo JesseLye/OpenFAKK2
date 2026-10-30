@@ -2822,6 +2822,47 @@ downloads (command 6, which retail refuses) and VoIP (10 and 11), which a local 
 not send. A demo carries its own configstrings, so the different sound indexes on a first
 load (under "Global aliases before spawning") do not matter on playback.
 
+## The x64 build
+
+OpenFAKK2 builds and runs as 64-bit (`scripts\build-msvc.cmd x64 Release`, modules
+`gamex86_64.dll` and `cgamex86_64.dll`, since 2026-10-31). Retail is 32-bit only, so the
+x64 build is judged against the same retail references as the x86 one and, in the test
+suite's x64 lane, against the x86 build run beside it (`tools/suite/README.md`, "The x64
+lane"). On its first full day it matched retail and x86 alike on spawn output, the test
+player's readings, saves and screenshots (15 checks, the pictures to 0.03% of pixels).
+What had to change for that, all in Ritual's game code, which assumed 32-bit pointers:
+
+- **Archive sizes.** The archiver (saves and the `.pth` path files) wrote and read every
+  size as a `size_t`: 4 bytes in retail's files, 8 in a 64-bit build, so an x64 build
+  could read neither the paks' `.pth` files (Balthazar's door map crashed at "Loading
+  nodes...") nor an x86 save. Sizes are 32 bits in the file whatever the build
+  (`Archiver::ReadSize`, `WriteSize`).
+- **The safe-pointer read** read `sizeof( &index )` bytes into a 4-byte `index`: the size
+  of a pointer, 4 on x86 by luck, 8 on x64, which overran the stack (exit `0xC0000409`).
+  It reads `sizeof( index )`.
+- **The client structure** (`gclient_t`, archived raw) holds a `trace_t`, whose entity
+  pointer is 8 bytes on x64 and pads `playerState_t` and `gclient_t` to 8, so an x64 save
+  was 16 bytes longer and the other build loaded it as far as the player and then lost
+  the script thread. `G_ArchiveClient` writes retail's x86 layout run by run, the
+  pointer as a 4-byte zero (it is never valid after a load; NULL when read). An x86 save
+  is the same bytes as before; a save from either build loads in the other (the suite's
+  `*-cross` checks, with the same results as a same-build load).
+- **Class allocations** keep the allocation's size in an `int` in front of the object
+  (`Class::operator new`): 4 bytes, so the object sat 4 past an 8-byte boundary, as in
+  retail. On x64 the header is 16 bytes, keeping the allocator's alignment.
+- **"N total memory in response list"** at the event system's start counts pointers, so
+  the x64 build prints twice retail's figure (1530352 for 765176). The harness drops the
+  figure from the line it compares.
+- Two slips the compiler caught: `sprintf( "%.5f", 0 )` for the boss health passes an int
+  where a double is read (0.00000 on x86 by luck; now `0.0`), and the server's rejected
+  connection reason was held in an `intptr_t` rather than a `const char *`.
+
+The inline assembly (`Q_rsqrt`, `BoxOnPlaneSide`, the sound mixer's clamp loop,
+ioquake3's `ftol` and `snapvector`) has C or MASM counterparts the x64 build selects by
+itself; the readings agreeing with x86 to every printed digit says they compute the same.
+A 64-bit process cannot load Ritual's `gamex86.dll` and `cgamex86.dll`, so the harness's
+retail-module runs (`FAKK2_TEST_MODULES=retail`) are x86 only.
+
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,
   triggers the player must walk into. The test player can now be given key presses, but

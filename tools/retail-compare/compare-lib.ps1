@@ -7,12 +7,14 @@
 # model's warnings), which differ between the engines for reasons of their own. Retail
 # run from a worktree's deep sandbox also prints "Com_sprintf: overflow of 128 in 128"
 # (a path longer than its 128-character buffer), which a run from the main checkout does not.
+# The event system's "N total memory in response list" counts pointers, so the x64 build
+# prints twice retail's figure for the same table; the figure is dropped from the line.
 function Get-GameLines([string]$File) {
     if (-not (Test-Path $File)) { return @() }
     $l = @(Get-Content $File | Where-Object { $_ -match '\S' })
     $start = ($l | Select-String '^Server: ' | Select-Object -First 1).LineNumber
     if (-not $start) { return @() }
-    $l[$start..($l.Count - 1)] | ForEach-Object { $_.TrimEnd() } | Where-Object {
+    $l[$start..($l.Count - 1)] | ForEach-Object { $_.TrimEnd() -replace '\d+ total memory in response list', 'N total memory in response list' } | Where-Object {
         $_ -notmatch '^(Hunk_Clear|LoadLibrary|----- FS_Startup|We are looking|Current search path|C:\\|handle \d|-+$|\d+ files in pk3|Hitch warning|Warning: cvar|[^ ]+\.tik: dropping animation|WARNING: CM_|SV_ArchivePersistantFile|Com_WipeSaveGame|Working directory|Com_sprintf: overflow)'
     }
 }

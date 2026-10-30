@@ -74,7 +74,8 @@ The game's art in these is Ritual Entertainment's.
     scripts\build-msvc.cmd x86 Release
 
 needs Visual Studio 2022 (or its Build Tools) with C++; output goes to
-`build\x86-Release\Release`. Details in [Building from source](docs/guide/07-compiling.md).
+`build\x86-Release\Release` (`x64` in place of `x86` for a 64-bit build). Details in
+[Building from source](docs/guide/07-compiling.md).
 
 ## Development
 

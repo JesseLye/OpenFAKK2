@@ -64,7 +64,7 @@ if (-not (Test-Path $saveFile)) { "[$Map] no save was written ($saveFile); see $
 $loaded = Run-Ours 'loaded' '+loadgame probesave' $LoadBin
 if ($LoadBin -ne $Bin) { "[$Map] saved by $Bin, loaded by $LoadBin" }
 
-$time = { param($f) (Select-String -Path $f -Pattern "(\d+) $marker ([\d.]+)" | Select-Object -Last 1).Matches.Groups[2].Value }
+$time = { param($f) $m = Select-String -Path $f -Pattern "(\d+) $marker ([\d.]+)" | Select-Object -Last 1; if ($m) { $m.Matches.Groups[2].Value } else { '(not reached)' } }
 "[$Map] pending events read at $(& $time $saved) saved / $(& $time $loaded) loaded"
 $varDiff = @(Compare-Object @(Vars $saved) @(Vars $loaded))
 "  level variables differing: $($varDiff.Count)"
