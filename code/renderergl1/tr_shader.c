@@ -1273,6 +1273,27 @@ static qboolean ParseStage( shaderStage_t *stage, char **text, qboolean secondBu
 		}
 	}
 
+	// a 2D picture blended by its alpha takes the bled copies of its images
+	// (R_BleedAlpha), so that scaled, its edges fade its own colour out
+	// rather than the black of its transparent texels; the blend is known
+	// only now, after the images were read
+	if ( shader.lightmapIndex == LIGHTMAP_2D && !stage->bundle[0].isLightmap &&
+		blendSrcBits == GLS_SRCBLEND_SRC_ALPHA && blendDstBits == GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA ) {
+		int		i, n = stage->bundle[0].numImageAnimations > 1 ? stage->bundle[0].numImageAnimations : 1;
+
+		for ( i = 0; i < n; i++ ) {
+			image_t	*image = stage->bundle[0].image[i];
+
+			if ( image && image->imgName[0] != '*' && !( image->flags & IMGFLAG_BLEED ) ) {
+				image_t	*bled = R_FindImageFile( image->imgName, image->type, image->flags | IMGFLAG_BLEED );
+
+				if ( bled ) {
+					stage->bundle[0].image[i] = bled;
+				}
+			}
+		}
+	}
+
 	//
 	// compute state bits
 	//
@@ -2996,6 +3017,11 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		else
 		{
 			flags |= IMGFLAG_CLAMPTOEDGE;
+		}
+
+		// a GUI element is blended by its alpha (below): the bled copy
+		if ( shader.lightmapIndex == LIGHTMAP_2D ) {
+			flags |= IMGFLAG_BLEED;
 		}
 
 		image = R_FindImageFile( name, IMGTYPE_COLORALPHA, flags );

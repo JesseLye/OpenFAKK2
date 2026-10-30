@@ -44,6 +44,7 @@ typedef enum
 	IMGFLAG_NOLIGHTSCALE   = 0x0020,
 	IMGFLAG_CLAMPTOEDGE    = 0x0040,
 	IMGFLAG_GENNORMALMAP   = 0x0080,
+	IMGFLAG_BLEED          = 0x0100,	// the transparent texels take their neighbours' colours (R_BleedAlpha); a separate copy of the image
 } imgFlags_t;
 
 typedef struct image_s {

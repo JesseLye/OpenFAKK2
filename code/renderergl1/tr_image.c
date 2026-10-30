@@ -1035,10 +1035,85 @@ void R_LoadImage( const char *name, byte **pic, int *width, int *height )
 
 /*
 ===============
+R_BleedAlpha
+
+Gives every fully transparent texel the colour of its nearest texels that
+are not (a few passes of dilation, as far as linear filtering samples),
+leaving the alpha as it is. FAKK2's pictures hold black in their
+transparent texels; drawn at their size, as retail draws the HUD, every
+pixel samples one texel and that black is never seen, but a picture drawn
+larger or smaller (OpenFAKK2 scales the HUD with the window) has pixels that
+sample across the edge of the art, and filtering mixed that black in: the
+weapon windows' left edge showed a dark line a pixel wide against the sky at
+1024x768. With the colours bled, the edge fades the art's own colour out.
+===============
+*/
+static void R_BleedAlpha( byte *pic, int width, int height ) {
+	byte	*mark;
+	int		count = width * height;
+	int		pass, x, y, i, changed;
+
+	// 1: a texel with colour, 2: one given a colour this pass
+	mark = ri.Hunk_AllocateTempMemory( count );
+	for ( i = 0; i < count; i++ ) {
+		mark[i] = pic[i * 4 + 3] != 0;
+	}
+	for ( pass = 0; pass < 8; pass++ ) {
+		changed = 0;
+		for ( y = 0; y < height; y++ ) {
+			for ( x = 0; x < width; x++ ) {
+				int		sum[3] = { 0, 0, 0 }, n = 0, dx, dy;
+
+				i = y * width + x;
+				if ( mark[i] ) {
+					continue;
+				}
+				for ( dy = -1; dy <= 1; dy++ ) {
+					for ( dx = -1; dx <= 1; dx++ ) {
+						int		xx = x + dx, yy = y + dy, j;
+
+						if ( xx < 0 || yy < 0 || xx >= width || yy >= height ) {
+							continue;
+						}
+						j = yy * width + xx;
+						if ( mark[j] != 1 ) {
+							continue;
+						}
+						sum[0] += pic[j * 4];
+						sum[1] += pic[j * 4 + 1];
+						sum[2] += pic[j * 4 + 2];
+						n++;
+					}
+				}
+				if ( n ) {
+					pic[i * 4] = sum[0] / n;
+					pic[i * 4 + 1] = sum[1] / n;
+					pic[i * 4 + 2] = sum[2] / n;
+					mark[i] = 2;
+					changed++;
+				}
+			}
+		}
+		if ( !changed ) {
+			break;
+		}
+		for ( i = 0; i < count; i++ ) {
+			if ( mark[i] == 2 ) {
+				mark[i] = 1;
+			}
+		}
+	}
+	ri.Hunk_FreeTempMemory( mark );
+}
+
+/*
+===============
 R_FindImageFile
 
 Finds or loads the given image.
 Returns NULL if it fails, not a default image.
+An image asked for with IMGFLAG_BLEED is a copy of its own, bled
+(R_BleedAlpha), beside the one without.
 ==============
 */
 image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
@@ -1058,7 +1133,7 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 	// see if the image is already loaded
 	//
 	for (image=hashTable[hash]; image; image=image->next) {
-		if ( !strcmp( name, image->imgName ) ) {
+		if ( !strcmp( name, image->imgName ) && !( ( image->flags ^ flags ) & IMGFLAG_BLEED ) ) {
 			// the white image can be used with any set of parms, but other mismatches are errors
 			if ( strcmp( name, "*white" ) ) {
 				if ( image->flags != flags ) {
@@ -1077,6 +1152,9 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 		return NULL;
 	}
 
+	if ( flags & IMGFLAG_BLEED ) {
+		R_BleedAlpha( pic, width, height );
+	}
 	image = R_CreateImage( ( char * ) name, pic, width, height, type, flags, 0 );
 	ri.Free( pic );
 	return image;
