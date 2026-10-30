@@ -178,6 +178,8 @@ typedef struct {
 	// runtime
 	qboolean	visible;
 	int			showTime;
+	qboolean	hiding;				// popped: fading out until hideTime + URC_MenuHideTime
+	int			hideTime;
 } urcMenu_t;
 
 // "aliascache <name> <file> [weight <w>]": a sound a widget names by alias;
@@ -211,6 +213,7 @@ static urcFont_t	urc_fonts[URC_MAX_FONTS];
 static int			urc_numFonts;
 static int			urc_stack[URC_MAX_STACK];
 static int			urc_stackDepth;
+static int			urc_lockTime;			// cls.realtime until which the stack takes no input and no pop: retail's lock while a popped menu goes (0x4a36e0, "unlock")
 static urcPrint_t	urc_print;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
@@ -2380,7 +2383,12 @@ static void URC_PlaySound( const char *name ) {
 	}
 }
 
-static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, float parentW, float parentH, float *dx, float *dy );
+static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, qboolean out, float parentW, float parentH, float *dx, float *dy );
+
+// the time a menu has been coming up, or going (URC_FadeOutMenu)
+static int URC_MenuElapsed( const urcMenu_t *menu ) {
+	return cls.realtime - ( menu->hiding ? menu->hideTime : menu->showTime );
+}
 
 /*
 =================
@@ -2434,7 +2442,7 @@ static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float
 	case 2: *oy = 480 - menu->height; break;
 	default: *oy = 0; break;
 	}
-	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, &dx, &dy );
+	URC_MotionOffset( menu->dir, menu->dirTime, elapsed, menu->hiding, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, &dx, &dy );
 	*ox += dx;
 	*oy += dy;
 }
@@ -2442,7 +2450,7 @@ static void URC_MenuOrigin( const urcMenu_t *menu, int elapsed, float *ox, float
 static void URC_WidgetRect( const urcWidget_t *w, const urcMenu_t *menu, float ox, float oy, int elapsed, float rect[4] ) {
 	float	dx, dy;
 
-	URC_MotionOffset( w->dir, w->dirTime, elapsed, menu->width, menu->height, &dx, &dy );
+	URC_MotionOffset( w->dir, w->dirTime, elapsed, menu->hiding, menu->width, menu->height, &dx, &dy );
 	rect[0] = ox + w->rect[0] + dx;
 	rect[1] = oy + w->rect[1] + dy;
 	rect[2] = w->rect[2];
@@ -2466,11 +2474,11 @@ static int URC_WidgetUnderCursor( void ) {
 	float		ox, oy, rect[4];
 	int			elapsed, i;
 
-	if ( !urc_stackDepth ) {
+	if ( !urc_stackDepth || urc_lockTime > cls.realtime ) {
 		return -1;
 	}
 	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
-	elapsed = cls.realtime - menu->showTime;
+	elapsed = URC_MenuElapsed( menu );
 	URC_MenuOrigin( menu, elapsed, &ox, &oy );
 	for ( i = menu->numWidgets - 1 ; i >= 0 ; i-- ) {
 		urcWidget_t	*w = &urc_widgets[menu->firstWidget + i];
@@ -2495,19 +2503,26 @@ static int URC_WidgetUnderCursor( void ) {
 URC_MotionOffset
 
 A widget or menu with a direction slides in from off its parent's edge
-over its time; returns the current offset.
+over its time, and back out the same way when its menu is popped (retail's
+motion out, 0x49dcb0, 0x49de30); returns the current offset.
 =================
 */
-static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, float parentW, float parentH, float *dx, float *dy ) {
+static void URC_MotionOffset( urcDir_t dir, float dirTime, int elapsedMs, qboolean out, float parentW, float parentH, float *dx, float *dy ) {
 	float	frac;
 
 	*dx = *dy = 0;
 	if ( dir == DIR_NONE || dirTime <= 0 ) {
 		return;
 	}
-	frac = 1.0f - elapsedMs / ( dirTime * 1000.0f );
+	frac = elapsedMs / ( dirTime * 1000.0f );
+	if ( !out ) {
+		frac = 1.0f - frac;
+	}
 	if ( frac <= 0 ) {
 		return;
+	}
+	if ( frac > 1 ) {
+		frac = 1;
 	}
 	switch ( dir ) {
 	case DIR_FROM_LEFT:		*dx = -frac * parentW; break;
@@ -2526,6 +2541,18 @@ static float URC_FadeAlpha( float fadein, int elapsedMs ) {
 		return 1;
 	}
 	return elapsedMs / ( fadein * 1000.0f );
+}
+
+// a popped widget's alpha runs from 1 to 0 over its fade time (0x49de30);
+// one without a fade time stays whole until its motion time hides it
+static float URC_FadeOutAlpha( float fadein, int elapsedMs ) {
+	if ( fadein <= 0 ) {
+		return 1;
+	}
+	if ( elapsedMs >= fadein * 1000 ) {
+		return 0;
+	}
+	return 1.0f - elapsedMs / ( fadein * 1000.0f );
 }
 
 static int URC_PlayerStat( int stat ) {
@@ -2743,7 +2770,7 @@ static void URC_DrawWidget( urcWidget_t *w, const urcMenu_t *menu, float ox, flo
 	}
 	URC_LoadWidgetShaders( w );
 	URC_WidgetRect( w, menu, ox, oy, menuElapsed, rect );
-	alpha = menuAlpha * URC_FadeAlpha( w->fadein, menuElapsed );
+	alpha = menuAlpha * ( menu->hiding ? URC_FadeOutAlpha( w->fadein, menuElapsed ) : URC_FadeAlpha( w->fadein, menuElapsed ) );
 	x = rect[0];
 	y = rect[1];
 	wd = rect[2];
@@ -2897,6 +2924,9 @@ URC_DrawMenu
 
 A HUD menu (one shown rather than pushed, which the cursor never reaches)
 is drawn at the HUD's size, towards the point its alignment anchors it to.
+A menu fades in over its fade time as it comes up and out again as it goes
+(URC_FadeOutMenu); its fill fades with it, as retail's does (UIWidget::Display,
+0x49ef30, draws the fill with its alpha times the widget's).
 =================
 */
 static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
@@ -2904,11 +2934,17 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
 	int		elapsed, i;
 	vec4_t	color;
 
-	elapsed = cls.realtime - menu->showTime;
+	elapsed = URC_MenuElapsed( menu );
+	if ( elapsed < 0 ) {
+		return;		// the menu beneath a popped one comes up when the pop's motion ends
+	}
+	alpha = menu->hiding ? URC_FadeOutAlpha( menu->fadein, elapsed ) : URC_FadeAlpha( menu->fadein, elapsed );
 	if ( menu->hasBgfill ) {
 		// the whole window: a full-screen menu on a wide one has its colour
 		// (black in every shipped menu) at the sides
-		URC_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, menu->bgfill );
+		Vector4Copy( menu->bgfill, color );
+		color[3] *= alpha;
+		URC_FillRect( SCR_ScreenLeft640(), 0, SCR_ScreenRight640() - SCR_ScreenLeft640(), 480, color );
 	}
 	if ( hud && !menu->fullscreen ) {
 		float	px, py;
@@ -2917,7 +2953,6 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
 		SCR_BeginHudScale( px, py );
 	}
 	URC_MenuOrigin( menu, elapsed, &ox, &oy );
-	alpha = URC_FadeAlpha( menu->fadein, elapsed );
 
 	Vector4Copy( menu->bgcolor, color );
 	color[3] *= alpha;
@@ -2987,8 +3022,9 @@ static void URC_RestoreCvars( void ) {
 }
 
 static void URC_ShowMenu( urcMenu_t *menu ) {
-	if ( menu && !menu->visible ) {
+	if ( menu && ( !menu->visible || menu->hiding ) ) {
 		menu->visible = qtrue;
+		menu->hiding = qfalse;
 		menu->showTime = cls.realtime;
 		URC_SnapshotCvars( menu );
 	}
@@ -2997,6 +3033,63 @@ static void URC_ShowMenu( urcMenu_t *menu ) {
 static void URC_HideMenu( urcMenu_t *menu ) {
 	if ( menu ) {
 		menu->visible = qfalse;
+		menu->hiding = qfalse;
+	}
+}
+
+/*
+=================
+URC_MenuHideTime, URC_FadeOutMenu, URC_FinishHides
+
+A popped menu goes the way retail's does. The window manager's pop
+(0x4a3420) takes it off the stack at once and sends it "hidemenu"
+(0x4a4120): every widget starts its motion out (0x49dcb0: back the way it
+came, its alpha running from 1 to 0 over its fade time, 0x49de30) and is
+hidden when the longest motion time among the menu's widgets has passed
+(0x4a4240). For that long the manager is locked against input and further
+pops (the "unlock" event, 0x4a36e0), and the menu beneath waits before its
+own "showmenu". Off the stack, the menu no longer pauses the game or hides
+the HUD (the update, 0x40af50), so the game runs under the fading menu. The
+shipped menus give their widgets no motion of their own; their header's
+time (menu "main" 640 480 NONE 0.5) is taken as the widgets' here. A map
+load's clearing of the menus (URC_ClearMenus) hides them at once, as
+retail's forced hide (0x4a3f60) does.
+=================
+*/
+static int URC_MenuHideTime( const urcMenu_t *menu ) {
+	float	t = menu->dirTime;
+	int		i;
+
+	for ( i = 0 ; i < menu->numWidgets ; i++ ) {
+		if ( urc_widgets[menu->firstWidget + i].dirTime > t ) {
+			t = urc_widgets[menu->firstWidget + i].dirTime;
+		}
+	}
+	return (int)( t * 1000 );
+}
+
+static void URC_FadeOutMenu( urcMenu_t *menu ) {
+	if ( !menu->visible || menu->hiding ) {
+		return;
+	}
+	if ( URC_MenuHideTime( menu ) <= 0 ) {
+		menu->visible = qfalse;
+		return;
+	}
+	menu->hiding = qtrue;
+	menu->hideTime = cls.realtime;
+}
+
+static void URC_FinishHides( void ) {
+	int		i;
+
+	for ( i = 0 ; i < urc_numMenus ; i++ ) {
+		urcMenu_t	*menu = &urc_menus[i];
+
+		if ( menu->hiding && cls.realtime - menu->hideTime >= URC_MenuHideTime( menu ) ) {
+			menu->visible = qfalse;
+			menu->hiding = qfalse;
+		}
 	}
 }
 
@@ -3126,11 +3219,8 @@ void URC_PushMenu( const char *name ) {
 	}
 }
 
-void URC_PopMenu( void ) {
-	if ( !urc_stackDepth ) {
-		return;
-	}
-	URC_HideMenu( &urc_menus[urc_stack[--urc_stackDepth]] );
+// after the stack lost its top: nothing is held, pressed or waited for
+static void URC_ReleaseInput( void ) {
 	urc_popupWidget = -1;
 	urc_dragSlider = -1;
 	urc_sliderPress = -1;
@@ -3141,10 +3231,31 @@ void URC_PopMenu( void ) {
 	URC_UpdateCatcher();
 }
 
-void URC_ClearMenus( void ) {
-	while ( urc_stackDepth ) {
-		URC_PopMenu();
+void URC_PopMenu( void ) {
+	urcMenu_t	*menu;
+	int			hideTime;
+
+	if ( !urc_stackDepth || urc_lockTime > cls.realtime ) {
+		return;		// retail's pop (0x4a3420) does nothing while the last one's motion runs
 	}
+	menu = &urc_menus[urc_stack[--urc_stackDepth]];
+	hideTime = URC_MenuHideTime( menu );
+	URC_FadeOutMenu( menu );
+	if ( hideTime > 0 ) {
+		urc_lockTime = cls.realtime + hideTime;
+		if ( urc_stackDepth ) {
+			urc_menus[urc_stack[urc_stackDepth - 1]].showTime = cls.realtime + hideTime;
+		}
+	}
+	URC_ReleaseInput();
+}
+
+void URC_ClearMenus( void ) {
+	urc_lockTime = 0;
+	while ( urc_stackDepth ) {
+		URC_HideMenu( &urc_menus[urc_stack[--urc_stackDepth]] );
+	}
+	URC_ReleaseInput();
 }
 
 /*
@@ -5733,6 +5844,7 @@ void URC_Draw( void ) {
 		return;
 	}
 	Vector4Set( urc_clip, SCR_ScreenLeft640(), 0, SCR_ScreenRight640(), 480 );
+	URC_FinishHides();
 
 	// leaving the menu for a map drops the menus, as the retail client's
 	// map load does; disconnecting brings the main menu back
@@ -5786,7 +5898,7 @@ void URC_Draw( void ) {
 
 			for ( k = 0 ; k < urc_stackDepth && urc_stack[k] != i ; k++ ) {
 			}
-			if ( menu->visible && k == urc_stackDepth ) {
+			if ( menu->visible && !menu->hiding && k == urc_stackDepth ) {
 				URC_DrawMenu( menu, qfalse, qtrue );
 			}
 		}
@@ -5825,7 +5937,8 @@ void URC_Draw( void ) {
 			}
 		}
 		if ( menu->visible && !stacked ) {
-			URC_DrawMenu( menu, qfalse, qtrue );
+			// a popped menu fades out where it was; a shown one is HUD
+			URC_DrawMenu( menu, qfalse, !menu->hiding );
 		}
 	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
@@ -5916,7 +6029,7 @@ static qboolean URC_TopWidgetRect( int index, float rect[4] ) {
 		return qfalse;
 	}
 	menu = &urc_menus[urc_stack[urc_stackDepth - 1]];
-	elapsed = cls.realtime - menu->showTime;
+	elapsed = URC_MenuElapsed( menu );
 	URC_MenuOrigin( menu, elapsed, &ox, &oy );
 	URC_WidgetRect( &urc_widgets[index], menu, ox, oy, elapsed, rect );
 	return qtrue;
@@ -6190,6 +6303,9 @@ void URC_KeyEvent( int key, qboolean down ) {
 	}
 	if ( !urc_stackDepth ) {
 		return;
+	}
+	if ( urc_lockTime > cls.realtime ) {
+		return;		// locked while a popped menu goes (retail 0x4a36e0, "unlock")
 	}
 	if ( !down ) {
 		if ( key == K_MOUSE1 ) {

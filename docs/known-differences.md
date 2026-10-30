@@ -993,6 +993,28 @@ Not read, done another way:
   menu up. With a menu up this client still closes the top one where retail toggles
   `main` (which pops every menu down to it).
 
+  A popped menu goes as retail's does. The window manager's pop (`0x4a3420`) takes the
+  menu off its stack at once and sends it `hidemenu` (`0x4a4120`): every widget starts
+  its motion out (`0x49dcb0`: back the way it came in, its alpha running from 1 to 0
+  over its fade time, `0x49de30`; one with no fade time stays whole), and is hidden
+  when the longest motion time among the menu's widgets has passed (`0x4a4240`). For
+  that long the manager is locked, taking no input and no further pop (the `unlock`
+  event, `0x4a36e0`), and the menu beneath waits for its own `showmenu`, so Back fades
+  one page out before the next fades in. Off the stack, the menu no longer pauses the
+  game or hides the HUD (the update, `0x40af50`): "Back to game" and Escape resume the
+  game at once under the menu fading out over its half second (`menu "main" 640 480
+  NONE 0.5`, `fadein 0.5`). A menu's fill is drawn with its alpha times the widget's
+  (`UIWidget::Display`, `0x49ef30`), so the main menu's white comes and goes with it: 250
+  ms into its fade-in the game shows pale through it. OpenFAKK2 dropped a popped menu at
+  once; it now fades it out (`probe-mfade` on `zoo`: about 0.3 s after the pop both
+  games show the menu at the same strength over the running game, 21% of pixels off by
+  more than 24, the clouds and the notify line, and at 0.45 s both show the game
+  alone). The forced hide (`0x4a3f60`), which hides at once, is what a map load's
+  clearing of the menus does here. Not read from retail: whether the header's time is
+  the widgets' motion time (the shipped files give the widgets none, and the capture
+  shows the half second), and what the menu beneath does when a menu is pushed over
+  one still going.
+
   The menus are drawn as retail's widget library in `fakk2.exe` (uilib) draws them,
   and capture pixel for pixel like retail at 640x480 (the main, load/save, video/audio,
   advanced, controls, credits, quit and GFX info menus; what differs is the animated
