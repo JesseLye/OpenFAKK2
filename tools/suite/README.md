@@ -115,7 +115,7 @@ check is for.
 | `tiki` | the client's `cachealltikis` | warnings and errors loading every .tik |
 | `spawn` | `run-openfakk2.ps1` / `run-retail.ps1` on a map | game lines only one side prints (compare.ps1's filter); console warnings |
 | `player` | `compare-player.ps1` (headless test player / retail client) | level variables, pending event kinds, whatis readings |
-| `client` | `probe-client.ps1` on both real clients | the readings of `select`ed entities, `fields` within `valueTolerance`; `oursOnly`: whether the probe finished |
+| `client` | `probe-client.ps1` on both real clients | the readings of `select`ed entities, `fields` within `valueTolerance`; `oursOnly`: whether the probe finished, and with `logCount` the lines of the log matching its `pattern` (as `matches`, judged against the last good result) |
 | `capture` | `capture.ps1` | % of pixels differing per shot (`--mask-notify`) |
 | `menus` | `capture-menus.ps1` | the same |
 | `widescreen` | `capture.ps1` on ours only, at the `wide` and `narrow` sizes (`r_mode -1`) | % of pixels differing between each wide shot's middle and the narrow shot below row `top` (`shots.py middle`), and between the two runs' saved game pictures (`saveShot`, the name the probe saves under) |

@@ -151,6 +151,19 @@ retail game again. Choose the probe with `-Probe`:
   steps must stay even across the menu: before the client's clock was held through a
   pause, the player stood still and then jumped ahead (and retail does this too; its
   `wait` counts milliseconds, so its menu is up for a shorter time).
+- `probe-diag` walks Julie straight, then diagonally (`+forward` with `+moveright`), then
+  runs both ways, two seconds each, reading her between the phases; `probe-fdiag` walks
+  her on `fakkhouse` (started on `intro` and gamemapped over, the cinematic its worldspawn
+  starts ended first) from the dock onto the hovercraft model, two seconds straight, half
+  a second diagonally and one more straight, and stops her on it. Real clients only, with
+  `-Extra "+set cg_showmiss 1"`: count the `Prediction miss` lines per phase. On the
+  hovercraft the SDK's prediction missed by 0.947 every snapshot on both games, standing
+  or walking (the model's fractional top, packed into whole units; `cg_exactbounds`,
+  "Standing on a model" in `docs/known-differences.md`): three misses in the run with it,
+  sixty with `+set cg_exactbounds 0`; the suite's `fdiag` check keeps the count.
+  `probe-fbob` is its picture probe for the `retail-capture` skill (`-Map intro -Secs
+  150`), forty shots one rendered frame apart while she crosses the model; the shots come
+  too slowly (one or two a snapshot) to show the bob.
 - `probe-savedmenu` saves the game on `zoo`, shoots the "GAME SAVED" print and then the
   main menu over it, which must hide it (retail draws the prints under the menus):
   `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-savedmenu -Map zoo

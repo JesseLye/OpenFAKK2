@@ -40,9 +40,10 @@ These are the original's behaviour, kept because the aim is to match it:
 ## Changed from the original on purpose, to fix it
 
 A few original behaviours were bugs worth not copying. For example, the inventory bar no
-longer stays drawn over the main menu's buttons, and after a menu (a save, say) Julie no
-longer lurches forward and then ignores you for as long as the menu was up. Each one is
-marked *(deliberate)* in
+longer stays drawn over the main menu's buttons; after a menu (a save, say) Julie no
+longer lurches forward and then ignores you for as long as the menu was up; and she no
+longer bobs up and down while standing on a model such as the hovercraft at the start of
+the game (`cg_exactbounds`). Each one is marked *(deliberate)* in
 [`known-differences.md`](../known-differences.md), with the reason.
 
 ## Not like the original yet

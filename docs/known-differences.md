@@ -1188,6 +1188,38 @@ Not read, done another way:
 - **The client's own key and mouse events** are not passed to the module; FAKK2's has
   no entry points for them.
 
+### Standing on a model: prediction against its exact bounds (deliberate)
+
+Reported as Julie jittering when moving diagonally on `fakkhouse`. The spot is the
+hovercraft by the dock (`ship`, a `script_model` of `obj_hovercraft.tik` at scale 1.3,
+entity 48), which the first steps away from the spawn reach; the direction only decides
+whether she walks onto it. On it the client game module's prediction misses by 0.946
+units every snapshot, on the retail client exactly as on ours (`probe-fdiag` with
+`cg_showmiss 1`: 13 misses of 0.947 in two seconds on both, none before her first step
+onto the model, none at all on `zoo`'s floor), and standing still on it as much as
+walking (40 in a second).
+
+The cause is in the SDK's prediction. The server clips the player to a model entity's real
+bounds, which for a `script_model` are the TIKI's bounds at the entity's scale
+(`Entity::setModel`, `gi.CalculateBounds`): the hovercraft's top is 154.94 above its
+origin. The client only has the box the server packs into `entityState_t->solid`
+(`SV_LinkEntity`, the SDK's `BoundingBoxToInteger`): the x and y extents truncated to
+whole units and made symmetric, the bottom and top truncated, so the client's box ends at
+154. Standing on the model, the server's snapshot puts her 0.946 above the client's box;
+the client's ground trace looks 0.25 down, finds nothing, lets her fall under gravity (the
+fraction takes about 50 ms) and the next snapshot lifts her again: a bob of a unit, twenty
+times a second, which the camera does not follow (`cg_errordecay` smooths the view but the
+model is drawn at the predicted origin). The retail client game module does the same, so
+the retail game bobs there too.
+
+OpenFAKK2's module (`CG_ExactModelBounds`, `cg_predict.c`) clips its prediction to the
+model's own bounds, from the same TIKI calculation the server uses, when they pack to the
+very box the server sent, so an entity the game gave a size of its own keeps the packed
+box. With it the probe reads three misses, two at her entry and one at her first step,
+and none on the model, where `cg_exactbounds 0` (the SDK's behaviour) reads sixty in the
+same run. The suite's `fdiag` check counts them. Ritual's `cgamex86.dll` under OpenFAKK2
+keeps the bob.
+
 ## The game module
 
 The rebuilt `gamex86.dll` is Ritual's 1.02 SDK source. It differs from the retail

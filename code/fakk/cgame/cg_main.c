@@ -138,6 +138,7 @@ cvar_t *cg_debugAnimWatch;
 cvar_t *cg_errorDecay;
 cvar_t *cg_nopredict;
 cvar_t *cg_showmiss;
+cvar_t *cg_exactbounds;
 cvar_t *cg_addMarks;
 cvar_t *cg_viewsize;
 cvar_t *cg_3rd_person;
@@ -173,6 +174,8 @@ void CG_RegisterCvars( void )
 	cg_errorDecay        = cgi.Cvar_Get( "cg_errordecay",       "100", 0 );
 	cg_nopredict         = cgi.Cvar_Get( "cg_nopredict",        "0", 0 );
 	cg_showmiss          = cgi.Cvar_Get( "cg_showmiss",         "0", 0 );
+	// OpenFAKK2: predict against a model entity's exact bounds (CG_ExactModelBounds)
+	cg_exactbounds       = cgi.Cvar_Get( "cg_exactbounds",      "1", CVAR_ARCHIVE );
 	cg_stats             = cgi.Cvar_Get( "cg_stats",            "0", 0 );
 	cg_hidetempmodels    = cgi.Cvar_Get( "cg_hidetempmodels",   "0", 0 );
 	cg_syncronousClients = cgi.Cvar_Get( "g_syncronousClients", "0", 0 );

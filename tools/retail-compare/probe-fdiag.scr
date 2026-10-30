@@ -1,0 +1,52 @@
+// probe-diag on fakkhouse, the map of the report: walks Julie straight (+forward) for two
+// seconds from the spawn on the dock, which takes her onto the hovercraft model, then
+// diagonally (+forward with +moveleft) for half a second and straight again for one, which
+// keeps her on the model (its edges are 46 units to her left and 56 to her right), reading
+// her every half second. Run on the real client with cg_showmiss 1 and count the
+// prediction misses in each phase (the suite's fdiag check counts them over the run).
+// Started on intro: a startup +map fakkhouse on retail gives way to the startup intro, so
+// the first thread gamemaps over and queues the walk (as chain.scr). fakkhouse's worldspawn
+// starts the level in cinematic mode, which freezes the player: the walk ends it first.
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-fdiag.scr::walk"
+end
+
+walk:
+wait 3
+removefakeplayer
+noncinematic
+clearletterbox 0
+cueplayer 0
+wait 1
+stuffcmd "whatis 0"
+stuffcmd "echo ==== straight walk"
+stuffcmd "+forward"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "echo ==== diagonal walk"
+stuffcmd "+moveleft"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "-moveleft"
+stuffcmd "echo ==== straight again"
+wait 0.5
+stuffcmd "whatis 0"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "-forward"
+stuffcmd "echo ==== stopped"
+wait 0.5
+stuffcmd "whatis 0"
+stuffcmd "whatis 48"
+stuffcmd "levelvars"
+stuffcmd "pendingevents"
+end

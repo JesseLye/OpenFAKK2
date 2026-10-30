@@ -641,6 +641,7 @@ extern cvar_t *cg_debugAnimWatch;
 extern cvar_t *cg_errorDecay;
 extern cvar_t *cg_nopredict;
 extern cvar_t *cg_showmiss;
+extern cvar_t *cg_exactbounds;
 extern cvar_t *cg_addMarks;
 extern cvar_t *cg_viewsize;
 extern cvar_t *cg_3rd_person;
