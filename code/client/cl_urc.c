@@ -49,7 +49,7 @@ UIFAKKLoadGameClass (columns 0x414710, rows 0x4147d0, its picture
 
 // the SDK's bg_public.h values the HUD menus read (code/fakk/fgame)
 #define URC_STAT_BOSSHEALTH		13
-#define URC_STAT_CINEMATIC		14
+#define URC_STAT_CINEMATIC		CL_STAT_CINEMATIC	// client.h: cl_keys.c reads it too
 #define URC_STAT_ADDFADE		15			// ps.blend is added rather than blended
 #define URC_STAT_LETTERBOX		16			// letterbox fraction * URC_MAX_LETTERBOX_SIZE
 #define URC_MAX_LETTERBOX_SIZE	0x7fff

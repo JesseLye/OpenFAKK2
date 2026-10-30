@@ -523,6 +523,10 @@ void URC_BeginLoading( void );
 void URC_EndLoading( void );
 void URC_KeyEvent( int key, qboolean down );
 void URC_CharEvent( int c );		// the active notepad's
+// the SDK's bg_public.h STAT_CINEMATIC (code/fakk/fgame): bit 0 is set while the
+// level is in a cinematic (level.cinematic), bit 1 while an actor's camera is on
+// (player.cpp); the HUD menus hide on it and escape sends skipcinematic on it
+#define CL_STAT_CINEMATIC		14
 qboolean URC_HasMenus( void );
 qboolean URC_HasWindows( void );
 qboolean URC_BindWaiting( void );
