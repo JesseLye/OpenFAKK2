@@ -176,6 +176,10 @@ suite, and says how to turn one into a check.
 
 - `demo-zoo` (`probe-dzoo`): two creepers fight Julie; chaingun, rockets, her death; 15
   s, 2 frames a second.
+- `demo-julie-turn` (hand-made, `build\demos\julie-turn.dm3` on this machine only): Julie
+  turning on fakkhouse's dock under its sun and lights, for her light cube at the 255 cap
+  (the cap scales a face by its brightest channel; by its length she flickered and ran a
+  quarter dark); 15 s at 20 frames a second, every fourth kept.
 - `demo-swamp1` (`probe-dsw1`): swamp1's opening cinematic, then rockets and a walk into
   the water; 36 s, 1 frame a second.
 - `demo-muzzle` (`probe-dmuz`): `muzzle`'s scene (the still flash model, then the uzi

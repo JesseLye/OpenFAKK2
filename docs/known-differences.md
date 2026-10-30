@@ -2165,7 +2165,7 @@ What is implemented, and on what basis:
   to a length of 255, which puts its brightest channel near 150: a face just under the
   cap stood at 254 and one just over fell to 155, so as a model turned each face
   crossing the cap jumped by a third, and a lit model stood darker than retail's.
-  Reported as Julie's lighting flickering; `pingas.dm3` (a hand-made demo of her turning
+  Reported as Julie's lighting flickering; `julie-turn.dm3` (a hand-made demo of her turning
   on fakkhouse's dock, in `build\demos`), played on both games at 20 frames a second,
   put her torso at 42 against retail's 57 with jumps of 7 to 8 between frames before
   the fix, and `r_debugLight 3` logged the faces flipping between 254 and 155 as her
