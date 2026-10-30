@@ -33,6 +33,12 @@ end
   line, so with `-Extra` a long name means the probe never starts on retail (14 characters
   was too long with `+set r_mode 4`).
 - Keep a probe to one question.
+- A `stuffcmd` goes through the client and reaches the server a frame or two later; the
+  script runs on at once. So a script line right after a `whatis` sweep (`$creeper1 kill`)
+  acts before the sweep is read: put `wait 0.5` between them.
+- At most about 60 `stuffcmd`s in one burst. On the retail client each is a reliable
+  command to the server, and more than 64 unanswered drop the client ("Going to
+  CS_ZOMBIE" in its log, nothing after): a sweep of 100 `whatis` did; 32 is safe.
 
 `.claude\skills\retail-probe\scripts\make_probe.py` expands a short template:
 `@cmd <command>` is `stuffcmd "<command>"`, `@hold <key> <seconds>` is a press, a wait
@@ -41,19 +47,20 @@ and a release, `@sweep [from] [to]` reads entities. Its `@end` adds `levelvars` 
 
 ## Example maps
 
-Ritual's tools release has 32 small maps, each showing one feature. They make good test
-levels: small, quick to load, and with nothing else going on. Install them into both
-sandboxes (the retail game's and ours' home) with
+Ritual's fakk2-sdk release (https://code.idtech.space/ritual/fakk2-sdk) has 32 small
+maps, each showing one feature. They make good test levels: small, quick to load, and
+with nothing else going on. They are in the repository, `tools\retail-compare\maps\example`
+(the `.bsp` with its `.scr`, `.pth`, `.prt` and the `.map` source), and any runner given
+a map under `example/` installs the `.bsp`, `.scr` and `.pth` files into both sandboxes
+(`build\sandbox\retail\fakk\maps\example` and `build\sandbox\test-home\fakk\maps\example`,
+`Install-ExampleMaps` in `common.ps1`, files already there skipped), so a fresh worktree
+needs no step of its own;
 
 ```
 tools\retail-compare\install-example-maps.ps1
 ```
 
-It copies the `.bsp`, `.scr` and `.pth` files from `$RitualTools\fakk\maps\example`
-(`common.ps1`; `FAKK2_TOOLS` overrides it) into `build\sandbox\retail\fakk\maps\example`
-and `build\sandbox\test-home\fakk\maps\example`, and skips files already there. Ritual's licence
-does not allow copying them, so they stay under `build\` and are never committed. Run it
-again in each new worktree: its sandboxes are its own.
+does the same by hand. The suite's `x*` checks run on them.
 
 Name them with their folder: `-Map example/rain`. Both games load maps from a subfolder,
 and each map's own level script (`maps\example\<map>.scr`) runs as usual. The runners

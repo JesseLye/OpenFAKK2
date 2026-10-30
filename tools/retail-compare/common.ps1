@@ -323,9 +323,10 @@ function Stop-HarnessGame($Process) {
 # repository (see $RitualTools above). Files already there with the same size and time are
 # left alone.
 function Install-ExampleMaps {
-    if (-not $RitualTools) { throw "set FAKK2_TOOLS to a clone of Ritual's tools release" }
-    $source = Join-Path $RitualTools 'fakk\maps\example'
-    if (-not (Test-Path $source)) { throw "no example maps at $source; set FAKK2_TOOLS to a clone of Ritual's tools release" }
+    # the maps are in the repository (tools\retail-compare\maps\example, from Ritual's
+    # fakk2-sdk release); the .bsp, .scr and .pth files are what the games load
+    $source = Join-Path $RepoRoot 'tools\retail-compare\maps\example'
+    if (-not (Test-Path $source)) { throw "no example maps at $source" }
     $files = Get-ChildItem $source -File | Where-Object { $_.Extension -in '.bsp', '.scr', '.pth' }
     foreach ($game in 'retail', 'test-home') {
         $dest = Join-Path $Sandbox "$game\fakk\maps\example"
@@ -352,6 +353,9 @@ function Get-ProbeDir([string]$GameHome, [string]$Map) {
     $dir = Join-Path $GameHome 'fakk\maps'
     $sub = Split-Path ($Map -replace '/', '\') -Parent
     if ($sub) { $dir = Join-Path $dir $sub }
+    # a run on an example map installs the maps into both sandboxes first (a copy is
+    # skipped when the file is already there), so a fresh worktree needs no step of its own
+    if ($Map -match '^example[\\/]') { Install-ExampleMaps | Out-Null }
     $dir
 }
 

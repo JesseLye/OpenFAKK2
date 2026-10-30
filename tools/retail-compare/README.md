@@ -8,10 +8,13 @@ under `build\sandbox`, and logs go to `build\compare`.
 `common.ps1` holds the shared paths. `$GameInstall` is the retail install
 (`FAKK2_INSTALL` overrides it). `$RitualTools` is a clone of Ritual's Tools 1.02 release
 (github.com/Sporesirius/fakk2), named by the `FAKK2_TOOLS` environment variable: design
-documents, tool sources, example maps and the tools. Only `tools\ritual-docs.ps1` and
-`install-example-maps.ps1` need it. Read from it, but never commit anything taken from it:
-Ritual's licence does not allow copying it, and its Miles files are not redistributable. `tools\ritual-docs.ps1` converts its design documents into searchable
-text in `build\ritual-docs`.
+documents, tool sources, example maps and the tools. Only `tools\ritual-docs.ps1` needs
+it. Read from it, but never commit anything taken from it: Ritual's licence does not
+allow copying it, and its Miles files are not redistributable. The one exception is the
+32 example maps, which Ritual released in the fakk2-sdk
+(https://code.idtech.space/ritual/fakk2-sdk) and which are in the repository under
+`maps\example` here. `tools\ritual-docs.ps1` converts the design documents into
+searchable text in `build\ritual-docs`.
 
     # one map, developer-level spawn output
     tools\retail-compare\compare.ps1 -Map zoo
@@ -347,8 +350,18 @@ the restart, so pass `-Secs 60`).
 `probe-popmenu` prints `cg_cameradist` after `popmenu 1` and `popmenu 0` under GameCamera.
 
 Ritual's 32 example maps (one small map per feature: doors, beams, rain, cameras, exploders
-and more) install into both sandboxes with `install-example-maps.ps1` and run as
-`-Map example/<map>`; `probe-scripting.md` lists what each one shows.
+and more) are in `maps\example`; a runner given `-Map example/<map>` installs them into
+both sandboxes by itself (`install-example-maps.ps1` does it by hand), and
+`probe-scripting.md` lists what each one shows. The suite's `x*` checks run on them,
+one subsystem of the game code each: `probe-xdoor` (a use trigger's actor walking
+through a `func_door`), `probe-xpatrol` (an actor on a path, killed and removed),
+`probe-xpickup` (an actor carrying and throwing another entity), `probe-xphys`
+(script-thrown physics objects), `probe-xexpl` (a `func_multi_exploder`'s delayed
+blasts), `probe-xspawn` (a `func_spawn` triggered and removed), `probe-xcam` (orbit and
+spline cameras) and `probe-xevent` (an actor removed while its thread and the events
+posted to it are pending). Each has a `probe` thread and a `save` thread that saves the
+game part way (`save-load.ps1 -Probe <probe> -Thread save`), so the same drive gives the
+state check and the save check.
 
 `capture-menus.ps1 [-Menus loadsave,controls] [-Side retail|ours]` shoots the `.urc` menus
 with no map loaded, one run per menu on each game, and pairs them in
