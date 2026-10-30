@@ -87,7 +87,7 @@
       "oursExtra": "+set s_initsound 1 +set s_useOpenAL 0 +set s_show 1", "oursOnly": true,
       "note": "homes2evil's doors, one at a time, with the sound trace on" },
 
-    { "name": "shots", "areas": ["rendering"], "level": "standard", "tolerance": { "*": 2, "training": 8 }, "toleranceWhy": "maps with an entry cinematic or moving scenery at three seconds vary by a point or two between runs; training's intro camera is moving, and the client draws it up to a snapshot (50 ms) ahead or behind: 4.5 to 12.6 points from retail in one build's runs of one day",
+    { "name": "shots", "areas": ["rendering"], "level": "standard", "tolerance": { "*": 2, "training": 10 }, "toleranceWhy": "maps with an entry cinematic or moving scenery at three seconds vary by a point or two between runs; training's intro camera is moving, and the client draws it up to a snapshot (50 ms) ahead or behind: 4.5 to 12.6 points from retail in one build's seven runs of one day, against a last good result of 4.5",
       "kind": "capture", "probe": "probe-load", "maps": "all", "quickMaps": ["zoo", "training"], "skipMaps": ["under"],
       "note": "one screenshot three seconds after entry on every map but under, where the probe's waitforplayer never returns on either game (its intro sets the player's model)" },
     { "name": "julie", "areas": ["rendering"], "level": "quick", "kind": "capture", "probe": "probe-julie", "map": "training" },
