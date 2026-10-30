@@ -1002,9 +1002,11 @@ Not read, done another way:
   `UIPulldownMenu` (`0x4be190`) draws its `menushader` at the image's size, the
   `selmenushader` while its list is open; the list (`UIPopupMenu`, `0x4bf1f0`,
   `0x4bf4a0`) opens below it in `verdana-14`, as wide as its widest entry plus 24, an
-  entry per line plus 4 above and below, black on white with a raised edge (the
-  entry under the cursor is drawn white under black, `0x4bda90`, so it looks the
-  same). Labels with a `linkcvar` show the value through their `linkstring` names;
+  entry per line plus 4 above and below, white text on black with a raised edge from
+  the black, the entry under the cursor black on a white box (the pulldown's entry
+  colours, `0x4bda90`, given to the list as it opens, `0x4be4c0`; OpenFAKK2 had read
+  them the other way round and drew the list black on white). Labels with a
+  `linkcvar` show the value through their `linkstring` names;
   `ui_newvidmode`, which the resolution box shows, is set to `r_mode` when a menu comes
   up and to -1 when the last goes (`0x40ab60`). `vidmode <n>` (`0x4223d0`) switches the
   window to mode n in place (the renderer's `0xc987f8`, then the client game and the

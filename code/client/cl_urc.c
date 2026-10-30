@@ -5929,8 +5929,12 @@ URC_PopupRect, URC_DrawPopup
 UIPopupMenu (Create, 0x4bf1f0; Draw, 0x4bf4a0), opened below its pulldown:
 as wide as its widest item plus 24, an item per verdana-14 line plus 4
 above and below, kept on the screen; a raised border on its background.
-The pulldown's menu gives it black on white, and white under black for the
-item under the cursor (0x4bda90), so that one looks the same.
+The pulldown gives it its entry's colours as it opens (0x4be4c0, after
+Create): the describe's defaults (0x4bda90) are white text on black, with
+the border from the black (setBackgroundColor with its border flag), and
+the item under the cursor black on a white box 2 in from the sides, the
+font's height tall (Draw's 0x49a230 at x 2, width - 4). No shipped .urc
+sets popup_fgcolor, popup_bgcolor or their highlight pair.
 =================
 */
 #define URC_POPUP_PAD		4
@@ -6095,8 +6099,8 @@ static void URC_DrawPopup( void ) {
 	URC_PopupRect( urc_popupWidget, rect );
 	hover = URC_PopupItemAt( rect );
 	URC_PushClip( rect, saved );
-	URC_Box( rect[0], rect[1], rect[2], rect[3], white, 1 );
-	URC_BorderColors( white, colors );
+	URC_Box( rect[0], rect[1], rect[2], rect[3], black, 1 );
+	URC_BorderColors( black, colors );
 	URC_Draw3DBox( rect, qfalse, colors, 1 );
 	h = URC_FontHeight( font );
 	y = rect[1] + URC_POPUP_PAD;
@@ -6104,7 +6108,7 @@ static void URC_DrawPopup( void ) {
 		if ( i == hover ) {
 			URC_Box( rect[0] + 2, y, rect[2] - 4, h, white, 1 );
 		}
-		URC_DrawString( font, rect[0] + URC_POPUP_PAD, y, URC_PopupText( w, i ), black );
+		URC_DrawString( font, rect[0] + URC_POPUP_PAD, y, URC_PopupText( w, i ), i == hover ? black : white );
 	}
 	URC_PopClip( saved );
 }
