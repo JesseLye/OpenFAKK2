@@ -893,6 +893,24 @@ Not read, done another way:
   is, since retail filters those the same way at any size. Captured with `probe-up` at
   1024x768: the halo is gone; with `cl_hudScale 0.625` (the HUD back at its pixel size)
   the shot is the same as before the change, pixel for pixel, and the same as retail's.
+- **The HUD's edges, enlarged, under multisampling.** Both fixes above assume a pixel
+  samples at its middle, which holds only for pixels the picture covers whole. Enlarged,
+  a picture's edge falls mid-pixel (the `weaphud` menu's `weapon_left` label starts at
+  -32, which is -51.2 pixels at 1024x768), and with `r_ext_multisample` on (off by default; the
+  OpenFAKK2 Options page offers up to 8, which the report's config had) the partly
+  covered edge pixel is drawn too, with its texture
+  coordinate taken at the pixel's middle, outside the picture and past the pull-in; the
+  `map` image wraps there to its far side. That drew a dark line a pixel wide down the
+  weapon windows' clear margin, 51 pixels left of the art, and a blue line down the right
+  edge of the health picture's 128-pixel rect (the water gauge's blue from its left side),
+  both floating in the sky. Retail draws every picture at its size on whole pixels and has
+  no multisampling, so nothing is ever partly covered. `URC_DrawPicST` now rounds each
+  picture's edges to whole pixels (each edge on its own, so pictures that meet still share
+  theirs) before the pull-in, which then also starts exactly at the edge pixel's middle.
+  Captured with `probe-hudsky` (fakkhouse's sky, from intro by `gamemap`) at 1024x768
+  with `r_ext_multisample 8`: both lines are gone and the rest of the picture is the
+  same as without multisampling; at 640x480 (`probe-up`) nothing changes but the water
+  gauge's animation.
 - **The stat bars' flash** (health, water, ammo): when a bar's fill changes, retail
   (UIFakkLabel's bar, 0x418270) draws the bar and then adds its
   `statbar_tileshader_flash` over it in SetColor(i, i, i, i), i fading from 1 to 0 over
