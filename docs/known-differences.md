@@ -974,6 +974,25 @@ Not read, done another way:
   does this one's, when it shows the main menu. `togglemenu` without a name toggles
   `main`, which is what `default.cfg` binds to Escape.
 
+  Escape itself is handled before the bindings (`CL_KeyEvent`, `0x41f9c0`, the block at
+  `0x41fb56`): a press within a second of the one before (`0x50219c` against
+  `cls.realtime`, `0xb06208`) toggles `main` at once (`0x40bf90`, the push a
+  `togglemenu` makes); otherwise the time is recorded, a menu up is toggled
+  (`0x40ab40` asks the interface, `0x4a2c40`), then, while the client is active (state
+  8) and bit 0 of the snapshot's `STAT_CINEMATIC` (`cl.snap.ps.stats[14]`, `0xb129ec`,
+  after the boss health the HUD update reads at `0xb129e8`) is set, `skipcinematic` is
+  added to the command buffer and nothing else happens; any other connected state
+  returns silently, and the rest toggles `main`. The flag is the game's
+  `level.cinematic` (bit 1 is an actor's camera, `player.cpp`), and `skipcinematic` is
+  the player's console event (`Player::SkipCinematic`, `player_util.cpp`), which runs
+  the thread the map's script set with `skipthread` and clears it: the intro's thread
+  fades out and loads fakkhouse, training's entry thread warps Julie to the intro
+  node and ends the cinematic. OpenFAKK2 does the same from `cl_keys.c` (`skipcine`
+  in the suite: ours presses the key, retail types the command, both end on Julie's
+  own view at the intro node). Before it, Escape in a cinematic only brought the main
+  menu up. With a menu up this client still closes the top one where retail toggles
+  `main` (which pops every menu down to it).
+
   The menus are drawn as retail's widget library in `fakk2.exe` (uilib) draws them,
   and capture pixel for pixel like retail at 640x480 (the main, load/save, video/audio,
   advanced, controls, credits, quit and GFX info menus; what differs is the animated
@@ -1119,8 +1138,8 @@ Not read, done another way:
   holds the playing sources while `paused` is set (OpenAL: `alSourcePause`; software
   mixer: the channel is skipped and its start moved on by the time it was held, the
   loops left out until then), leaving the music's streams alone. Not followed: the
-  same update halves the sound volume (`0x43ed10`) while the client's cinematic flag
-  (`0xb129ec`, the one that makes Escape `skipcinematic`) is set.
+  same update halves the sound volume (`0x43ed10`) while the snapshot's
+  `STAT_CINEMATIC` (`0xb129ec`, the stat Escape reads to send `skipcinematic`) is set.
 - **The client's clock under a pause (deliberate).** Retail's `CL_SetCGameTime`
   (`0x41d590`) leaves `cl.serverTime` alone while paused but lets `cls.realtime` run on
   (`CL_Frame`, `0x421f30`), so when the pause ends `cl.serverTime` jumps by its length

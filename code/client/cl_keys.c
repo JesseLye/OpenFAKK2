@@ -1634,11 +1634,28 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !uivm ) {
-			// FAKK2's own menus (cl_urc.c): escape closes the one up, or
-			// brings the main menu up over the game or the intro, as the
-			// retail client's binding (togglemenu) does
+			// FAKK2 (CL_KeyEvent 0x41f9c0, the escape block at 0x41fb56):
+			// escape closes the menu up (cl_urc.c); otherwise, while the game
+			// is active and the snapshot's STAT_CINEMATIC has its cinematic
+			// bit set, it sends skipcinematic to the server (the player's
+			// console event runs the script's skipthread, player_util.cpp)
+			// and nothing else; otherwise it brings the main menu up over the
+			// game or the intro, as the retail client's binding (togglemenu)
+			// does. A second press within a second of the one before
+			// (0x50219c against cls.realtime) skips the cinematic test and
+			// goes to the menu at once, so two presses leave a cinematic for
+			// the menu; the repeat does not restart the second.
+			static int	lastEscape = -1000;
+			qboolean	repeat = cls.realtime - lastEscape < 1000;
+
+			if ( !repeat ) {
+				lastEscape = cls.realtime;
+			}
 			if ( URC_HasMenus() ) {
 				URC_KeyEvent( key, qtrue );
+			} else if ( !repeat && clc.state == CA_ACTIVE && !clc.demoplaying
+				&& ( cl.snap.ps.stats[CL_STAT_CINEMATIC] & 1 ) ) {
+				Cbuf_AddText( "skipcinematic\n" );
 			} else if ( ( clc.state == CA_ACTIVE || clc.state == CA_DISCONNECTED ) && !clc.demoplaying ) {
 				URC_PushMenu( "main" );
 			}
