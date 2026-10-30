@@ -689,9 +689,16 @@ function Get-OtherArch($Check, [string]$Arch) {
 }
 
 # One lane's result against the other's (run-suite.ps1 -Against): the same measures as
-# against retail, with the other build's last good result in retail's place. Its shots
-# when both have them, else its readings when the log has whatis blocks, else the game
-# lines of its log; $null when there is nothing of it to compare.
+# against retail, with the other build's result in retail's place. Its shots when both
+# have them, else its readings when the log has whatis blocks, else the game lines of
+# its log; $null when there is nothing of it to compare. Readings are compared exactly,
+# except for a check that holds keys on the real client ("exclusive": "timing"), whose
+# two runs cannot be frame-exact: those within the check's valueTolerance. Lines that
+# name the build (the module's file, the version string, the game state's size, the
+# module's checksums, the addresses of the OpenAL symbols), timings, and configstring
+# updates sent after the gamestate (which of them come as updates depends on when the
+# client connected, and their sequence numbers follow) are left out.
+$AgainstBuildLines = 'Loaded client game module|CL_InitCGame:|Game state for|Trying to load|Loading "|\bcs 0 "|clientCommand: .*: cp \d+ @|LoadLibrary|Loaded symbol |msec to draw all images|serverCommand: \d+ : cs \d+ '
 function Measure-Against($Check, [string]$Ours, [string]$Other, [string]$Evidence) {
     New-Item -ItemType Directory -Force $Evidence | Out-Null
     $oursLog = Join-Path $Ours 'game.log'; $otherLog = Join-Path $Other 'game.log'
@@ -701,9 +708,10 @@ function Measure-Against($Check, [string]$Ours, [string]$Other, [string]$Evidenc
     $sel = Get-Prop $Check 'select'
     $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
     if (Select-String -Path $otherLog -Pattern 'Entity #\s*: \d+' -Quiet) {
-        return Measure-PlayerLogs $otherLog $oursLog 0 -Fields @(Get-Prop $Check 'fields' @()) -Entities $ents -Classnames $cls -Labels x86, ours
+        $tol = if ([string](Get-Prop $Check 'exclusive' '') -eq 'timing') { [double](Get-Prop $Check 'valueTolerance' 0.01) } else { 0.0 }
+        return Measure-PlayerLogs $otherLog $oursLog $tol -Fields @(Get-Prop $Check 'fields' @()) -Entities $ents -Classnames $cls -Labels x86, ours
     }
-    $a = @(Get-GameLines $otherLog); $b = @(Get-GameLines $oursLog)
+    $a = @(Get-GameLines $otherLog | Where-Object { $_ -notmatch $AgainstBuildLines }); $b = @(Get-GameLines $oursLog | Where-Object { $_ -notmatch $AgainstBuildLines })
     $d = @(Compare-Object $a $b)
     $onlyA = @($d | Where-Object SideIndicator -eq '<='); $onlyB = @($d | Where-Object SideIndicator -eq '=>')
     $ev = @("x86 $($a.Count) lines, ours $($b.Count) lines; only in x86: $($onlyA.Count), only in ours: $($onlyB.Count)")

@@ -2856,6 +2856,11 @@ What had to change for that, all in Ritual's game code, which assumed 32-bit poi
 - Two slips the compiler caught: `sprintf( "%.5f", 0 )` for the boss health passes an int
   where a double is read (0.00000 on x86 by luck; now `0.0`), and the server's rejected
   connection reason was held in an `intptr_t` rather than a `const char *`.
+- **The OpenAL driver's name.** ioquake3 looks for `OpenAL64.dll` on 64-bit Windows, but
+  OpenAL Soft's 64-bit library keeps the name `OpenAL32.dll` (its readme), which is what
+  the build ships beside both executables. The x64 client fell back to the software mixer
+  and its 8 MB pool, and evicted and reloaded sounds by the hundred on every map change
+  (4600 warnings in the suite's `restart` check). The default is `OpenAL32.dll` on both.
 
 The inline assembly (`Q_rsqrt`, `BoxOnPlaneSide`, the sound mixer's clamp loop,
 ioquake3's `ftol` and `snapvector`) has C or MASM counterparts the x64 build selects by

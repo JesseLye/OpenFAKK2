@@ -269,6 +269,9 @@ foreach ($c in $selected) {
             $tolRetail = Get-Tolerance $c $key $b 'retail'
             if ($null -ne $b -and $v -lt [double]$b - $tolBase) { $better += "$key $v (last good $b)" }
             if ($ms.growth -contains $key) {
+                # a count that only must not grow (warnings, frame times) is this lane's own
+                # affair: not judged against the other lane's history
+                if ($judgeDir -ne $baseDir) { $unknown += "$key $v (no $Arch last good result)"; continue }
                 if ($null -ne $b -and $v -gt [double]$b + $tolBase) { $worse += "$key $v (last good $b, tolerance $([Math]::Round($tolBase, 2)))" }
                 elseif ($null -eq $b) { $unknown += "$key $v (no last good result)" }
                 continue

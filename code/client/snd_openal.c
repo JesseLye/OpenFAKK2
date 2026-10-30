@@ -2808,9 +2808,11 @@ static ALCdevice *alCaptureDevice;
 static cvar_t *s_alCapture;
 #endif
 
-#if defined(_WIN64)
-#define ALDRIVER_DEFAULT "OpenAL64.dll"
-#elif defined(_WIN32)
+#if defined(_WIN32)
+// OpenAL Soft's 64-bit DLL keeps the name OpenAL32.dll (its readme), and that is what
+// the build ships beside both executables; ioquake3's "OpenAL64.dll" default left the
+// x64 build without OpenAL, on the software mixer and its 8 MB pool (every map change
+// evicted and reloaded sounds by the hundred)
 #define ALDRIVER_DEFAULT "OpenAL32.dll"
 #elif defined(__APPLE__)
 #define ALDRIVER_DEFAULT "/System/Library/Frameworks/OpenAL.framework/OpenAL"

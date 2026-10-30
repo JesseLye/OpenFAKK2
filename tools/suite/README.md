@@ -175,8 +175,12 @@ other, and `-Against x86` (on by default with `-Arch x64`; `-Against none` turns
 runs every check on the x86 build too, right after, and compares the two results
 directly: readings, level variables, pending events and game lines exactly, shots within
 the check's own tolerance (a live shot moves by a frame of animation between two runs of
-one build). A difference is newly failing, "against x86" in the evidence, with the pair
-pictures under `checks\<name>\against-x86`. It needs the x86 build to exist and doubles
+one build), and a check that holds keys on the real client (`exclusive: timing`) within
+its own `valueTolerance`, since its two runs cannot be frame-exact. Lines that name the
+build (the module's file and checksums, the version string) are left out. A difference
+is newly failing, "against x86" in the evidence, with the pair pictures under
+`checks\<name>\against-x86`. A count that only must not grow (build warnings, console
+warnings, frame times) is judged against the lane's own history alone, never x86's. It needs the x86 build to exist and doubles
 the run time. With the x86 build standing in for x64 (`-Bin build\x86-Release\Release`),
 every check came out the same, pictures included, and the real x64 build then did too on
 its first day (2026-10-31: spawn output on zoo and training, walk-jump, the eight
