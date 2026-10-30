@@ -1035,15 +1035,29 @@ Not read, done another way:
   over its fade time, `0x49de30`; one with no fade time stays whole), and is hidden
   when the longest motion time among the menu's widgets has passed (`0x4a4240`). For
   that long the manager is locked, taking no input and no further pop (the `unlock`
-  event, `0x4a36e0`). The menu beneath is not touched: it was never hidden by the push
-  over it, so Back on the options page shows the main menu whole on the next frame, the
-  popped page gone under it (sixteen shots 50 ms apart after `popmenu 1` on retail,
-  alike to the pixel; the suite's `menu-back`). OpenFAKK2 first read this as the menu
-  beneath waiting for its own `showmenu`, held it back until the popped page had gone
-  and then faded it in: half a second of the page fading over black, then the main
-  menu fading in, reported as menus fading to black between pages. It now leaves the
-  menu beneath as it is and draws the popped one under the stack, where a full-screen
-  page covers it at once. Off the stack, the menu no longer pauses the
+  event, `0x4a36e0`). What the menu beneath does depends on how the change was asked
+  for. A button (its `stuffcommand`) or the Escape key cross-fades the pages: on the
+  main menu's Video/Audio button the main menu pales from 150 ms, at 400 ms both pages
+  stand at half strength over the white of their `bgcolor`, and at 700 ms the options
+  page stands alone; on its Back button, and on Escape, the options page goes and the
+  main menu comes back the same way, whole by 700 ms (`tools/retail-compare/retail-click.ps1`,
+  which walks retail's own menu cursor to a button by relative mouse motion and presses
+  Enter on it, posted mouse buttons never reaching the game, and shoots the frames after
+  by a posted F12 bound to `screenshot`). The console's `pushmenu` and `popmenu` switch
+  at once instead: after `popmenu 1` retail shows the main menu whole on the next frame,
+  sixteen shots 50 ms apart alike to the pixel (the suite's `menu-back`), and after
+  `pushmenu options` the options page whole, so a page pushed from the console never
+  hides the one beneath. OpenFAKK2 first read the pop as the menu beneath waiting for
+  its own `showmenu`, held it back until the popped page had gone and then faded it in:
+  half a second of the page fading over black, then the main menu fading in, reported
+  as menus fading to black between pages; then switched the page beneath at once and
+  faded nothing but the popped page, reported as the menus not fading out. It now runs
+  a widget's command between `_urc_widget 1` and `_urc_widget 0` in the command buffer:
+  a push from a widget fades the page beneath out on the stack as the new page fades in,
+  a pop from a widget or Escape fades the popped page out and the one beneath back in
+  (`probe`-less: `menu-fade` in the suite clicks the buttons through the virtual pad),
+  and the console's commands switch at once, a page that had faded out coming back
+  whole. Off the stack, the menu no longer pauses the
   game or hides the HUD (the update, `0x40af50`): "Back to game" and Escape resume the
   game at once under the menu fading out over its half second (`menu "main" 640 480
   NONE 0.5`, `fadein 0.5`). A menu's fill is drawn with its alpha times the widget's

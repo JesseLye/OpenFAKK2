@@ -187,6 +187,14 @@ retail game again. Choose the probe with `-Probe`:
   paused): the first shot shows the menu fading out over the running game on both,
   the others the game alone:
   `.claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-mfade -Map zoo -MaskNotify`.
+- `retail-click.ps1` activates a button of retail's menus for real, which no console
+  command does the same way (retail's `pushmenu` and `popmenu` switch pages at once; a
+  button or Escape cross-fades them): it brings the retail window to the front, pins the
+  game's own menu cursor to the top left corner by relative mouse motion, walks it to the
+  button (about 1.54 units a count), presses Enter on it by a posted key (posted mouse
+  buttons never reach the game) and shoots the frames after with a posted F12 bound to
+  `screenshot`. `-Menu main,options` pushes those first; `-X2`/`-Y2` or `-Escape2` do a
+  second action after `-BetweenMs`. It takes the cursor and the focus for about a second.
 - `probe-oneprint` puts up a centre print and, a second later, a location print, which
   replaces it (retail keeps one print), then a location print of
   `@textures/menu/gamesaved`, which retail writes as text:

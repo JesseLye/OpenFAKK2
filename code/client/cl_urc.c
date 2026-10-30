@@ -214,6 +214,8 @@ static int			urc_numFonts;
 static int			urc_stack[URC_MAX_STACK];
 static int			urc_stackDepth;
 static int			urc_lockTime;			// cls.realtime until which the stack takes no input and no pop: retail's lock while a popped menu goes (0x4a36e0, "unlock")
+static qboolean		urc_fromWidget;			// the push or pop under way comes from a widget's command or the Escape key, which cross-fade (URC_WidgetCommand)
+static void URC_WidgetCommand( const char *command );
 static urcPrint_t	urc_print;
 static qboolean		urc_initialised;
 static int			urc_lastState = -1;
@@ -2954,6 +2956,9 @@ static void URC_DrawMenu( urcMenu_t *menu, qboolean onTop, qboolean hud ) {
 
 	elapsed = URC_MenuElapsed( menu );
 	alpha = menu->hiding ? URC_FadeOutAlpha( menu->fadein, elapsed ) : URC_FadeAlpha( menu->fadein, elapsed );
+	if ( ui_urcdebug->integer ) {
+		Com_Printf( "MENUDRAW %d %s alpha %.2f elapsed %d hiding %d top %d\n", cls.realtime, menu->name, alpha, elapsed, menu->hiding, onTop );
+	}
 	if ( menu->hasBgfill ) {
 		// the whole window: a full-screen menu on a wide one has its colour
 		// (black in every shipped menu) at the sides
@@ -3214,6 +3219,15 @@ void URC_PushMenu( const char *name ) {
 	urc_stack[urc_stackDepth++] = menu - urc_menus;
 	URC_ShowMenu( menu );
 	URC_SnapshotCvars( menu );		// also when it was shown already
+	// a button's push cross-fades: the page beneath fades out, still on the
+	// stack, while the new one fades in (retail's Video/Audio button:
+	// 150 ms in the main menu pales, at 400 ms both pages stand at half
+	// strength, at 700 ms the options page alone; retail-click.ps1). The
+	// console's pushmenu switches at once (retail's does), so the page
+	// beneath is left whole, drawn under the new one.
+	if ( urc_fromWidget && urc_stackDepth >= 2 ) {
+		URC_FadeOutMenu( &urc_menus[urc_stack[urc_stackDepth - 2]] );
+	}
 	URC_UpdateCatcher();
 	INV_Close();		// not retail's: its weapon bar stays over the menu (cl_inv.c)
 
@@ -3259,14 +3273,23 @@ void URC_PopMenu( void ) {
 	if ( hideTime > 0 ) {
 		urc_lockTime = cls.realtime + hideTime;
 	}
-	// the menu beneath is left as it is: it was never hidden, so it stands at
-	// full strength the frame the pop lands, and the popped menu goes out
-	// under it (URC_Draw draws a menu off the stack before the stack).
-	// Retail's Back on the options page shows the main menu whole on the
-	// next frame, with no fade of either (menupop.ps1: sixteen shots after
-	// "popmenu 1" alike to the pixel); OpenFAKK2 had held the menu beneath
-	// back until the popped one had gone and then faded it in, half a
-	// second of black between two pages.
+	// the menu beneath: after a button's push it faded out on the stack, and
+	// a button's pop (or Escape) fades it back in as the popped one goes, a
+	// cross-fade (retail's Back button and Escape: 400 ms in both pages at
+	// half strength, the main menu whole by 700 ms; retail-click.ps1). The
+	// console's popmenu switches at once, as retail's does: a page that was
+	// never hidden stands whole the frame the pop lands, the popped menu
+	// going out under it (URC_Draw draws a menu off the stack before the
+	// stack), and one that had faded out comes back whole.
+	if ( urc_stackDepth ) {
+		urcMenu_t	*beneath = &urc_menus[urc_stack[urc_stackDepth - 1]];
+
+		if ( !beneath->visible || beneath->hiding ) {
+			beneath->visible = qtrue;
+			beneath->hiding = qfalse;
+			beneath->showTime = urc_fromWidget ? cls.realtime : cls.realtime - 100000;
+		}
+	}
 	URC_ReleaseInput();
 }
 
@@ -5962,7 +5985,11 @@ void URC_Draw( void ) {
 		}
 	}
 	for ( i = 0 ; i < urc_stackDepth ; i++ ) {
-		URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1, qfalse );
+		// a page beneath that faded out after a button's push stays hidden
+		// until a pop brings it back
+		if ( urc_menus[urc_stack[i]].visible ) {
+			URC_DrawMenu( &urc_menus[urc_stack[i]], i == urc_stackDepth - 1, qfalse );
+		}
 	}
 	URC_DrawWindows();
 	URC_DrawPopup();
@@ -6369,7 +6396,11 @@ void URC_KeyEvent( int key, qboolean down ) {
 	}
 
 	if ( key == K_ESCAPE ) {
+		// Escape cross-fades as a Back button does (retail: the options page
+		// out and the main menu in over 700 ms after Escape)
+		urc_fromWidget = qtrue;
 		URC_PopMenu();
+		urc_fromWidget = qfalse;
 		return;
 	}
 	if ( key == K_MWHEELUP || key == K_MWHEELDOWN ) {
@@ -6465,7 +6496,7 @@ void URC_KeyEvent( int key, qboolean down ) {
 				break;
 			}
 			if ( w->stuffcommand[0] ) {
-				Cbuf_AddText( va( "%s\n", w->stuffcommand ) );
+				URC_WidgetCommand( w->stuffcommand );
 			}
 		}
 	}
@@ -6544,6 +6575,24 @@ static void URC_PushMenu_f( void ) {
 		return;
 	}
 	URC_PushMenu( Cmd_Argv( 1 ) );
+}
+
+/*
+=================
+URC_WidgetCommand, URC_FromWidget_f
+
+A widget's command runs through the command buffer between "_urc_widget 1"
+and "_urc_widget 0", so the pushmenu or popmenu in it knows it comes from a
+button and cross-fades the pages (URC_PushMenu, URC_PopMenu); the same
+commands typed at the console switch at once, as retail's do.
+=================
+*/
+static void URC_WidgetCommand( const char *command ) {
+	Cbuf_AddText( va( "_urc_widget 1\n%s\n_urc_widget 0\n", command ) );
+}
+
+static void URC_FromWidget_f( void ) {
+	urc_fromWidget = Cmd_Argc() > 1 && atoi( Cmd_Argv( 1 ) ) != 0;
 }
 
 // popmenu <restore_cvars> (0x40bbd0, 0x40b790): 1 puts back the cvars the
@@ -6848,6 +6897,7 @@ void URC_Init( void ) {
 	Cmd_AddCommand( "pushmenu", URC_PushMenu_f );
 	Cmd_AddCommand( "forcemenu", URC_PushMenu_f );
 	Cmd_AddCommand( "popmenu", URC_PopMenu_f );
+	Cmd_AddCommand( "_urc_widget", URC_FromWidget_f );
 	Cmd_AddCommand( "showmenu", URC_ShowMenu_f );
 	Cmd_AddCommand( "hidemenu", URC_HideMenu_f );
 	Cmd_AddCommand( "togglemenu", URC_ToggleMenu_f );
@@ -6889,6 +6939,7 @@ void URC_Shutdown( void ) {
 	Cmd_RemoveCommand( "pushmenu" );
 	Cmd_RemoveCommand( "forcemenu" );
 	Cmd_RemoveCommand( "popmenu" );
+	Cmd_RemoveCommand( "_urc_widget" );
 	Cmd_RemoveCommand( "showmenu" );
 	Cmd_RemoveCommand( "hidemenu" );
 	Cmd_RemoveCommand( "togglemenu" );
