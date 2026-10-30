@@ -12,6 +12,7 @@ checks for what it changed, and the project's Stop hook asks for it when code ch
     tools\suite\run-suite.ps1 -Only chain, spawn/zoo -NoBuild
     tools\suite\run-suite.ps1 -List -Level standard -Areas rendering
     tools\suite\run-suite.ps1 -Level quick -Changed -Since HEAD^1 -AcceptMoves   # on main after a merge (the merge skill)
+    tools\suite\run-suite.ps1 -Level quick -Changed -Arch x64                     # the x64 build, and each check on x86 beside it
 
 ## What a run does
 
@@ -21,8 +22,9 @@ checks for what it changed, and the project's Stop hook asks for it when code ch
    check up to standard in the areas and their neighbours (`areas` in suite.json);
    `full` all of them. `-Changed` takes the areas from the files this branch changed
    (suite.json `paths`) and the checks of any probe that changed.
-2. Runs each on ours (the build in `build\x86-Release`, built first), with a fresh test
-   home: no saves, screenshots or crash dump from the check before.
+2. Runs each on ours (the build in `build\<arch>-Release`, x86 unless `-Arch x64`, built
+   first), with a fresh test home: no saves, screenshots or crash dump from the check
+   before.
 3. Measures it: each check gives one or more numbers, 0 when ours matches retail (spawn
    lines differing, readings differing, % of pixels differing per screenshot, steps of
    the level chain missed). A number within tolerance of 0 matches retail; one within
@@ -55,9 +57,10 @@ never committed (they are made from Ritual's data).
 
   It needs the game disc in a drive and puts the retail game's windows on screen.
 - `ours\<check>\`: ours' last good result (`baseline.json` with the numbers, the commit,
-  the retail reference it was measured against and why it was kept, and the logs and
-  shots, against which a failing shot is also paired). A worktree compares against
-  main's. Changed only on main: by the `merge` skill's
+  the architecture, a hash of the probe, the retail reference it was measured against
+  and why it was kept, and the logs and shots, against which a failing shot is also
+  paired). A worktree compares against main's. `ours-x64\<check>\` is the x64 lane's
+  (below). Changed only on main: by the `merge` skill's
   `run-suite.ps1 -Since HEAD^1 -AcceptMoves` after a merge, which keeps the declared
   moves, the improvements and the results against remade references; or by
   `-UpdateBaseline`, which keeps everything, to set the suite up.
@@ -110,7 +113,7 @@ check is for.
 
 | Kind | Runs | Measures |
 |---|---|---|
-| `build` | `scripts\build-msvc.cmd x86 Release` (copied from the main checkout if missing) | failure; warnings, filed per target in `build\suite\warnings-ledger.json`, so an incremental build counts as a full one would |
+| `build` | `scripts\build-msvc.cmd <arch> Release` (copied from the main checkout if missing) | failure; warnings, filed per target in `build\suite\warnings-ledger.json` (`-x64` for that lane), so an incremental build counts as a full one would |
 | `cik` | `check_tiki_against_cik.py` | models whose bounds or radius differ from the .cik caches |
 | `tiki` | the client's `cachealltikis` | warnings and errors loading every .tik |
 | `spawn` | `run-openfakk2.ps1` / `run-retail.ps1` on a map | game lines only one side prints (compare.ps1's filter); console warnings |
@@ -121,7 +124,7 @@ check is for.
 | `widescreen` | `capture.ps1` on ours only, at the `wide` and `narrow` sizes (`r_mode -1`) | % of pixels differing between each wide shot's middle and the narrow shot below row `top` (`shots.py middle`), and between the two runs' saved game pictures (`saveShot`, the name the probe saves under) |
 | `windowshots` | the client, pictures of its window at `times` seconds | the same (the startup intro, which a config's waits would hold up) |
 | `cfgrun` | the client with a config (`cfg`, `{maps} ...` or `{each} ...` per map) | `doneMarker` reached; console warnings (`countWarnings`); frame times (`frameTimes`, com_speeds) |
-| `saveload` | `save-load.ps1` (`probe` and `thread` name the script that saves; `probe-save`'s `probe` by default) | level variables and readings differing between the saved and the loaded game |
+| `saveload` | `save-load.ps1` (`probe` and `thread` name the script that saves; `probe-save`'s `probe` by default; `loadArch` has the other architecture's build load the save, see below) | level variables and readings differing between the saved and the loaded game |
 | `chain` | `level-chain.ps1` | levels reached, autosaves, inventory against retail's run |
 | `sound` | `sound-record.ps1` | the largest level difference in dB (`sound_metric.py`): the probe tone's plateaus (`tone`), or the 50th, 75th and 90th percentiles of the levels while sound plays (`rms`, music and game sounds, so the two games' start times do not matter) |
 | `demo` | retail: `probe` records `demos/<probe>.dm3` (kept in the reference); both: that demo played with `cl_avidemo` (`avidemo` frames a second, every `every`-th kept, only those in the `keep` windows when it has them), ours with `cl_demoSeed 1` | % of pixels differing per frame, as `capture` |
@@ -156,6 +159,38 @@ module's: a trigger's or exploder's `Contents` comes back as `ffffffff` after a 
 back as an integer. What a death or an idle leaves is drawn at random, so `xpatrol`
 compares the creeper and the player only and its save thread does not kill; `xcam`
 compares the cameras and the player (Gruff's idle nods).
+
+## The x64 lane
+
+`-Arch x64` runs the x64 build (`build\x64-Release`, built first) through the same checks.
+Both builds are judged against the same retail references: retail is the source of
+truth for both, and the x64 build is not meant to differ from the x86 one in anything
+retail shows. Each lane keeps its own last good results (`reference\ours` for x86,
+`reference\ours-x64`), and a check the x64 lane has no last good result for yet is judged
+against x86's, so the lane starts with x86's history rather than from nothing. Runs of
+the lane are stamped `<time>-x64`, and the build's warnings have their own ledger.
+
+The two builds run the same code, so beyond matching retail they should agree with each
+other, and `-Against x86` (on by default with `-Arch x64`; `-Against none` turns it off)
+runs every check on the x86 build too, right after, and compares the two results
+directly: readings, level variables, pending events and game lines exactly, shots within
+the check's own tolerance (a live shot moves by a frame of animation between two runs of
+one build). A difference is newly failing, "against x86" in the evidence, with the pair
+pictures under `checks\<name>\against-x86`. It needs the x86 build to exist and doubles
+the run time. With the x86 build standing in for x64 (`-Bin build\x86-Release\Release`),
+every check came out the same, pictures included (2026-10-31), which is the floor the
+real x64 build is held to.
+
+The cross-build save checks (`save-cross`, `xdoor-cross`, `xphys-cross`, `xexpl-cross`,
+`xcam-cross`: `"loadArch": "other"`) save the game with the lane's build and load it with
+the other architecture's (`save-load.ps1 -LoadBin`), so the x86 lane has x64 load x86's
+saves and the x64 lane the reverse. They are skipped until the other build exists. The
+save format writes some structures raw (`gclient_t`, the listener info), whose layout
+changes with the pointer size; these checks are where that shows.
+
+`verify-gate.ps1 -Stamp` records the last run whichever lane it was; while the port is
+in progress, verifying a change means running both lanes. The merge skill runs
+`-AcceptMoves` on each lane that has results.
 
 ## Demos
 

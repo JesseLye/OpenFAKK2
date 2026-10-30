@@ -10,7 +10,9 @@ param(
     [switch]$AcceptMoves,
     [switch]$Noise,
     [switch]$List,
-    [string]$Bin = ''
+    [string]$Bin = '',
+    [ValidateSet('x86', 'x64')][string]$Arch = 'x86',
+    [ValidateSet('', 'x86', 'none')][string]$Against = ''
 )
 # Runs the test suite's checks (tools\suite\suite.json) on this checkout's build and
 # writes a report to build\suite\runs\<time>\report.md: a summary, then the checks that are
@@ -39,6 +41,17 @@ param(
 #   -Noise     run each check twice and record how far ours differs from itself, per
 #              measure, in the references' noise.json; tolerances are at least 1.5 times that.
 #   -List      print the selection and stop.
+#   -Arch      x86 (default) or x64: which build is run (build\<arch>-Release, built first)
+#              and judged. Both are judged against the same retail references; each has
+#              its own last good results (reference\ours for x86, reference\ours-x64), and
+#              a check the x64 lane has no last good result for yet is judged against
+#              x86's. Runs of the x64 lane are stamped <time>-x64.
+#   -Against   x86 (the default for -Arch x64; none turns it off): every check is also
+#              run on the x86 build, right after, and the two results compared directly
+#              (readings and game lines exactly, shots within the check's own tolerance),
+#              since the two builds run the same code and should agree; a difference is
+#              newly failing, "against x86" in the evidence. The x86 build must exist
+#              (it is not built here). Twice the run time.
 #
 # Never starts the retail game: retail's results come from the references that
 # refresh-retail.ps1 makes. A check whose reference is missing, or was made from an older
@@ -89,8 +102,14 @@ if ($List) {
 }
 
 # --- run ----------------------------------------------------------------------------
-if (-not $Bin) { $Bin = $EngineBin }
+if (-not $Bin) { $Bin = Join-Path $RepoRoot "build\$Arch-Release\Release" }
+$SuiteArch = $Arch
+$X86Refs = $OursRefs
+if ($Arch -ne 'x86') { $OursRefs = Join-Path $SuiteShared "reference\ours-$Arch" }
+if (-not $Against) { $Against = if ($Arch -eq 'x86') { 'none' } else { 'x86' } }
+if ($Against -eq 'x86' -and $Arch -eq 'x86') { $Against = 'none' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+if ($Arch -ne 'x86') { $stamp += "-$Arch" }
 $runDir = Join-Path $SuiteLocal "runs\$stamp"
 New-Item -ItemType Directory -Force $runDir | Out-Null
 $branch = (git -C $RepoRoot rev-parse --abbrev-ref HEAD 2>$null)
@@ -143,6 +162,12 @@ foreach ($c in $selected) {
     $oursDir = Join-Path $checkDir 'ours'
     $refDir = Get-RefDir $RetailRefs $c.name
     $baseDir = Get-RefDir $OursRefs $c.name
+    # the last good result it is judged against: this lane's, or x86's while this lane has none
+    $judgeDir = $baseDir
+    if ($Arch -ne 'x86' -and -not (Test-Path (Join-Path $baseDir 'baseline.json')) -and (Test-Path (Join-Path (Get-RefDir $X86Refs $c.name) 'baseline.json'))) {
+        $judgeDir = Get-RefDir $X86Refs $c.name
+        $r.details += "no $Arch last good result yet: judged against x86's"
+    }
     Write-Host ("[{0}/{1}] {2}" -f $i, $selected.Count, $c.name) -NoNewline
     try {
         if ($buildFailed -and $c.kind -ne 'build') { $r.status = 'skipped'; $r.reason = 'the build failed'; throw 'skip' }
@@ -157,6 +182,9 @@ foreach ($c in $selected) {
         # the retail-recorded demos it plays (demo, timedemo), which come with references
         $noDemo = @(Get-CheckDemos $c | Where-Object { -not (Test-Path $_.file) } | Select-Object -First 1)
         if ($noDemo.Count) { $r.status = 'skipped'; $r.reason = "no retail demo for $($noDemo[0].check) (tools\suite\refresh-retail.ps1 -Only $($noDemo[0].check))"; throw 'skip' }
+        # a cross-build save check loads the save with the other architecture's build
+        $otherArch = Get-OtherArch $c $Arch
+        if ($otherArch -and -not (Test-Path (Join-Path $RepoRoot "build\$otherArch-Release\Release\openfakk2ded.exe"))) { $r.status = 'skipped'; $r.reason = "no $otherArch build to load the save with (scripts\build-msvc.cmd $otherArch Release)"; throw 'skip' }
         # a fresh test home for each check: no saves, screenshots or crash dump from the last
         foreach ($d in 'save', 'screenshots') { Remove-Item (Join-Path $TestFakk $d) -Recurse -Force -ErrorAction SilentlyContinue }
         Remove-Item (Join-Path $TestFakk 'crash.dmp') -Force -ErrorAction SilentlyContinue
@@ -176,7 +204,7 @@ foreach ($c in $selected) {
                 throw 'crashed'
             }
             if ($c.kind -eq 'build' -and (Get-Content (Join-Path $dir 'exit.txt') -ErrorAction SilentlyContinue) -ne '0') { $buildFailed = $true }
-            $measured += , (Measure-Check $c $dir $(if ($hasRetail) { $refDir } else { $null }) (Join-Path $checkDir $(if ($k) { 'evidence-2' } else { 'evidence' })) $(if (Test-Path $baseDir) { $baseDir } else { '' }))
+            $measured += , (Measure-Check $c $dir $(if ($hasRetail) { $refDir } else { $null }) (Join-Path $checkDir $(if ($k) { 'evidence-2' } else { 'evidence' })) $(if (Test-Path $judgeDir) { $judgeDir } else { '' }))
         }
         $ms = $measured[0]
         $r.metrics = $ms.metrics; $r.evidence = @($ms.evidence); $r.images = @($ms.images | ForEach-Object { $_.Substring($runDir.Length + 1) })
@@ -189,10 +217,41 @@ foreach ($c in $selected) {
             $r.details += "noise (two runs of ours): " + (($nz.GetEnumerator() | ForEach-Object { "$($_.Key) $([Math]::Round($_.Value, 2))" }) -join ', ')
         }
 
+        # the same check on the x86 build, run now: the two builds run the same code, so
+        # they should agree (readings and lines exactly; shots within the check's tolerance)
+        $x86Worse = @()
+        if ($Against -eq 'x86' -and $c.kind -notin 'build', 'cik', 'sound' -and -not (Get-OtherArch $c $Arch)) {
+            $x86Bin = Join-Path $RepoRoot 'build\x86-Release\Release'
+            if (-not (Test-Path (Join-Path $x86Bin 'openfakk2ded.exe'))) { $r.details += 'against x86: no x86 build to run (scripts\build-msvc.cmd x86 Release)' }
+            else {
+                $x86Dir = Join-Path $checkDir 'x86'
+                foreach ($d in 'save', 'screenshots') { Remove-Item (Join-Path $TestFakk $d) -Recurse -Force -ErrorAction SilentlyContinue }
+                Remove-Item (Join-Path $TestFakk 'crash.dmp') -Force -ErrorAction SilentlyContinue
+                $SuiteArch = 'x86'
+                try { Invoke-CheckSide $c 'ours' $x86Dir $x86Bin | Out-Null } finally { $SuiteArch = $Arch }
+                $x86Logs = @(Get-ChildItem $x86Dir -File | Where-Object { $_.Extension -eq '.log' -or $_.Name -eq 'output.txt' } | ForEach-Object FullName)
+                $x86Crash = @(Find-Crash $x86Logs $x86Bin)
+                if ($x86Crash.Count) { $x86Worse += "the x86 build crashed: $($x86Crash[0])" }
+                $ag = Measure-Against $c $oursDir $x86Dir (Join-Path $checkDir 'against-x86')
+                if ($null -eq $ag) { $r.details += 'against x86: nothing of its result to compare (no log or shots)' }
+                else {
+                    foreach ($key in $ag.metrics.Keys) {
+                        $v = [double]$ag.metrics[$key]
+                        $t = Get-Tolerance $c $key $null 'base'
+                        if ($v -gt $t) { $x86Worse += "$key $v (tolerance $([Math]::Round($t, 2)))" }
+                        $r.metrics["x86_$key"] = $v
+                    }
+                    $r.evidence += @('against the x86 build, run alongside:') + @($ag.evidence | ForEach-Object { "  $_" })
+                    $r.images += @($ag.images | ForEach-Object { $_.Substring($runDir.Length + 1) })
+                    if (-not $x86Worse.Count) { $r.details += 'against x86: the same' }
+                }
+            }
+        }
+
         # judge each measure against retail and ours' last good result
         $base = $null
-        if (Test-Path (Join-Path $baseDir 'baseline.json')) {
-            $base = Get-Content (Join-Path $baseDir 'baseline.json') -Raw | ConvertFrom-Json
+        if (Test-Path (Join-Path $judgeDir 'baseline.json')) {
+            $base = Get-Content (Join-Path $judgeDir 'baseline.json') -Raw | ConvertFrom-Json
             # numbers measured against another retail reference do not compare: judged
             # against retail alone until the baseline is made again
             if ($hasRetail -and (Get-Prop $base 'reference') -and (Get-Prop $base 'reference') -ne (Get-ReferenceStamp $refDir)) {
@@ -203,7 +262,7 @@ foreach ($c in $selected) {
             else { $r.baseline = $base.metrics }
         }
         $worse = @(); $differs = @(); $unknown = @(); $better = @()
-        foreach ($key in $ms.metrics.Keys) {
+        foreach ($key in @($ms.metrics.Keys)) {
             $v = [double]$ms.metrics[$key]
             $b = Get-Prop (Get-Prop $base 'metrics') $key $null
             $tolBase = Get-Tolerance $c $key $b 'base'
@@ -222,6 +281,7 @@ foreach ($c in $selected) {
         $r.improved = [bool]($better.Count -and -not $worse.Count)
         if ($better.Count) { $r.details += "better than ours' last good result: " + ($better -join '; ') }
         $move = Get-Move $c
+        if ($x86Worse.Count) { $worse += @($x86Worse | ForEach-Object { "differs from x86: $_" }) }
         if ($worse.Count -and $move) { $r.status = 'moved'; $r.reason = "declared moved in $($move.Commit) ($($move.Reason)); worse than ours' last good result: " + ($worse -join '; ') }
         elseif ($worse.Count) { $r.status = 'fail'; $r.reason = "worse than ours' last good result: " + ($worse -join '; ') }
         elseif ($differs.Count) { $r.status = if ($base) { 'known' } else { 'unmatched' }; $r.reason = ($differs -join '; ') }
@@ -247,7 +307,9 @@ foreach ($c in $selected) {
         New-Item -ItemType Directory -Force $baseDir | Out-Null
         Get-ChildItem $baseDir -File | Remove-Item -Force
         Get-ChildItem $oursDir -File | Where-Object { $_.Extension -in '.tga', '.log', '.json', '.txt' } | Copy-Item -Destination $baseDir -Force
-        [ordered]@{ metrics = $r.metrics; commit = $commit; branch = $branch; date = (Get-Date -Format s); reference = $(if (Test-HasRetail $c) { Get-ReferenceStamp $refDir } else { '' })
+        # the x86_ measures are this run's comparison with x86, not a result to keep
+        $keepMetrics = [ordered]@{}; foreach ($key in $r.metrics.Keys) { if ($key -notlike 'x86_*') { $keepMetrics[$key] = $r.metrics[$key] } }
+        [ordered]@{ metrics = $keepMetrics; commit = $commit; branch = $branch; date = (Get-Date -Format s); arch = $Arch; input = (Get-CheckInputHash $c); reference = $(if (Test-HasRetail $c) { Get-ReferenceStamp $refDir } else { '' })
             why = $(if ($UpdateBaseline) { '-UpdateBaseline' } elseif ($r.status -eq 'moved' -or (Get-Move $c)) { "declared: $((Get-Move $c).Reason) ($((Get-Move $c).Commit))" } elseif ($r.staleBaseline) { 'the retail reference was made again' } else { 'improved' }) } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $baseDir 'baseline.json') -Encoding utf8
     }
     $results.Add([pscustomobject]$r)
@@ -270,7 +332,7 @@ $by = @{}; foreach ($s in 'fail', 'error', 'moved', 'known', 'unmatched', 'pass'
 $md = New-Object System.Collections.Generic.List[string]
 $md.Add("# Suite run $stamp")
 $md.Add('')
-$md.Add("$Level on $branch @ $commit" + $(if ($changeHash) { " with changes" } else { '' }) + "; areas $($areaSet -join ', '); took $([int]$took.TotalMinutes) min $($took.Seconds) s.")
+$md.Add("$Level on $branch @ $commit" + $(if ($changeHash) { " with changes" } else { '' }) + "; $Arch build" + $(if ($Against -ne 'none') { ", each check also run on the $Against build and compared" } else { '' }) + "; areas $($areaSet -join ', '); took $([int]$took.TotalMinutes) min $($took.Seconds) s.")
 $md.Add('')
 $md.Add("**$($results.Count) checks: $($by.fail.Count) newly failing, $($by.error.Count) could not run, $($by.moved.Count) moved as declared, $($by.known.Count) differ from retail as before, $($by.unmatched.Count) differ with no last good result, $($by.pass.Count) pass, $($by.skipped.Count) skipped.**")
 $md.Add('')
@@ -308,12 +370,12 @@ $results | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $runDir 'results.jso
 
 # what verify-gate.ps1 -Stamp reads: whether this run passed, for which changes
 $passed = -not ($by.fail.Count + $by.error.Count)
-[ordered]@{ run = $stamp; level = $Level; passed = $passed; changeHash = $changeHash; commit = $commit; checks = $results.Count } | ConvertTo-Json | Set-Content (Join-Path $SuiteLocal 'last-run.json') -Encoding utf8
+[ordered]@{ run = $stamp; level = $Level; arch = $Arch; against = $Against; passed = $passed; changeHash = $changeHash; commit = $commit; checks = $results.Count } | ConvertTo-Json | Set-Content (Join-Path $SuiteLocal 'last-run.json') -Encoding utf8
 
 ''
 "$($results.Count) checks: $($by.fail.Count) newly failing, $($by.error.Count) could not run, $($by.moved.Count) moved as declared, $($by.known.Count) known, $($by.unmatched.Count) unmatched, $($by.pass.Count) pass, $($by.skipped.Count) skipped ($([int]$took.TotalMinutes) min)"
 foreach ($x in @($by.fail) + @($by.error) + @($by.moved)) { "  $($x.status.ToUpper()) $($x.name): $($x.reason)" }
-if ($AcceptMoves) { $kept = @($results | Where-Object { $_.details -match 'AcceptMoves' }); "kept as ours' last good results: $(if ($kept.Count) { ($kept | ForEach-Object name) -join ', ' } else { 'none' })" }
+if ($AcceptMoves) { $kept = @($results | Where-Object { $_.details -match 'AcceptMoves' }); "kept as ours' last good results ($Arch): $(if ($kept.Count) { ($kept | ForEach-Object name) -join ', ' } else { 'none' })" }
 "report: $report"
 if (-not $passed) { exit 1 }
 exit 0

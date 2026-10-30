@@ -72,6 +72,10 @@ last good results only:
 
 It prints `kept as ours' last good results: ...`. Everything else keeps its old result.
 
+When the x64 build exists (`build\x64-Release\Release\openfakk2ded.exe` in the main
+checkout, or the branch touched it), run the same with `-Arch x64` too: the x64 lane has
+its own last good results (`reference\ours-x64`), and keeps them the same way.
+
 ## 5. Read the report
 
 `build\suite\runs\<time>\report.md`:
