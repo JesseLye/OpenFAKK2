@@ -44,7 +44,7 @@ is the original's prediction, which bobs there).
 ## Video
 
 The **resolution** list in Video options has *Desktop* (your screen's size, `r_mode -2`, the
-default), every size your display offers, and the common wide ones; the original's list
+default) and every size your display supports, nothing it does not; the original's list
 stopped at 1600x1200. Any size works from the console:
 `r_mode -1; r_customwidth 2560; r_customheight 1440; vid_restart`.
 
