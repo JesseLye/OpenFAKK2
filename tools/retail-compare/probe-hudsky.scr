@@ -1,0 +1,31 @@
+// The HUD over fakkhouse's bright sky: a camera on the dock looks straight up and
+// screenshots, for the edges of the HUD's pictures (the weapon windows' clear
+// margin, the health picture's right edge, the windows' clipped bottom) against a
+// bright, even background. Runs on intro and moves to fakkhouse by gamemap (a startup
+// +map fakkhouse on the retail game gives way to the startup intro); the plain load
+// leaves the level in cinematic mode, which the thread ends first.
+// Both games: .claude\skills\retail-capture\scripts\capture.ps1 -Probe probe-hudsky -Map intro -Mode 6 -Secs 150 -MaskNotify
+probe:
+waitforplayer
+wait 1
+stuffcmd "gamemap fakkhouse"
+stuffcmd "script thread probe-hudsky.scr::shots"
+end
+
+shots:
+wait 3
+removefakeplayer
+noncinematic
+clearletterbox 0
+cueplayer 0
+wait 1
+spawn Camera targetname skycam origin "4096 -1152 -200" angles "-89 0 0"
+wait .2
+cuecamera $skycam
+wait 1
+stuffcmd "screenshot"
+wait 3
+stuffcmd "screenshot"
+wait 1
+stuffcmd "quit"
+end

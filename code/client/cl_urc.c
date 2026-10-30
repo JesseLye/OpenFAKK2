@@ -1270,6 +1270,24 @@ static void URC_DrawPicST( float x, float y, float w, float h, float s1, float t
 	}
 	re.SetColor( color );
 	SCR_AdjustFrom640( &x, &y, &w, &h );
+	// whole pixels: retail draws its pictures at their size on whole pixels,
+	// and here, enlarged, an edge fell mid-pixel. With multisampling on, a
+	// pixel the picture covers only partly is drawn with its texture
+	// coordinate taken at the pixel's middle, outside the picture, past the
+	// edge texels' middles the pull-in below keeps to, and a "map" image
+	// wraps there to its far side: a dark line down the weapon windows'
+	// clear margin and a blue one down the health picture's right edge at
+	// 1024x768 with r_ext_multisample 8 (probe-hudsky). Each edge is
+	// rounded on its own, so two pictures that meet still share theirs.
+	d = x + w;
+	x = floorf( x + 0.5f );
+	w = floorf( d + 0.5f ) - x;
+	d = y + h;
+	y = floorf( y + 0.5f );
+	h = floorf( d + 0.5f ) - y;
+	if ( w <= 0 || h <= 0 ) {
+		return;
+	}
 	if ( re.ShaderImageSize ) {
 		re.ShaderImageSize( shader, &iw, &ih );
 		URC_EdgeTexels( &s1, &s2, iw, x, x + w );
