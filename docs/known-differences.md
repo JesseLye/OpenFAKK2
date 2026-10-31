@@ -283,6 +283,11 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
 - **`cl_avidemo <n>`** (Ritual's "Dumping Demo AVI"; `CL_Frame` `0x421f45`, Quake III
   1.32's): while a game runs, `screenshot silent` every frame, and every frame counts as
   1/n of a second however long it took. ioquake3's `video` command is there as well.
+  Retail takes the shot once the client's state is active (`0x421f30` tests the state
+  against 8, `CA_ACTIVE`), whether or not the first active snapshot has drawn yet, so a
+  demo's first frame is black or a picture by load timing; OpenFAKK2 does the same, and
+  the test suite pairs demo frames from the first picture on each side
+  (`tools/suite/README.md`, "Demos").
 - **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
   `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
   the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`
@@ -1805,6 +1810,20 @@ Where OpenFAKK2 differs:
   soundtrack called `none`, and every level sets its own.
 - **The picture** is read back inside the frame it is drawn in, ahead of the buffer
   swap; retail runs the screenshot after the frame.
+
+Two things a loaded game shows that the saved one did not, which the suite's save checks
+(`save-load`, the example maps' `x*-save`) report on every run. Both are the game code's
+own doing, so retail's as well; neither is a fault of the archive:
+
+- **A brush trigger's `contents` is `-1` after a load** where it was 0 when saved.
+  `Entity::Archive` restores the edict (contents 0) and then sets the model again, and
+  `SetBrushModel` (`0x444510`, the same in OpenFAKK2) gives a brush entity with no
+  contents `-1`, "everything". `Trigger::Trigger` sets 0 at spawn, after its model. A
+  trigger is `SOLID_TRIGGER`, which traces do not clip against, so nothing changes in play.
+- **`playerammo_edenwater` reads `50` after a load and `50.000000` when saved.** The
+  player creates the variable from a float (`%f`) and updates it from an int (`%d`) each
+  time the water changes; a loaded game runs the update at once, a fresh one has not yet
+  when the probe reads it. A script variable has no type, only the number and its text.
 
 ## The renderer and the map viewer
 

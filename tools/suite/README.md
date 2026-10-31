@@ -153,10 +153,11 @@ events, `xspawn` a `func_spawn`, `xcam` orbit and spline cameras, `xevent` an ac
 removed with its thread and events pending. Each is a `player` check (the probe's
 `probe` thread against retail) with an `x*-save` sibling (`saveload` on the probe's
 `save` thread: the same drive saved part way and loaded in a new process). The two
-things the save checks showed from the start, in every one of them, are the game
-module's: a trigger's or exploder's `Contents` comes back as `ffffffff` after a load
-(0 when saved), and a float level variable (`playerammo_edenwater = 50.000000`) comes
-back as an integer. What a death or an idle leaves is drawn at random, so `xpatrol`
+things the save checks show in every one of them, a trigger's or exploder's `Contents`
+`ffffffff` after a load (0 when saved) and `playerammo_edenwater` read as `50` rather
+than `50.000000`, are the game's own behaviour after a load, retail's too
+(`docs/known-differences.md`, "Saved games"), and part of their last good results.
+What a death or an idle leaves is drawn at random, so `xpatrol`
 compares the creeper and the player only and its save thread does not kill; `xcam`
 compares the cameras and the player (Gruff's idle nods).
 
