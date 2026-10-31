@@ -26,8 +26,10 @@ endif()
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:/W4>")
 
 # C4267: 'var' : conversion from 'size_t' to 'type', possible loss of data
-# There are way too many of these to realistically deal with them
-add_compile_options("$<$<COMPILE_LANGUAGE:C>:/wd4267>")
+# There are way too many of these to realistically deal with them. For C++ too:
+# Ritual's str class keeps lengths in ints, so an x64 build warns about every
+# strlen() in str.h (600 times) and nowhere that matters.
+add_compile_options(/wd4267)
 
 # C4206: nonstandard extension used: translation unit is empty
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:/wd4206>")

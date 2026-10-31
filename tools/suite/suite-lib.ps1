@@ -11,6 +11,8 @@ $RetailCompare = Join-Path $RepoRoot 'tools\retail-compare'
 $SuiteShared = Join-Path $MainRoot 'build\suite'
 $RetailRefs = Join-Path $SuiteShared 'reference\retail'
 $OursRefs = Join-Path $SuiteShared 'reference\ours'
+# the lane: run-suite.ps1 -Arch sets these (x64: its build, reference\ours-x64)
+$SuiteArch = 'x86'
 $SuiteLocal = Join-Path $RepoRoot 'build\suite'
 $ShotsPy = Join-Path $RepoRoot '.claude\skills\retail-capture\scripts\shots.py'
 $CaptureScript = Join-Path $RepoRoot '.claude\skills\retail-capture\scripts\capture.ps1'
@@ -385,8 +387,14 @@ function Invoke-CheckSideGames($Check, [ValidateSet('ours', 'retail')][string]$S
             Copy-IfThere "$Out\console.log" "$Out\game.log" | Out-Null
         }
         'saveload' {
-            $output = & (Join-Path $RetailCompare 'save-load.ps1') -Map $map -Bin $Bin -Extra $extra
-            foreach ($n in 'saved', 'loaded') { Copy-IfThere (Join-Path $LogDir "save-load-$tag-$n.log") "$Out\$n.log" | Out-Null }
+            # probe and thread: which script saves the game (probe-save's probe thread by default)
+            $sp = if ($probe) { $probe } else { 'probe-save' }; $st = [string](Get-Prop $Check 'thread' 'probe')
+            # loadArch: the save is loaded by the other architecture's build (a cross-build check)
+            $sl = @{ Map = $map; Probe = $sp; Thread = $st; Bin = $Bin; Extra = $extra }
+            $otherArch = Get-OtherArch $Check $SuiteArch
+            if ($otherArch) { $sl.LoadBin = Join-Path $RepoRoot "build\$otherArch-Release\Release" }
+            $output = & (Join-Path $RetailCompare 'save-load.ps1') @sl
+            foreach ($n in 'saved', 'loaded') { Copy-IfThere (Join-Path $LogDir "save-load-$tag-$sp-$n.log") "$Out\$n.log" | Out-Null }
             if (Test-Path "$Out\loaded.log") { Get-Content "$Out\saved.log", "$Out\loaded.log" | Set-Content "$Out\game.log" }
         }
         'sound' {
@@ -401,7 +409,7 @@ function Invoke-CheckSideGames($Check, [ValidateSet('ours', 'retail')][string]$S
             Copy-IfThere (Join-Path $LogDir "sound-$engine-$probe-suite.npy") "$Out\sound.npy" | Out-Null
             Copy-IfThere (Join-Path $LogDir "sound-$engine-$probe-suite.log") "$Out\game.log" | Out-Null
         }
-        'build' { $output = Invoke-SuiteBuild $Out }
+        'build' { $output = Invoke-SuiteBuild $Out $SuiteArch }
         'cik' {
             $output = & $Python -I (Join-Path $RetailCompare 'check_tiki_against_cik.py') "$GameInstall\fakk\pak0.pk3" "$GameInstall\fakk\pak1.pk3" 2>&1
             $output | Set-Content "$Out\output.txt"
@@ -543,21 +551,21 @@ function Update-WarningLedger([string]$Log, [string]$LedgerFile) {
     $total
 }
 
-function Invoke-SuiteBuild([string]$Out) {
+function Invoke-SuiteBuild([string]$Out, [string]$Arch = 'x86') {
     $script = Join-Path $RepoRoot 'scripts\build-msvc.cmd'
     if (-not (Test-Path $script)) {
         # build* is in .gitignore, so a new worktree has no build script
         Copy-Item (Join-Path $MainRoot 'scripts\build-msvc.cmd') $script
     }
     $log = Join-Path $Out 'build.log'
-    $ledgerFile = Join-Path $SuiteLocal 'warnings-ledger.json'
+    $ledgerFile = Join-Path $SuiteLocal $(if ($Arch -eq 'x86') { 'warnings-ledger.json' } else { "warnings-ledger-$Arch.json" })
     New-Item -ItemType Directory -Force $SuiteLocal | Out-Null
     if (-not (Test-Path $ledgerFile)) {
         # no ledger yet: without its objects every target is compiled again, so each
         # target's warnings are seen once
-        Get-ChildItem (Join-Path $RepoRoot 'build\x86-Release') -Recurse -File -Include *.obj -ErrorAction SilentlyContinue | Remove-Item -Force
+        Get-ChildItem (Join-Path $RepoRoot "build\$Arch-Release") -Recurse -File -Include *.obj -ErrorAction SilentlyContinue | Remove-Item -Force
     }
-    cmd /c "`"$script`" x86 Release > `"$log`" 2>&1"
+    cmd /c "`"$script`" $Arch Release > `"$log`" 2>&1"
     $code = $LASTEXITCODE
     Set-Content "$Out\exit.txt" $code
     if ($code -ne 0) { return "build failed (exit $code)" }
@@ -577,24 +585,55 @@ function Get-Percent([string[]]$Text) {
     if ($m.Success) { [double]$m.Groups[1].Value } else { $null }
 }
 
-function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [string]$Baseline = '') {
+# Whether an uncompressed TGA is black (no byte of its pixels above 24): the frame a
+# demo's capture takes before the first active snapshot draws.
+function Test-BlackShot([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 18) { return $false }
+    $idLength = $bytes[0]
+    [Linq.Enumerable]::Max([byte[]]$bytes[(18 + $idLength)..($bytes.Length - 1)]) -le 24
+}
+
+# How many leading shot-<n>.tga in a folder are black.
+function Get-LeadingBlack([string]$Dir) {
+    $k = 0
+    foreach ($f in @(Get-ChildItem $Dir -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue | Sort-Object { [int]($_.Name -replace '\D', '') })) {
+        if (-not (Test-BlackShot $f.FullName)) { break }
+        $k++
+    }
+    $k
+}
+
+# -AlignBlack (demo frames): the frames before the first one with a picture are dropped on
+# each side and the rest paired in order, as frame i of each. Whether a black frame is
+# captured before the demo's first active snapshot draws depends on load timing, in both
+# engines: the same build took one in one run and none an hour later (2026-10-31).
+function Measure-Shots([string]$Retail, [string]$Ours, [string]$Evidence, [string]$Baseline = '', [string]$Label = 'retail', [switch]$AlignBlack) {
     $metrics = [ordered]@{}; $lines = @(); $images = @()
+    $skipA = 0; $skipB = 0; $skipBase = 0
+    if ($AlignBlack) {
+        $skipA = Get-LeadingBlack $Retail; $skipB = Get-LeadingBlack $Ours
+        if ($Baseline) { $skipBase = Get-LeadingBlack $Baseline }
+        if ($skipA -or $skipB -or $skipBase) { $lines += "leading black frames dropped: $Label $skipA, ours $skipB" + $(if ($Baseline) { ", last good $skipBase" } else { '' }) }
+    }
     $names = @(Get-ChildItem $Retail, $Ours -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object -Unique { [int]($_ -replace '\D', '') })
     if (-not $names.Count) { $metrics['shots'] = 100; return @{ metrics = $metrics; evidence = @('no screenshots on either side'); images = @() } }
-    foreach ($n in $names) {
-        $i = [int]($n -replace '\D', '')
-        $a = Join-Path $Retail $n; $b = Join-Path $Ours $n
+    $count = $names.Count - [Math]::Max($skipA, [Math]::Max($skipB, $skipBase))
+    foreach ($i in 0..($count - 1)) {
+        if ($i -lt 0) { break }
+        $n = "shot-$i.tga"
+        $a = Join-Path $Retail "shot-$($i + $skipA).tga"; $b = Join-Path $Ours "shot-$($i + $skipB).tga"
         if (-not (Test-Path $a)) { $metrics["shot$i"] = 100; $lines += "shot $i`: ours took it, retail did not"; continue }
         if (-not (Test-Path $b)) { $metrics["shot$i"] = 100; $lines += "shot $i`: missing (retail took it)"; continue }
-        $png = Join-Path $Evidence "pair-retail-$i.png"
+        $png = Join-Path $Evidence "pair-$Label-$i.png"
         $text = & $Python -I $ShotsPy pair $a $b $png --mask-notify 2>&1
         $pct = Get-Percent $text
         $metrics["shot$i"] = if ($null -eq $pct) { 100 } else { $pct }
         $lines += "shot $i`: $(@($text | Select-String 'mean abs|pixels differing') -join '; ')"
         $images += $png
-        if ($Baseline -and (Test-Path (Join-Path $Baseline $n))) {
+        if ($Baseline -and (Test-Path (Join-Path $Baseline "shot-$($i + $skipBase).tga"))) {
             $png2 = Join-Path $Evidence "pair-lastgood-$i.png"
-            $t2 = & $Python -I $ShotsPy pair (Join-Path $Baseline $n) $b $png2 --mask-notify 2>&1
+            $t2 = & $Python -I $ShotsPy pair (Join-Path $Baseline "shot-$($i + $skipBase).tga") $b $png2 --mask-notify 2>&1
             $p2 = Get-Percent $t2
             $lines += "shot $i against ours' last good: $p2% of pixels differ"
             $images += $png2
@@ -638,7 +677,7 @@ function Measure-Widescreen($Check, [string]$Ours, [string]$Evidence) {
     @{ metrics = $metrics; evidence = $lines; images = $images }
 }
 
-function Measure-PlayerLogs([string]$RetailLog, [string]$OursLog, [double]$Tol, [string[]]$Fields = @(), [switch]$ReadingsOnly, [int[]]$Entities = @(), [string[]]$Classnames = @()) {
+function Measure-PlayerLogs([string]$RetailLog, [string]$OursLog, [double]$Tol, [string[]]$Fields = @(), [switch]$ReadingsOnly, [int[]]$Entities = @(), [string[]]$Classnames = @(), [string[]]$Labels = @('retail', 'ours')) {
     $metrics = [ordered]@{}; $evidence = @()
     if (-not $ReadingsOnly) {
         $a = Get-Dump $RetailLog; $b = Get-Dump $OursLog
@@ -650,9 +689,9 @@ function Measure-PlayerLogs([string]$RetailLog, [string]$OursLog, [double]$Tol, 
             $kindDiff = @(($ka.Keys + $kb.Keys | Sort-Object -Unique) | Where-Object { [int]$ka[$_] -ne [int]$kb[$_] })
             $metrics['vars'] = $varDiff.Count
             $metrics['events'] = $kindDiff.Count
-            $evidence += "variables: $($varsA.Count) retail / $($varsB.Count) ours, differing lines $($varDiff.Count); event kinds differing $($kindDiff.Count)"
-            $evidence += @($varDiff | Select-Object -First 8 | ForEach-Object { "  var {0} {1}" -f ($_.SideIndicator -replace '<=', 'retail:' -replace '=>', 'ours:  '), $_.InputObject })
-            $evidence += @($kindDiff | Select-Object -First 8 | ForEach-Object { "  event {0,-40} retail {1,4}  ours {2,4}" -f $_, [int]$ka[$_], [int]$kb[$_] })
+            $evidence += "variables: $($varsA.Count) $($Labels[0]) / $($varsB.Count) $($Labels[1]), differing lines $($varDiff.Count); event kinds differing $($kindDiff.Count)"
+            $evidence += @($varDiff | Select-Object -First 8 | ForEach-Object { "  var {0} {1}" -f ($_.SideIndicator -replace '<=', "$($Labels[0]):" -replace '=>', "$($Labels[1]):  "), $_.InputObject })
+            $evidence += @($kindDiff | Select-Object -First 8 | ForEach-Object { "  event {0,-40} $($Labels[0]) {1,4}  $($Labels[1]) {2,4}" -f $_, [int]$ka[$_], [int]$kb[$_] })
         }
     }
     $ra = Get-Readings $RetailLog; $rb = Get-Readings $OursLog
@@ -661,12 +700,55 @@ function Measure-PlayerLogs([string]$RetailLog, [string]$OursLog, [double]$Tol, 
         $ra = @($ra | Where-Object { & $keep $_ }); $rb = @($rb | Where-Object { & $keep $_ })
     }
     if ($ra.Count -or $rb.Count) {
-        $r = Compare-Readings $ra $rb $Tol 8 $Fields
+        $r = Compare-Readings $ra $rb $Tol 8 $Fields -Labels $Labels
         $metrics['readings'] = ($r.Compared - $r.Identical) + [Math]::Abs($r.CountA - $r.CountB)
-        $evidence += Format-ReadingsLine $r
+        $evidence += Format-ReadingsLine $r -Labels $Labels
         $evidence += @($r.Examples)
     }
     @{ metrics = $metrics; evidence = $evidence; images = @() }
+}
+
+# A cross-build save check: "loadArch" names the build that loads the save ("other" is
+# the other architecture than the lane's), so that an x86 lane's run has x64 load x86's
+# save and an x64 lane's run the reverse. Empty for an ordinary check.
+function Get-OtherArch($Check, [string]$Arch) {
+    $la = [string](Get-Prop $Check 'loadArch' '')
+    if (-not $la) { return '' }
+    if ($la -eq 'other') { return $(if ($Arch -eq 'x86') { 'x64' } else { 'x86' }) }
+    if ($la -eq $Arch) { return '' }
+    $la
+}
+
+# One lane's result against the other's (run-suite.ps1 -Against): the same measures as
+# against retail, with the other build's result in retail's place. Its shots when both
+# have them, else its readings when the log has whatis blocks, else the game lines of
+# its log; $null when there is nothing of it to compare. Readings are compared exactly,
+# except for a check that holds keys on the real client ("exclusive": "timing"), whose
+# two runs cannot be frame-exact: those within the check's valueTolerance. Lines that
+# name the build (the module's file, the version string, the game state's size, the
+# module's checksums, the addresses of the OpenAL symbols), timings, and configstring
+# updates sent after the gamestate (which of them come as updates depends on when the
+# client connected, and their sequence numbers follow) are left out.
+$AgainstBuildLines = 'Loaded client game module|CL_InitCGame:|Game state for|Trying to load|Loading "|\bcs 0 "|clientCommand: .*: cp \d+ @|LoadLibrary|Loaded symbol |msec to draw all images|serverCommand: \d+ : cs \d+ '
+function Measure-Against($Check, [string]$Ours, [string]$Other, [string]$Evidence) {
+    New-Item -ItemType Directory -Force $Evidence | Out-Null
+    $oursLog = Join-Path $Ours 'game.log'; $otherLog = Join-Path $Other 'game.log'
+    $shots = @(Get-ChildItem $Other -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue)
+    if ($shots.Count -and @(Get-ChildItem $Ours -File -Filter 'shot-*.tga' -ErrorAction SilentlyContinue).Count) { return Measure-Shots $Other $Ours $Evidence -Label x86 -AlignBlack:($Check.kind -eq 'demo') }
+    if (-not (Test-Path $oursLog) -or -not (Test-Path $otherLog)) { return $null }
+    $sel = Get-Prop $Check 'select'
+    $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
+    if (Select-String -Path $otherLog -Pattern 'Entity #\s*: \d+' -Quiet) {
+        $tol = if ([string](Get-Prop $Check 'exclusive' '') -eq 'timing') { [double](Get-Prop $Check 'valueTolerance' 0.01) } else { 0.0 }
+        return Measure-PlayerLogs $otherLog $oursLog $tol -Fields @(Get-Prop $Check 'fields' @()) -Entities $ents -Classnames $cls -Labels x86, ours
+    }
+    $a = @(Get-GameLines $otherLog | Where-Object { $_ -notmatch $AgainstBuildLines }); $b = @(Get-GameLines $oursLog | Where-Object { $_ -notmatch $AgainstBuildLines })
+    $d = @(Compare-Object $a $b)
+    $onlyA = @($d | Where-Object SideIndicator -eq '<='); $onlyB = @($d | Where-Object SideIndicator -eq '=>')
+    $ev = @("x86 $($a.Count) lines, ours $($b.Count) lines; only in x86: $($onlyA.Count), only in ours: $($onlyB.Count)")
+    $ev += @($onlyA | Select-Object -First 8 | ForEach-Object { "  x86:  $($_.InputObject)" })
+    $ev += @($onlyB | Select-Object -First 8 | ForEach-Object { "  ours: $($_.InputObject)" })
+    @{ metrics = [ordered]@{ lines = $onlyA.Count + $onlyB.Count }; evidence = $ev; images = @() }
 }
 
 function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence, [string]$Baseline = '') {
@@ -691,7 +773,12 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             $ev += Format-WarningGroups $warn 4
             $result = @{ metrics = $metrics; evidence = $ev; images = @() }
         }
-        'player' { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol }
+        'player' {
+            # select and fields, as for client: which readings are compared, and which of their fields
+            $sel = Get-Prop $Check 'select'
+            $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
+            $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields @(Get-Prop $Check 'fields' @()) -Entities $ents -Classnames $cls
+        }
         'client' {
             $sel = Get-Prop $Check 'select'
             $ents = @(Get-Prop $sel 'entities' @() | ForEach-Object { [int]$_ }); $cls = @(Get-Prop $sel 'classnames' @())
@@ -713,7 +800,8 @@ function Measure-Check($Check, [string]$Ours, [string]$Retail, [string]$Evidence
             }
             else { $result = Measure-PlayerLogs (Join-Path $Retail 'game.log') $oursLog $tol -Fields $fields -ReadingsOnly -Entities $ents -Classnames $cls }
         }
-        { $_ -in 'capture', 'menus', 'windowshots', 'demo' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        { $_ -in 'capture', 'menus', 'windowshots' } { $result = Measure-Shots $Retail $Ours $Evidence $Baseline }
+        'demo' { $result = Measure-Shots $Retail $Ours $Evidence $Baseline -AlignBlack }
         'timedemo' {
             # the mean frame time of each demo, without its first frames (where textures are
             # uploaded as they are first seen); ioquake3's own line for the evidence

@@ -44,7 +44,8 @@ modules you are running ([FAQ](03-faq.md)).
 From a checkout of the repository, `run.cmd` does this for you: it starts the build
 against the install above (edit `GAME` in it if yours is elsewhere), in a 1024x768 window,
 with its own home folder in `build\sandbox\home`. `run.cmd training` goes straight to a
-map.
+map. It runs the 32-bit build; `run.cmd x64` (or `FAKK2_ARCH=x64` in the environment)
+runs the 64-bit one from `build\x64-Release`, with a map after it as before.
 
 ## Your files
 

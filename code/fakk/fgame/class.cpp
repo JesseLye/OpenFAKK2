@@ -462,6 +462,15 @@ CLASS_DECLARATION( NULL, Class, NULL )
 
 #ifdef NDEBUG
 
+// The size of the allocation is kept in front of the object: in an int, as retail does
+// (so the object sits 4 bytes past an 8-byte boundary on x86, as in retail), and in a
+// 16-byte header on x64, where the object must keep the allocator's 16-byte alignment.
+#if ( defined( _WIN64 ) || defined( __x86_64__ ) || defined( __aarch64__ ) )
+#define CLASS_HEADER_INTS 4
+#else
+#define CLASS_HEADER_INTS 1
+#endif
+
 void * Class::operator new( size_t s )
 	{
 	int *p;
@@ -469,7 +478,7 @@ void * Class::operator new( size_t s )
 	if ( s == 0 )
 		return NULL;
 
-	s += sizeof( int );
+	s += sizeof( int ) * CLASS_HEADER_INTS;
 #if defined( GAME_DLL )
 	p = ( int * )gi.Malloc( s );
 #elif defined( CGAME_DLL )
@@ -477,17 +486,17 @@ void * Class::operator new( size_t s )
 #else
 	p = ( int * )Z_TagMalloc( s, TAG_CLIENT );
 #endif
-	*p = s;
-	totalmemallocated += s;
+	*p = ( int )s;
+	totalmemallocated += ( int )s;
 	numclassesallocated++;
-	return p + 1;
+	return p + CLASS_HEADER_INTS;
 	}
 
 void Class::operator delete( void *ptr )
 	{
 	int *p;
 
-	p = ( ( int * )ptr ) - 1;
+	p = ( ( int * )ptr ) - CLASS_HEADER_INTS;
 	totalmemallocated -= *p;
 	numclassesallocated--;
 #if defined( GAME_DLL )

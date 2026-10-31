@@ -51,6 +51,13 @@ Use `quick` unless asked for more; `standard` before merging a large change. The
 suite builds first. Run it in the background and wait for it; never pipe it into
 `Select-Object -First`.
 
+A change that touches the x64 build (the port, anything under `code/` once the x64
+build exists) is verified on both lanes: the run above, then
+`tools\suite\run-suite.ps1 -Level quick -Changed -Arch x64`, which builds and runs the
+x64 build and also runs each check on x86 beside it, so a difference between the two
+builds is newly failing ("against x86" in the evidence). The stamp records the last
+run only; stamp after the second.
+
 ## 4. Read the report
 
 `build\suite\runs\<time>\report.md`: the summary, then **Newly failing** with the

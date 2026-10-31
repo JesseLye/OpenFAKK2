@@ -78,4 +78,4 @@ foreach ($c in $checks) {
 }
 if ($Twice) { $noiseAll | ConvertTo-Json -Depth 5 | Set-Content $noiseFile -Encoding utf8 }
 # ours' last good results were measured against the old references
-if ($checks.Count) { "Remade references: make ours' last good results again on main, tools\suite\run-suite.ps1 -NoBuild -UpdateBaseline -Only $(($checks | ForEach-Object name) -join ', ')" }
+if ($checks.Count) { "Remade references: make ours' last good results again on main, tools\suite\run-suite.ps1 -NoBuild -UpdateBaseline -Only $(($checks | ForEach-Object name) -join ', ') (and with -Arch x64 for the x64 lane, which shares them)" }

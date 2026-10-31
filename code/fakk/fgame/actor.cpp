@@ -10510,7 +10510,7 @@ void Actor::EndMode( void )
 		if ( GetActorFlag( ACTOR_FLAG_UPDATE_BOSS_HEALTH ) && max_boss_health )
 			{
 			char bosshealth_string[20];
-			sprintf( bosshealth_string, "%.5f", 0 );
+			sprintf( bosshealth_string, "%.5f", 0.0 );   // retail passes the int 0 to %f (undefined; 0.00000 on x86 by luck)
 			gi.cvar_set( "bosshealth", bosshealth_string );
 			}
 

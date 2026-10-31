@@ -1308,8 +1308,10 @@ void SV_InitGameProgs( void ) {
 		svs.clients[i].gentity = NULL;
 	}
 
-	// use the current msec count for a random seed
-	ge->Init( sv.time, Com_Milliseconds() );
+	// use the current msec count for a random seed. Not retail's: sv_randomSeed, when
+	// set, is the seed instead, so a harness run draws the same random numbers every time
+	// (idle animations, death drops, gib models); see cl_demoSeed for demos
+	ge->Init( sv.time, Cvar_VariableIntegerValue( "sv_randomSeed" ) ? Cvar_VariableIntegerValue( "sv_randomSeed" ) : Com_Milliseconds() );
 }
 
 /*

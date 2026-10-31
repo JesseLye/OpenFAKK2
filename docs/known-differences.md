@@ -283,6 +283,11 @@ TIKI surface flag; in `fakk2.exe` that word belongs to the shader parser (`0x477
 - **`cl_avidemo <n>`** (Ritual's "Dumping Demo AVI"; `CL_Frame` `0x421f45`, Quake III
   1.32's): while a game runs, `screenshot silent` every frame, and every frame counts as
   1/n of a second however long it took. ioquake3's `video` command is there as well.
+  Retail takes the shot once the client's state is active (`0x421f30` tests the state
+  against 8, `CA_ACTIVE`), whether or not the first active snapshot has drawn yet, so a
+  demo's first frame is black or a picture by load timing; OpenFAKK2 does the same, and
+  the test suite pairs demo frames from the first picture on each side
+  (`tools/suite/README.md`, "Demos").
 - **The mouse** (`CL_MouseMove` `0x41e3e0`): `freelook` is retail's name for Quake III's
   `cl_freelook`; with strafe held the mouse's y moves Julie forward twice over (once in
   the strafe branch, once where freelook is tested, as retail does it) and up by `m_up`
@@ -1806,6 +1811,20 @@ Where OpenFAKK2 differs:
 - **The picture** is read back inside the frame it is drawn in, ahead of the buffer
   swap; retail runs the screenshot after the frame.
 
+Two things a loaded game shows that the saved one did not, which the suite's save checks
+(`save-load`, the example maps' `x*-save`) report on every run. Both are the game code's
+own doing, so retail's as well; neither is a fault of the archive:
+
+- **A brush trigger's `contents` is `-1` after a load** where it was 0 when saved.
+  `Entity::Archive` restores the edict (contents 0) and then sets the model again, and
+  `SetBrushModel` (`0x444510`, the same in OpenFAKK2) gives a brush entity with no
+  contents `-1`, "everything". `Trigger::Trigger` sets 0 at spawn, after its model. A
+  trigger is `SOLID_TRIGGER`, which traces do not clip against, so nothing changes in play.
+- **`playerammo_edenwater` reads `50` after a load and `50.000000` when saved.** The
+  player creates the variable from a float (`%f`) and updates it from an int (`%d`) each
+  time the water changes; a loaded game runs the update at once, a fresh one has not yet
+  when the probe reads it. A script variable has no type, only the number and its text.
+
 ## The renderer and the map viewer
 
 Each item below says what it was taken from: the retail renderer in `fakk2.exe` where an
@@ -2771,6 +2790,12 @@ random numbers with it before the client game module loads (`CL_PlayDemo_f`), so
 playback draws the same random effects every time. The client game module's `rand()`
 shares the engine's C runtime, whose state is per thread, so the one seed covers it. The
 test suite plays its demos with it; retail has nothing like it, and draws its own.
+`sv_randomSeed` (default 0, not archived) is its server-side twin: when it is set, the
+game module is given it as its random seed instead of the millisecond clock
+(`SV_InitGameProgs`), so an actor's idle animation, what a death drops and which gib
+model flies are the same every run. The harness's test-player runs (`compare-player.ps1`,
+`save-load.ps1`) set it to 1; retail's choices vary between runs, as its own references
+show.
 
 The test suite plays retail demos frame by frame on both games (`demo-zoo`,
 `demo-swamp1`, `demo-muzzle`, `demo-crosshair`, `demo-flashes`, `demo-guns`, `demo-melee`,
@@ -2815,6 +2840,52 @@ now in retail's bits) and the netchan header, which demos do not hold and were n
 downloads (command 6, which retail refuses) and VoIP (10 and 11), which a local game does
 not send. A demo carries its own configstrings, so the different sound indexes on a first
 load (under "Global aliases before spawning") do not matter on playback.
+
+## The x64 build
+
+OpenFAKK2 builds and runs as 64-bit (`scripts\build-msvc.cmd x64 Release`, modules
+`gamex86_64.dll` and `cgamex86_64.dll`, since 2026-10-31). Retail is 32-bit only, so the
+x64 build is judged against the same retail references as the x86 one and, in the test
+suite's x64 lane, against the x86 build run beside it (`tools/suite/README.md`, "The x64
+lane"). On its first full day it matched retail and x86 alike on spawn output, the test
+player's readings, saves and screenshots (15 checks, the pictures to 0.03% of pixels).
+What had to change for that, all in Ritual's game code, which assumed 32-bit pointers:
+
+- **Archive sizes.** The archiver (saves and the `.pth` path files) wrote and read every
+  size as a `size_t`: 4 bytes in retail's files, 8 in a 64-bit build, so an x64 build
+  could read neither the paks' `.pth` files (Balthazar's door map crashed at "Loading
+  nodes...") nor an x86 save. Sizes are 32 bits in the file whatever the build
+  (`Archiver::ReadSize`, `WriteSize`).
+- **The safe-pointer read** read `sizeof( &index )` bytes into a 4-byte `index`: the size
+  of a pointer, 4 on x86 by luck, 8 on x64, which overran the stack (exit `0xC0000409`).
+  It reads `sizeof( index )`.
+- **The client structure** (`gclient_t`, archived raw) holds a `trace_t`, whose entity
+  pointer is 8 bytes on x64 and pads `playerState_t` and `gclient_t` to 8, so an x64 save
+  was 16 bytes longer and the other build loaded it as far as the player and then lost
+  the script thread. `G_ArchiveClient` writes retail's x86 layout run by run, the
+  pointer as a 4-byte zero (it is never valid after a load; NULL when read). An x86 save
+  is the same bytes as before; a save from either build loads in the other (the suite's
+  `*-cross` checks, with the same results as a same-build load).
+- **Class allocations** keep the allocation's size in an `int` in front of the object
+  (`Class::operator new`): 4 bytes, so the object sat 4 past an 8-byte boundary, as in
+  retail. On x64 the header is 16 bytes, keeping the allocator's alignment.
+- **"N total memory in response list"** at the event system's start counts pointers, so
+  the x64 build prints twice retail's figure (1530352 for 765176). The harness drops the
+  figure from the line it compares.
+- Two slips the compiler caught: `sprintf( "%.5f", 0 )` for the boss health passes an int
+  where a double is read (0.00000 on x86 by luck; now `0.0`), and the server's rejected
+  connection reason was held in an `intptr_t` rather than a `const char *`.
+- **The OpenAL driver's name.** ioquake3 looks for `OpenAL64.dll` on 64-bit Windows, but
+  OpenAL Soft's 64-bit library keeps the name `OpenAL32.dll` (its readme), which is what
+  the build ships beside both executables. The x64 client fell back to the software mixer
+  and its 8 MB pool, and evicted and reloaded sounds by the hundred on every map change
+  (4600 warnings in the suite's `restart` check). The default is `OpenAL32.dll` on both.
+
+The inline assembly (`Q_rsqrt`, `BoxOnPlaneSide`, the sound mixer's clamp loop,
+ioquake3's `ftol` and `snapvector`) has C or MASM counterparts the x64 build selects by
+itself; the readings agreeing with x86 to every printed digit says they compute the same.
+A 64-bit process cannot load Ritual's `gamex86.dll` and `cgamex86.dll`, so the harness's
+retail-module runs (`FAKK2_TEST_MODULES=retail`) are x86 only.
 
 ## Not yet comparable
 - Input beyond walking in a straight line: turning, jumping, weapons, using objects,

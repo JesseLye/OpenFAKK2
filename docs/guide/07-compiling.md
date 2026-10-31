@@ -16,11 +16,14 @@ and Ninja. The result is in `build\x86-Release\Release`
 ([what's in it](01-installation.md#getting-openfakk2)). `Debug` in place of `Release` makes
 a debug build in `build\x86-Debug`. Anything after the first two arguments goes to CMake.
 
-**Build 32-bit (`x86`).** A 64-bit build (`x64`) has not been tried and is not supported:
-Ritual's game code was written for 32-bit pointers (its script engine and save files store
-them), and it has only been built and checked as 32-bit. A 32-bit build can also run Ritual's original
-`gamex86.dll` and `cgamex86.dll`, which is how a bug is pinned on the engine or on the game
-code.
+**32-bit or 64-bit.** `x86` is the build the game shipped as and the one most checked
+against retail; it is also the only one that can run Ritual's original `gamex86.dll` and
+`cgamex86.dll`, which is how a bug is pinned on the engine or on the game code. `x64`
+builds the same code as 64-bit (`build\x64-Release`, modules `gamex86_64.dll` and
+`cgamex86_64.dll`); it plays the same, and reads and writes the same save files and path
+files as the 32-bit build and the original game. What Ritual's code assumed about
+32-bit pointers, and how it was settled, is under "The x64 build" in
+[known-differences.md](../known-differences.md).
 
 To build without the script, from an *x86 Native Tools Command Prompt for VS 2022*:
 

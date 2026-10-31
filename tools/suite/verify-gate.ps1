@@ -14,6 +14,7 @@ param([ValidateSet('Stop', 'TaskCompleted')][string]$Event = 'Stop', [switch]$St
 #                passed for exactly the current changes.
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+function Get-Prop($Object, [string]$Name, $Default = $null) { if ($null -ne $Object -and $Object.PSObject.Properties[$Name]) { return $Object.$Name }; $Default }
 . (Join-Path $PSScriptRoot 'changes.ps1')
 $suiteDir = Join-Path $root 'build\suite'
 $stampFile = Join-Path $suiteDir 'verified.stamp'
@@ -27,7 +28,7 @@ if ($Stamp) {
     if ($run.changeHash -ne $hash) { "the code changed after the last suite run ($($run.run)); run it again"; exit 1 }
     New-Item -ItemType Directory -Force $suiteDir | Out-Null
     Set-Content $stampFile $hash -Encoding ascii
-    "verified: $(if ($hash) { $hash } else { 'no changes' }) (run $($run.run), $($run.level))"
+    "verified: $(if ($hash) { $hash } else { 'no changes' }) (run $($run.run), $($run.level)$(if (Get-Prop $run 'arch') { ", $($run.arch)" }))"
     exit 0
 }
 

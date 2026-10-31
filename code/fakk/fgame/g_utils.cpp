@@ -1617,6 +1617,39 @@ ScriptThread * ExecuteThread
 G_ArchiveEdict
 ==============
 */
+/*
+=============
+G_ArchiveClient
+
+Retail archives the whole gclient_t raw (0x86 layout). It holds a trace_t, whose entity
+pointer is 8 bytes on x64 and pads playerState_t and gclient_t to 8, so a raw archive
+would give the x64 build a save of its own. This writes the same bytes retail's x86 build
+does, run by run: the pointer as a 4-byte zero (it is never valid after a load; NULL when
+read), and no padding. See docs/known-differences.md, "The x64 build".
+=============
+*/
+void G_ArchiveClient
+   (
+   Archiver &arc,
+   gclient_t *client
+   )
+
+   {
+   playerState_t  *ps = &client->ps;
+   trace_t        *tr = &ps->groundTrace;
+   int            ent = 0;
+
+   arc.ArchiveRaw( ps, offsetof( playerState_t, falldir ) + sizeof( ps->falldir ) );
+   arc.ArchiveRaw( tr, offsetof( trace_t, entityNum ) + sizeof( tr->entityNum ) );
+   arc.ArchiveInteger( &ent );
+   if ( arc.Loading() )
+      {
+      tr->ent = NULL;
+      }
+   arc.ArchiveRaw( &ps->clientNum, offsetof( playerState_t, ping ) + sizeof( ps->ping ) - offsetof( playerState_t, clientNum ) );
+   arc.ArchiveRaw( &client->ping, offsetof( gclient_t, cmd_angles ) + sizeof( client->cmd_angles ) - offsetof( gclient_t, ping ) );
+   }
+
 void G_ArchiveEdict
    (
    Archiver &arc,
@@ -1635,7 +1668,7 @@ void G_ArchiveEdict
 
    if ( edict->client )
       {
-      arc.ArchiveRaw( edict->client, sizeof( *edict->client ) );
+      G_ArchiveClient( arc, edict->client );
       }
 
    arc.ArchiveInteger( &edict->s.eType );

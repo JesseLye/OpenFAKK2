@@ -131,6 +131,7 @@
 class Archiver;
 
 void        G_ArchiveEdict( Archiver &arc, gentity_t *edict );
+void        G_ArchiveClient( Archiver &arc, gclient_t *client );
 
 #include "entity.h"
 
